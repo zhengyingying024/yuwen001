@@ -402,13 +402,31 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root(request: Request):
     # 获取当前统计数据
     now = datetime.now()
-    hour_key = now.strftime('%Y-%m-%d %H:00')
-    minute_key = now.strftime('%Y-%m-%d %H:%M')
     
     # 计算过去24小时的调用总数
     last_24h_calls = sum(api_call_stats['last_24h'].values())
-    hourly_calls = api_call_stats['hourly'][hour_key]
-    minute_calls = api_call_stats['minute'][minute_key]
+    
+    # 计算过去一小时内的调用总数
+    one_hour_ago = now - timedelta(hours=1)
+    hourly_calls = 0
+    for hour_key, count in api_call_stats['hourly'].items():
+        try:
+            hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
+            if hour_time >= one_hour_ago:
+                hourly_calls += count
+        except ValueError:
+            continue
+    
+    # 计算过去一分钟内的调用总数
+    one_minute_ago = now - timedelta(minutes=1)
+    minute_calls = 0
+    for minute_key, count in api_call_stats['minute'].items():
+        try:
+            minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
+            if minute_time >= one_minute_ago:
+                minute_calls += count
+        except ValueError:
+            continue
     
     # 获取最近的日志
     recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志

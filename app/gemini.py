@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx
 import logging
+from app.utils import format_log_message
 
 logger = logging.getLogger('my_logger')
 
@@ -108,7 +109,10 @@ class GeminiClient:
         self.api_key = api_key
 
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        logger.info("流式开始 →")
+        extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'N/A'}
+        log_msg = format_log_message('INFO', "流式请求开始", extra=extra_log)
+        logger.info(log_msg)
+        
         api_version = "v1alpha" if "think" in request.model else "v1beta"
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
         headers = {
@@ -133,7 +137,7 @@ class GeminiClient:
                         if not line.strip():
                             continue
                         if line.startswith("data: "):
-                            line = line[len("data: "):] 
+                            line = line[len("data: "):]
                         buffer += line.encode('utf-8')
                         try:
                             data = json.loads(buffer.decode('utf-8'))
@@ -152,28 +156,43 @@ class GeminiClient:
                                             yield text
                                         
                                 if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
-                                    # logger.warning(f"模型的响应因违反内容政策而被标记: {candidate.get('finishReason')}")
-                                    raise ValueError(f"模型的响应被截断: {candidate.get('finishReason')}")
+                                    error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
+                                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                                    log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)
+                                    logger.warning(log_msg)
+                                    raise ValueError(error_msg)
                                 
                                 if 'safetyRatings' in candidate:
                                     for rating in candidate['safetyRatings']:
                                         if rating['probability'] == 'HIGH':
-                                            # logger.warning(f"模型的响应因高概率被标记为 {rating['category']}")
-                                            raise ValueError(f"模型的响应被截断: {rating['category']}")
+                                            error_msg = f"模型的响应被截断: {rating['category']}"
+                                            extra_log_safety = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                                            log_msg = format_log_message('WARNING', error_msg, extra=extra_log_safety)
+                                            logger.warning(log_msg)
+                                            raise ValueError(error_msg)
                         except json.JSONDecodeError:
-                            # logger.debug(f"JSON解析错误, 当前缓冲区内容: {buffer}")
                             continue
                         except Exception as e:
-                            # logger.error(f"流式处理期间发生错误: {e}")
+                            error_msg = f"流式处理期间发生错误: {str(e)}"
+                            extra_log_stream_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                            log_msg = format_log_message('ERROR', error_msg, extra=extra_log_stream_error)
+                            logger.error(log_msg)
                             raise e
                 except Exception as e:
-                    # logger.error(f"流式处理错误: {e}")
+                    error_msg = f"流式处理错误: {str(e)}"
+                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                    log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
+                    logger.error(log_msg)
                     raise e
                 finally:
-                    logger.info("流式结束 ←")
-
+                    log_msg = format_log_message('INFO', "流式请求结束", extra=extra_log)
+                    logger.info(log_msg)
 
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
+        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'N/A'}
+        log_msg = format_log_message('INFO', "非流式请求开始", extra=extra_log)
+        logger.info(log_msg)
+        
         api_version = "v1alpha" if "think" in request.model else "v1beta"
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
         headers = {
@@ -189,9 +208,21 @@ class GeminiClient:
         }
         if system_instruction:
             data["system_instruction"] = system_instruction
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        return ResponseWrapper(response.json())
+            
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            
+            log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
+            logger.info(log_msg)
+            
+            return ResponseWrapper(response.json())
+        except Exception as e:
+            error_msg = f"非流式请求错误: {str(e)}"
+            extra_log_error = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+            log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
+            logger.error(log_msg)
+            raise
 
     def convert_messages(self, messages, use_system_prompt=False):
         gemini_history = []

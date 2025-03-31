@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from .models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
 from .gemini import GeminiClient, ResponseWrapper
-from .utils import handle_gemini_error, protect_from_abuse, APIKeyManager, test_api_key, format_log_message
+from .utils import handle_gemini_error, protect_from_abuse, APIKeyManager, test_api_key, format_log_message, log_manager
 import os
 import json
 import asyncio
@@ -14,6 +16,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import sys
 import logging
 from collections import defaultdict
+import pathlib
 
 logging.getLogger("uvicorn").disabled = True
 logging.getLogger("uvicorn.access").disabled = True
@@ -21,6 +24,10 @@ logging.getLogger("uvicorn.access").disabled = True
 # 配置 logger
 logger = logging.getLogger("my_logger")
 logger.setLevel(logging.DEBUG)
+
+# 设置模板目录
+BASE_DIR = pathlib.Path(__file__).parent
+templates = Jinja2Templates(directory=str(BASE_DIR))
 
 def translate_error(message: str) -> str:
     if "quota exceeded" in message.lower():
@@ -392,7 +399,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
+async def root(request: Request):
     # 获取当前统计数据
     now = datetime.now()
     hour_key = now.strftime('%Y-%m-%d %H:00')
@@ -403,132 +410,57 @@ async def root():
     hourly_calls = api_call_stats['hourly'][hour_key]
     minute_calls = api_call_stats['minute'][minute_key]
     
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Gemini API 代理服务</title>
-        <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-                line-height: 1.6;
-            }}
-            h1 {{
-                color: #333;
-                text-align: center;
-                margin-bottom: 30px;
-            }}
-            .info-box {{
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 20px;
-                margin-bottom: 20px;
-            }}
-            .status {{
-                color: #28a745;
-                font-weight: bold;
-                font-size: 18px;
-                margin-bottom: 20px;
-                text-align: center;
-            }}
-            .stats-grid {{
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 10px;
-                margin-top: 15px;
-                margin-bottom: 20px;
-            }}
-            .stat-card {{
-                background-color: #e9ecef;
-                padding: 10px;
-                border-radius: 4px;
-                text-align: center;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                transition: transform 0.2s;
-            }}
-            .stat-card:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            }}
-            .stat-value {{
-                font-size: 24px;
-                font-weight: bold;
-                color: #007bff;
-            }}
-            .stat-label {{
-                font-size: 14px;
-                color: #6c757d;
-                margin-top: 5px;
-            }}
-            .section-title {{
-                color: #495057;
-                border-bottom: 1px solid #dee2e6;
-                padding-bottom: 10px;
-                margin-bottom: 20px;
-            }}
-        </style>
-    </head>
-    <body>
-        <h1>🤖 Gemini API 代理服务</h1>
-        
-        <div class="info-box">
-            <h2 class="section-title">🟢 运行状态</h2>
-            <p class="status">服务运行中</p>
-            
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{len(key_manager.api_keys)}</div>
-                    <div class="stat-label">可用API密钥数量</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{len(GeminiClient.AVAILABLE_MODELS)}</div>
-                    <div class="stat-label">可用模型数量</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{len(key_manager.api_keys)}</div>
-                    <div class="stat-label">最大重试次数</div>
-                </div>
-            </div>
-            
-            <h3 class="section-title">API调用统计</h3>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{last_24h_calls}</div>
-                    <div class="stat-label">24小时内调用次数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{hourly_calls}</div>
-                    <div class="stat-label">当前小时调用次数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{minute_calls}</div>
-                    <div class="stat-label">当前分钟调用次数</div>
-                </div>
-            </div>
+    # 获取最近的日志
+    recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
+    
+    # 读取HTML模板
+    with open(os.path.join(BASE_DIR, "index.html"), "r", encoding="utf-8") as f:
+        html_content = f.read()
+    
+    # 替换模板变量
+    context = {
+        "key_count": len(key_manager.api_keys),
+        "model_count": len(GeminiClient.AVAILABLE_MODELS),
+        "retry_count": len(key_manager.api_keys),
+        "last_24h_calls": last_24h_calls,
+        "hourly_calls": hourly_calls,
+        "minute_calls": minute_calls,
+        "max_requests_per_minute": MAX_REQUESTS_PER_MINUTE,
+        "max_requests_per_day_per_ip": MAX_REQUESTS_PER_DAY_PER_IP,
+        "current_time": datetime.now().strftime('%H:%M:%S'),
+        "logs": recent_logs
+    }
+    
+    # 使用Jinja2模板引擎渲染HTML
+    for key, value in context.items():
+        placeholder = "{{ " + key + " }}"
+        html_content = html_content.replace(placeholder, str(value))
+    
+    # 处理日志条目的循环
+    log_entries_html = ""
+    for log in recent_logs:
+        log_entry_html = f"""
+        <div class="log-entry {log['level']}" data-level="{log['level']}">
+            <span class="log-timestamp">{log['timestamp']}</span>
+            <span class="log-level {log['level']}">{log['level']}</span>
+            <span class="log-message">
+                {f"[{log['key']}]" if log['key'] != 'N/A' else ''}
+                {log['request_type'] if log['request_type'] != 'N/A' else ''}
+                {f"[{log['model']}]" if log['model'] != 'N/A' else ''}
+                {log['status_code'] if log['status_code'] != 'N/A' else ''}
+                : {log['message']}
+                {f" - {log['error_message']}" if log['error_message'] else ''}
+            </span>
         </div>
-
-        <div class="info-box">
-            <h2 class="section-title">⚙️ 环境配置</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{MAX_REQUESTS_PER_MINUTE}</div>
-                    <div class="stat-label">每分钟请求限制</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{MAX_REQUESTS_PER_DAY_PER_IP}</div>
-                    <div class="stat-label">每IP每日请求限制</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{datetime.now().strftime('%H:%M:%S')}</div>
-                    <div class="stat-label">当前服务器时间</div>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+        """
+        log_entries_html += log_entry_html
+    
+    # 替换日志循环部分
+    log_loop_start = "{% for log in logs %}"
+    log_loop_end = "{% endfor %}"
+    log_loop_pattern = log_loop_start + ".*?" + log_loop_end
+    
+    import re
+    html_content = re.sub(log_loop_pattern, log_entries_html, html_content, flags=re.DOTALL)
+    
     return html_content

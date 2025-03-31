@@ -56,19 +56,13 @@ app = FastAPI()
 # 添加API调用计数器
 api_call_stats = {
     'last_24h': defaultdict(int),  # 按小时统计过去24小时
-    'hourly': defaultdict(int),    # 按小时统计
-    'minute': defaultdict(int),    # 按分钟统计
-    'last_reset': {
-        'hourly': datetime.now().replace(minute=0, second=0, microsecond=0),
-        'minute': datetime.now().replace(second=0, microsecond=0)
-    }
+    'hourly': defaultdict(int),    # 按小时统计过去一小时
+    'minute': defaultdict(int),    # 按分钟统计过去一分钟
 }
 
-# 定时清理过期统计数据的函数
+# 清理过期统计数据的函数
 def clean_expired_stats():
     now = datetime.now()
-    current_hour = now.replace(minute=0, second=0, microsecond=0)
-    current_minute = now.replace(second=0, microsecond=0)
     
     # 清理24小时前的数据
     for hour_key in list(api_call_stats['last_24h'].keys()):
@@ -80,19 +74,27 @@ def clean_expired_stats():
             # 如果键格式不正确，直接删除
             del api_call_stats['last_24h'][hour_key]
     
-    # 如果小时变更，重置小时统计
-    if current_hour != api_call_stats['last_reset']['hourly']:
-        api_call_stats['hourly'] = defaultdict(int)
-        api_call_stats['last_reset']['hourly'] = current_hour
-        log_msg = format_log_message('INFO', "每小时API调用统计已重置")
-        logger.info(log_msg)
+    # 清理一小时前的小时统计数据
+    one_hour_ago = now - timedelta(hours=1)
+    for hour_key in list(api_call_stats['hourly'].keys()):
+        try:
+            hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
+            if hour_time < one_hour_ago:
+                del api_call_stats['hourly'][hour_key]
+        except ValueError:
+            # 如果键格式不正确，直接删除
+            del api_call_stats['hourly'][hour_key]
     
-    # 如果分钟变更，重置分钟统计
-    if current_minute != api_call_stats['last_reset']['minute']:
-        api_call_stats['minute'] = defaultdict(int)
-        api_call_stats['last_reset']['minute'] = current_minute
-        log_msg = format_log_message('INFO', "每分钟API调用统计已重置")
-        logger.info(log_msg)
+    # 清理一分钟前的分钟统计数据
+    one_minute_ago = now - timedelta(minutes=1)
+    for minute_key in list(api_call_stats['minute'].keys()):
+        try:
+            minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
+            if minute_time < one_minute_ago:
+                del api_call_stats['minute'][minute_key]
+        except ValueError:
+            # 如果键格式不正确，直接删除
+            del api_call_stats['minute'][minute_key]
 
 # 更新API调用统计的函数
 def update_api_call_stats():
@@ -107,6 +109,9 @@ def update_api_call_stats():
     api_call_stats['last_24h'][hour_key] += 1
     api_call_stats['hourly'][hour_key] += 1
     api_call_stats['minute'][minute_key] += 1
+    
+    log_msg = format_log_message('INFO', f"API调用统计已更新: 24小时={sum(api_call_stats['last_24h'].values())}, 1小时={sum(api_call_stats['hourly'].values())}, 1分钟={sum(api_call_stats['minute'].values())}")
+    logger.info(log_msg)
 
 PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
 MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
@@ -400,6 +405,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
+    # 先清理过期数据，确保统计数据是最新的
+    clean_expired_stats()
+    
     # 获取当前统计数据
     now = datetime.now()
     

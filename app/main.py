@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import sys
 import logging
+from collections import defaultdict
 
 logging.getLogger("uvicorn").disabled = True
 logging.getLogger("uvicorn.access").disabled = True
@@ -43,8 +44,62 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 sys.excepthook = handle_exception
-
 app = FastAPI()
+
+# 添加API调用计数器
+api_call_stats = {
+    'last_24h': defaultdict(int),  # 按小时统计过去24小时
+    'hourly': defaultdict(int),    # 按小时统计
+    'minute': defaultdict(int),    # 按分钟统计
+    'last_reset': {
+        'hourly': datetime.now().replace(minute=0, second=0, microsecond=0),
+        'minute': datetime.now().replace(second=0, microsecond=0)
+    }
+}
+
+# 定时清理过期统计数据的函数
+def clean_expired_stats():
+    now = datetime.now()
+    current_hour = now.replace(minute=0, second=0, microsecond=0)
+    current_minute = now.replace(second=0, microsecond=0)
+    
+    # 清理24小时前的数据
+    for hour_key in list(api_call_stats['last_24h'].keys()):
+        try:
+            hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
+            if (now - hour_time).total_seconds() > 24 * 3600:  # 超过24小时
+                del api_call_stats['last_24h'][hour_key]
+        except ValueError:
+            # 如果键格式不正确，直接删除
+            del api_call_stats['last_24h'][hour_key]
+    
+    # 如果小时变更，重置小时统计
+    if current_hour != api_call_stats['last_reset']['hourly']:
+        api_call_stats['hourly'] = defaultdict(int)
+        api_call_stats['last_reset']['hourly'] = current_hour
+        log_msg = format_log_message('INFO', "每小时API调用统计已重置")
+        logger.info(log_msg)
+    
+    # 如果分钟变更，重置分钟统计
+    if current_minute != api_call_stats['last_reset']['minute']:
+        api_call_stats['minute'] = defaultdict(int)
+        api_call_stats['last_reset']['minute'] = current_minute
+        log_msg = format_log_message('INFO', "每分钟API调用统计已重置")
+        logger.info(log_msg)
+
+# 更新API调用统计的函数
+def update_api_call_stats():
+    now = datetime.now()
+    hour_key = now.strftime('%Y-%m-%d %H:00')
+    minute_key = now.strftime('%Y-%m-%d %H:%M')
+    
+    # 检查并清理过期统计
+    clean_expired_stats()
+    
+    # 更新统计
+    api_call_stats['last_24h'][hour_key] += 1
+    api_call_stats['hourly'][hour_key] += 1
+    api_call_stats['minute'][minute_key] += 1
 
 PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
 MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
@@ -52,6 +107,7 @@ MAX_REQUESTS_PER_DAY_PER_IP = int(
     os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
 # MAX_RETRIES = int(os.environ.get('MaxRetries', '3').strip() or '3')
 RETRY_DELAY = 1
+MAX_RETRY_DELAY = 16
 MAX_RETRY_DELAY = 16
 safety_settings = [
     {
@@ -205,10 +261,18 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
             if chat_request.stream:
                 async def stream_generator():
                     try:
+                        # 标记是否成功获取到响应
+                        success = False
                         async for chunk in gemini_client.stream_chat(chat_request, contents, safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings, system_instruction):
                             formatted_chunk = {"id": "chatcmpl-someid", "object": "chat.completion.chunk", "created": 1234567,
                                                "model": chat_request.model, "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]}
+                            success = True  # 只要有一个chunk成功，就标记为成功
                             yield f"data: {json.dumps(formatted_chunk)}\n\n"
+                        
+                        # 如果成功获取到响应，更新API调用统计
+                        if success:
+                            update_api_call_stats()
+                            
                         yield "data: [DONE]\n\n"
 
                     except asyncio.CancelledError:
@@ -278,6 +342,10 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                         extra_log_success = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 200}
                         log_msg = format_log_message('INFO', "请求处理成功", extra=extra_log_success)
                         logger.info(log_msg)
+                        
+                        # 更新API调用统计
+                        update_api_call_stats()
+                        
                         return response
 
                 except asyncio.CancelledError:
@@ -325,6 +393,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
+    # 获取当前统计数据
+    now = datetime.now()
+    hour_key = now.strftime('%Y-%m-%d %H:00')
+    minute_key = now.strftime('%Y-%m-%d %H:%M')
+    
+    # 计算过去24小时的调用总数
+    last_24h_calls = sum(api_call_stats['last_24h'].values())
+    hourly_calls = api_call_stats['hourly'][hour_key]
+    minute_calls = api_call_stats['minute'][minute_key]
+    
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -353,6 +431,44 @@ async def root():
             .status {{
                 color: #28a745;
                 font-weight: bold;
+                font-size: 18px;
+                margin-bottom: 20px;
+                text-align: center;
+            }}
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+                margin-top: 15px;
+                margin-bottom: 20px;
+            }}
+            .stat-card {{
+                background-color: #e9ecef;
+                padding: 10px;
+                border-radius: 4px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                transition: transform 0.2s;
+            }}
+            .stat-card:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }}
+            .stat-value {{
+                font-size: 24px;
+                font-weight: bold;
+                color: #007bff;
+            }}
+            .stat-label {{
+                font-size: 14px;
+                color: #6c757d;
+                margin-top: 5px;
+            }}
+            .section-title {{
+                color: #495057;
+                border-bottom: 1px solid #dee2e6;
+                padding-bottom: 10px;
+                margin-bottom: 20px;
             }}
         </style>
     </head>
@@ -360,17 +476,57 @@ async def root():
         <h1>🤖 Gemini API 代理服务</h1>
         
         <div class="info-box">
-            <h2>🟢 运行状态</h2>
+            <h2 class="section-title">🟢 运行状态</h2>
             <p class="status">服务运行中</p>
-            <p>可用API密钥数量: {len(key_manager.api_keys)}</p>
-            <p>可用模型数量: {len(GeminiClient.AVAILABLE_MODELS)}</p>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{len(key_manager.api_keys)}</div>
+                    <div class="stat-label">可用API密钥数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{len(GeminiClient.AVAILABLE_MODELS)}</div>
+                    <div class="stat-label">可用模型数量</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{len(key_manager.api_keys)}</div>
+                    <div class="stat-label">最大重试次数</div>
+                </div>
+            </div>
+            
+            <h3 class="section-title">API调用统计</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{last_24h_calls}</div>
+                    <div class="stat-label">24小时内调用次数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{hourly_calls}</div>
+                    <div class="stat-label">当前小时调用次数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{minute_calls}</div>
+                    <div class="stat-label">当前分钟调用次数</div>
+                </div>
+            </div>
         </div>
 
         <div class="info-box">
-            <h2>⚙️ 环境配置</h2>
-            <p>每分钟请求限制: {MAX_REQUESTS_PER_MINUTE}</p>
-            <p>每IP每日请求限制: {MAX_REQUESTS_PER_DAY_PER_IP}</p>
-            <p>最大重试次数: {len(key_manager.api_keys)}</p>
+            <h2 class="section-title">⚙️ 环境配置</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{MAX_REQUESTS_PER_MINUTE}</div>
+                    <div class="stat-label">每分钟请求限制</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{MAX_REQUESTS_PER_DAY_PER_IP}</div>
+                    <div class="stat-label">每IP每日请求限制</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{datetime.now().strftime('%H:%M:%S')}</div>
+                    <div class="stat-label">当前服务器时间</div>
+                </div>
+            </div>
         </div>
     </body>
     </html>

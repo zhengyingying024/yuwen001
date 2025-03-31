@@ -218,7 +218,32 @@
     </div>
 
     <div class="info-box">
-        <h2 class="section-title">📋 系统日志</h2>
+        <h2 class="section-title">📦 版本信息</h2>
+        <div class="version-info" style="text-align: center; margin-bottom: 15px;">
+            <div style="font-size: 18px; margin-bottom: 10px;">
+                当前版本: <span style="font-weight: bold; color: #007bff;">{{ local_version }}</span>
+            </div>
+            {% if has_update %}
+            <div style="display: flex; align-items: center; justify-content: center; margin-top: 15px;">
+                <div style="background-color: #fef6e0; border: 1px solid #ffeeba; border-radius: 4px; padding: 10px 15px; display: inline-flex; align-items: center;">
+                    <span style="color: #ff9800; margin-right: 10px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </span>
+                    <span>
+                        <strong>发现新版本!</strong> 最新版本: <span style="font-weight: bold; color: #28a745;">{{ remote_version }}</span>
+                    </span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="info-box">
+        <h2 class="section-title"> 系统日志</h2>
         <div class="log-filter">
             <button class="active" data-level="ALL">全部</button>
             <button data-level="INFO">信息</button>

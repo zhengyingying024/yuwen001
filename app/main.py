@@ -197,10 +197,62 @@ async def check_keys():
     return available_keys
 
 
+# 存储版本信息的全局变量
+local_version = "0.0.0"
+remote_version = "0.0.0"
+has_update = False
+
+# 检查版本更新
+async def check_version():
+    global local_version, remote_version, has_update
+    try:
+        # 读取本地版本
+        with open("version.txt", "r") as f:
+            version_line = f.read().strip()
+            local_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
+        
+        # 获取远程版本
+        github_url = "https://raw.githubusercontent.com/wyeeeee/hajimi/refs/heads/main/version.txt"
+        response = requests.get(github_url, timeout=5)
+        if response.status_code == 200:
+            version_line = response.text.strip()
+            remote_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
+            
+            # 比较版本号
+            local_parts = [int(x) for x in local_version.split(".")]
+            remote_parts = [int(x) for x in remote_version.split(".")]
+            
+            # 确保两个列表长度相同
+            while len(local_parts) < len(remote_parts):
+                local_parts.append(0)
+            while len(remote_parts) < len(local_parts):
+                remote_parts.append(0)
+                
+            # 比较版本号
+            for i in range(len(local_parts)):
+                if remote_parts[i] > local_parts[i]:
+                    has_update = True
+                    break
+                elif remote_parts[i] < local_parts[i]:
+                    break
+            
+            log_msg = format_log_message('INFO', f"版本检查: 本地版本 {local_version}, 远程版本 {remote_version}, 有更新: {has_update}")
+            logger.info(log_msg)
+        else:
+            log_msg = format_log_message('WARNING', f"无法获取远程版本信息，HTTP状态码: {response.status_code}")
+            logger.warning(log_msg)
+    except Exception as e:
+        log_msg = format_log_message('ERROR', f"版本检查失败: {str(e)}")
+        logger.error(log_msg)
+
 @app.on_event("startup")
 async def startup_event():
     log_msg = format_log_message('INFO', "Starting Gemini API proxy...")
     logger.info(log_msg)
+    
+    # 检查版本
+    await check_version()
+    
     available_keys = await check_keys()
     if available_keys:
         key_manager.api_keys = available_keys
@@ -439,11 +491,7 @@ async def root(request: Request):
     # 获取最近的日志
     recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
     
-    # 读取HTML模板
-    with open(os.path.join(BASE_DIR, "index.html"), "r", encoding="utf-8") as f:
-        html_content = f.read()
-    
-    # 替换模板变量
+    # 准备模板上下文
     context = {
         "key_count": len(key_manager.api_keys),
         "model_count": len(GeminiClient.AVAILABLE_MODELS),
@@ -454,39 +502,12 @@ async def root(request: Request):
         "max_requests_per_minute": MAX_REQUESTS_PER_MINUTE,
         "max_requests_per_day_per_ip": MAX_REQUESTS_PER_DAY_PER_IP,
         "current_time": datetime.now().strftime('%H:%M:%S'),
-        "logs": recent_logs
+        "logs": recent_logs,
+        # 添加版本信息
+        "local_version": local_version,
+        "remote_version": remote_version,
+        "has_update": has_update
     }
     
-    # 使用Jinja2模板引擎渲染HTML
-    for key, value in context.items():
-        placeholder = "{{ " + key + " }}"
-        html_content = html_content.replace(placeholder, str(value))
-    
-    # 处理日志条目的循环
-    log_entries_html = ""
-    for log in recent_logs:
-        log_entry_html = f"""
-        <div class="log-entry {log['level']}" data-level="{log['level']}">
-            <span class="log-timestamp">{log['timestamp']}</span>
-            <span class="log-level {log['level']}">{log['level']}</span>
-            <span class="log-message">
-                {f"[{log['key']}]" if log['key'] != 'N/A' else ''}
-                {log['request_type'] if log['request_type'] != 'N/A' else ''}
-                {f"[{log['model']}]" if log['model'] != 'N/A' else ''}
-                {log['status_code'] if log['status_code'] != 'N/A' else ''}
-                : {log['message']}
-                {f" - {log['error_message']}" if log['error_message'] else ''}
-            </span>
-        </div>
-        """
-        log_entries_html += log_entry_html
-    
-    # 替换日志循环部分
-    log_loop_start = "{% for log in logs %}"
-    log_loop_end = "{% endfor %}"
-    log_loop_pattern = log_loop_start + ".*?" + log_loop_end
-    
-    import re
-    html_content = re.sub(log_loop_pattern, log_entries_html, html_content, flags=re.DOTALL)
-    
-    return html_content
+    # 使用Jinja2模板引擎正确渲染HTML
+    return templates.TemplateResponse("index.html", {"request": request, **context})

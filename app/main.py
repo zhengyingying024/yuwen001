@@ -8,7 +8,7 @@ from .utils import handle_gemini_error, protect_from_abuse, APIKeyManager, test_
 import os
 import json
 import asyncio
-from typing import Literal
+from typing import Literal, Dict, Any, Optional
 import random
 import requests
 from datetime import datetime, timedelta
@@ -17,6 +17,8 @@ import sys
 import logging
 from collections import defaultdict
 import pathlib
+import hashlib
+import time
 
 logging.getLogger("uvicorn").disabled = True
 logging.getLogger("uvicorn.access").disabled = True
@@ -250,6 +252,9 @@ async def startup_event():
     log_msg = format_log_message('INFO', "Starting Gemini API proxy...")
     logger.info(log_msg)
     
+    # 启动缓存清理定时任务
+    schedule_cache_cleanup()
+    
     # 检查版本
     await check_version()
     
@@ -289,7 +294,213 @@ async def verify_password(request: Request):
                 status_code=401, detail="Unauthorized: Invalid token")
 
 
-async def process_request(chat_request: ChatCompletionRequest, http_request: Request, request_type: Literal['stream', 'non-stream']):
+@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(verify_password)):
+    # 获取客户端IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    
+    # 流式请求直接处理，不使用缓存
+    if request.stream:
+        return await process_request(request, http_request, "stream")
+    
+    # 生成完整缓存键 - 用于精确匹配
+    cache_key = generate_cache_key(request)
+    
+    # 生成简化请求特征键（主要基于模型和消息内容）- 用于相似匹配
+    simplified_key = generate_simplified_request_key(client_ip, request.model, request.messages)
+    
+    # 记录请求缓存键信息
+    log_msg = format_log_message('INFO', f"请求缓存键: {cache_key[:8]}..., 简化键: {simplified_key[:8]}...", 
+                               extra={'cache_key': cache_key[:8], 'request_type': 'non-stream'})
+    logger.info(log_msg)
+    
+    # 检查精确缓存是否存在且未过期
+    if cache_key in response_cache and time.time() < response_cache[cache_key].get('expiry_time', 0):
+        # 精确缓存命中
+        log_msg = format_log_message('INFO', f"精确缓存命中: {cache_key[:8]}...", 
+                                   extra={'cache_operation': 'hit', 'request_type': 'non-stream'})
+        logger.info(log_msg)
+        
+        # 获取缓存的响应
+        cached_response = response_cache[cache_key]['response']
+        
+        # 根据配置决定是否删除缓存项
+        if REMOVE_CACHE_AFTER_USE:
+            del response_cache[cache_key]
+            log_msg = format_log_message('INFO', f"缓存使用后已清除: {cache_key[:8]}...", 
+                                      extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
+            logger.info(log_msg)
+            
+            # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
+            task_keys_to_delete = []
+            for task_key in active_requests_pool.keys():
+                if task_key.startswith(f"cache:{cache_key}:"):
+                    task_keys_to_delete.append(task_key)
+            
+            for task_key in task_keys_to_delete:
+                if task_key in active_requests_pool:
+                    # 不取消任务，只从池中移除，避免任务被中断
+                    del active_requests_pool[task_key]
+                    log_msg = format_log_message('INFO', f"缓存使用后移除相关活跃任务: {task_key}", 
+                                              extra={'cache_operation': 'task-removed', 'request_type': 'non-stream'})
+                    logger.info(log_msg)
+        
+        # 返回缓存响应（但创建新的响应对象）
+        return ChatCompletionResponse(
+            id=f"chatcmpl-{int(time.time()*1000)}",
+            object="chat.completion", 
+            created=int(time.time()),
+            model=cached_response.model,
+            choices=cached_response.choices
+        )
+    
+    # 查找所有使用相同缓存键的活跃任务
+    for key, task in active_requests_pool.items():
+        if not task.done() and key.startswith(f"cache:{cache_key}"):
+            log_msg = format_log_message('INFO', f"发现相同请求的进行中任务", 
+                                      extra={'request_type': 'non-stream', 'model': request.model})
+            logger.info(log_msg)
+            
+            # 等待已有任务完成
+            try:
+                # 设置超时，避免无限等待
+                result = await asyncio.wait_for(task, timeout=60)
+                # 如果任务成功完成，返回结果
+                if result:
+                    log_msg = format_log_message('INFO', f"使用已完成任务的结果", 
+                                              extra={'request_type': 'non-stream', 'model': request.model})
+                    logger.info(log_msg)
+                    
+                    # 如果配置了使用后清除缓存，检查并清除相关缓存
+                    if REMOVE_CACHE_AFTER_USE:
+                        # 从活跃任务键中提取缓存键
+                        parts = key.split(":")
+                        if len(parts) >= 2 and parts[0] == "cache":
+                            cache_key_from_task = parts[1]
+                            if cache_key_from_task in response_cache:
+                                del response_cache[cache_key_from_task]
+                                log_msg = format_log_message('INFO', f"活跃任务完成后清除缓存: {cache_key_from_task[:8]}...", 
+                                                          extra={'cache_operation': 'task-used-and-removed', 'request_type': 'non-stream'})
+                                logger.info(log_msg)
+                    
+                    # 返回活跃任务的结果
+                    return ChatCompletionResponse(
+                        id=f"chatcmpl-{int(time.time()*1000)}",
+                        object="chat.completion", 
+                        created=int(time.time()),
+                        model=result.model,
+                        choices=result.choices
+                    )
+            except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+                # 任务超时或被取消的情况下，记录日志然后让代码继续执行
+                # 不要重新抛出异常
+                error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"
+                log_msg = format_log_message('WARNING', f"等待已有任务{error_type}: {key}", 
+                                          extra={'request_type': 'non-stream', 'model': request.model})
+                logger.warning(log_msg)
+                
+                # 从活跃请求池移除该任务
+                if key in active_requests_pool and (task.done() or task.cancelled()):
+                    del active_requests_pool[key]
+                    log_msg = format_log_message('INFO', f"已从活跃请求池移除{error_type}任务: {key}", 
+                                              extra={'request_type': 'non-stream'})
+                    logger.info(log_msg)
+                    
+                # 不抛出异常，继续处理，尝试查找其他缓存或创建新请求
+    
+    # 检查相似缓存 - 查找来自任何客户端的相似请求缓存
+    for key, cache_data in response_cache.items():
+        # 检查是否有相同模型、相似内容的已缓存响应
+        simplified_stored = cache_data.get('simplified_key')
+        if (simplified_stored == simplified_key and 
+            time.time() < cache_data.get('expiry_time', 0)):
+            
+            log_msg = format_log_message('INFO', f"相似缓存命中: {key[:8]}... (简化键: {simplified_key[:8]}...)", 
+                                       extra={'cache_operation': 'similar-hit', 'request_type': 'non-stream'})
+            logger.info(log_msg)
+            
+            # 获取缓存的响应
+            cached_response = cache_data['response']
+            
+            # 根据配置决定是否删除缓存项
+            if REMOVE_CACHE_AFTER_USE:
+                del response_cache[key]
+                log_msg = format_log_message('INFO', f"相似缓存使用后已清除: {key[:8]}...", 
+                                          extra={'cache_operation': 'similar-used-and-removed', 'request_type': 'non-stream'})
+                logger.info(log_msg)
+                
+                # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
+                task_keys_to_delete = []
+                for task_key in active_requests_pool.keys():
+                    if task_key.startswith(f"cache:{key}:") or task_key.endswith(f":{simplified_key}"):
+                        task_keys_to_delete.append(task_key)
+                
+                for task_key in task_keys_to_delete:
+                    if task_key in active_requests_pool:
+                        # 不取消任务，只从池中移除，避免任务被中断
+                        del active_requests_pool[task_key]
+                        log_msg = format_log_message('INFO', f"相似缓存使用后移除相关活跃任务: {task_key}", 
+                                                  extra={'cache_operation': 'similar-task-removed', 'request_type': 'non-stream'})
+                        logger.info(log_msg)
+            
+            # 返回缓存响应（但创建新的响应对象）
+            return ChatCompletionResponse(
+                id=f"chatcmpl-{int(time.time()*1000)}",
+                object="chat.completion", 
+                created=int(time.time()),
+                model=cached_response.model,
+                choices=cached_response.choices
+            )
+    
+    # 构建包含缓存键的活跃请求池键
+    pool_key = f"cache:{cache_key}:{simplified_key}"
+    
+    # 创建请求处理任务
+    process_task = asyncio.create_task(
+        process_request(request, http_request, "non-stream", cache_key=cache_key, client_ip=client_ip, simplified_key=simplified_key)
+    )
+    
+    # 给任务添加创建时间属性，用于清理长时间运行的任务
+    process_task.creation_time = time.time()
+    
+    # 将任务添加到活跃请求池
+    active_requests_pool[pool_key] = process_task
+    
+    # 等待任务完成
+    try:
+        response = await process_task
+        # 检查结果是否为None（表示任务被取消）
+        if response is None:
+            log_msg = format_log_message('INFO', f"任务已被取消，回退到创建新请求", 
+                                      extra={'request_type': 'non-stream', 'model': request.model})
+            logger.info(log_msg)
+            
+            # 如果在活跃请求池中，移除任务
+            if pool_key in active_requests_pool:
+                del active_requests_pool[pool_key]
+            
+            # 创建新的处理任务（不添加到活跃请求池，避免重复问题）
+            new_process_task = asyncio.create_task(
+                process_request(request, http_request, "non-stream", cache_key=cache_key, client_ip=client_ip, simplified_key=simplified_key)
+            )
+            
+            # 等待新任务完成
+            response = await new_process_task
+            if response is None:
+                # 如果新任务也被取消，则返回错误
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                    detail="请求处理失败，任务被取消"
+                )
+        
+        return response
+    except Exception as e:
+        # 如果任务失败，从活跃请求池中移除
+        if pool_key in active_requests_pool:
+            del active_requests_pool[pool_key]
+        raise
+
+async def process_request(chat_request: ChatCompletionRequest, http_request: Request, request_type: Literal['stream', 'non-stream'], cache_key: str = None, client_ip: str = None, simplified_key: str = None):
     global current_api_key
     protect_from_abuse(
         http_request, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_DAY_PER_IP)
@@ -357,13 +568,14 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                         extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端断开导致API调用取消'}
                         log_msg = format_log_message('INFO', "API调用因客户端断开而取消", extra=extra_log_gemini_cancel)
                         logger.info(log_msg)
-                        raise
+                        # 不继续抛出异常，而是返回None，表示任务被取消
+                        return None
 
                 async def check_client_disconnect():
                     while True:
                         if await http_request.is_disconnected():
                             extra_log_client_disconnect = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '检测到客户端断开连接'}
-                            log_msg = format_log_message('INFO', "客户端连接已中断，正在取消API请求", extra=extra_log_client_disconnect)
+                            log_msg = format_log_message('INFO', "客户端连接已中断，等待API请求完成", extra=extra_log_client_disconnect)
                             logger.info(log_msg)
                             return True
                         await asyncio.sleep(0.5)
@@ -378,15 +590,70 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                     )
 
                     if disconnect_task in done:
-                        gemini_task.cancel()
+                        # 不立即取消API请求，而是等待其完成
                         try:
-                            await gemini_task
-                        except asyncio.CancelledError:
-                            extra_log_gemini_task_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': 'API任务已终止'}
-                            log_msg = format_log_message('INFO', "API任务已成功取消", extra=extra_log_gemini_task_cancel)
+                            response_content = await gemini_task
+                            # 检查响应内容是否为None（表示任务被取消）
+                            if response_content is None:
+                                log_msg = format_log_message('INFO', "API任务已取消，跳过处理", 
+                                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                                logger.info(log_msg)
+                                # 继续循环，尝试其他API密钥
+                                continue
+                            
+                            # 检查响应文本是否为空
+                            if response_content.text == "":
+                                extra_log_empty_response = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 204}
+                                log_msg = format_log_message('INFO', "Gemini API 返回空响应", extra=extra_log_empty_response)
+                                logger.info(log_msg)
+                                # 继续循环
+                                continue
+                            
+                            # 生成符合OpenAI标准的响应ID
+                            response_id = f"chatcmpl-{int(time.time()*1000)}"
+                            
+                            response = ChatCompletionResponse(
+                                id=response_id,
+                                object="chat.completion", 
+                                created=int(time.time()),
+                                model=chat_request.model,
+                                choices=[{
+                                    "index": 0, 
+                                    "message": {
+                                        "role": "assistant", 
+                                        "content": response_content.text
+                                    }, 
+                                    "finish_reason": "stop"
+                                }]
+                            )
+                            
+                            # 缓存响应
+                            if cache_key:
+                                now = time.time()
+                                response_cache[cache_key] = {
+                                    'response': response,
+                                    'expiry_time': now + CACHE_EXPIRY_TIME,
+                                    'created_at': now,
+                                    'client_ip': client_ip,
+                                    'simplified_key': simplified_key
+                                }
+                                log_msg = format_log_message('INFO', f"响应已缓存: {cache_key[:8]}...", 
+                                                           extra={'cache_operation': 'store', 'request_type': request_type})
+                                logger.info(log_msg)
+                            
+                            extra_log_success = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 200}
+                            log_msg = format_log_message('INFO', "请求处理成功", extra=extra_log_success)
                             logger.info(log_msg)
-                        # 直接抛出异常中断循环
-                        raise HTTPException(status_code=status.HTTP_408_REQUEST_TIMEOUT, detail="客户端连接已中断")
+                            
+                            # 更新API调用统计
+                            update_api_call_stats()
+                            
+                            return response
+                        except Exception as e:
+                            extra_log_error = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 408, 'error_message': 'API请求失败'}
+                            log_msg = format_log_message('ERROR', "API请求失败", extra=extra_log_error)
+                            logger.error(log_msg)
+                            raise HTTPException(status_code=status.HTTP_408_REQUEST_TIMEOUT, detail="API请求失败")
 
                     if gemini_task in done:
                         disconnect_task.cancel()
@@ -401,8 +668,39 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                             logger.info(log_msg)
                             # 继续循环
                             continue
-                        response = ChatCompletionResponse(id="chatcmpl-someid", object="chat.completion", created=1234567890, model=chat_request.model,
-                                                        choices=[{"index": 0, "message": {"role": "assistant", "content": response_content.text}, "finish_reason": "stop"}])
+                        
+                        # 生成符合OpenAI标准的响应ID
+                        response_id = f"chatcmpl-{int(time.time()*1000)}"
+                        
+                        response = ChatCompletionResponse(
+                            id=response_id,
+                            object="chat.completion", 
+                            created=int(time.time()),
+                            model=chat_request.model,
+                            choices=[{
+                                "index": 0, 
+                                "message": {
+                                    "role": "assistant", 
+                                    "content": response_content.text
+                                }, 
+                                "finish_reason": "stop"
+                            }]
+                        )
+                        
+                        # 缓存响应
+                        if cache_key:
+                            now = time.time()
+                            response_cache[cache_key] = {
+                                'response': response,
+                                'expiry_time': now + CACHE_EXPIRY_TIME,
+                                'created_at': now,
+                                'client_ip': client_ip,
+                                'simplified_key': simplified_key
+                            }
+                            log_msg = format_log_message('INFO', f"响应已缓存: {cache_key[:8]}...", 
+                                        extra={'cache_operation': 'store', 'request_type': request_type})
+                            logger.info(log_msg)
+                        
                         extra_log_success = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 200}
                         log_msg = format_log_message('INFO', "请求处理成功", extra=extra_log_success)
                         logger.info(log_msg)
@@ -416,7 +714,17 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                     extra_log_request_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message':"请求被取消" }
                     log_msg = format_log_message('INFO', "请求取消", extra=extra_log_request_cancel)
                     logger.info(log_msg)
-                    raise
+                    
+                    # 在请求被取消时清理相关资源
+                    for pool_key in list(active_requests_pool.keys()):
+                        if cache_key and pool_key.startswith(f"cache:{cache_key}:"):
+                            del active_requests_pool[pool_key]
+                            log_msg = format_log_message('INFO', f"请求取消时清理相关活跃任务: {pool_key}", 
+                                                      extra={'cleanup': 'cancelled_task'})
+                            logger.info(log_msg)
+                    
+                    # 不再抛出CancelledError，而是返回None，使用另一种方法处理取消
+                    return None
 
         except HTTPException as e:
             if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
@@ -441,11 +749,6 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
 
 
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(verify_password)):
-    return await process_request(request, http_request, "stream" if request.stream else "non-stream")
-
-
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     error_message = translate_error(str(exc))
@@ -459,6 +762,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root(request: Request):
     # 先清理过期数据，确保统计数据是最新的
     clean_expired_stats()
+    clean_expired_cache()
     await check_version()
     # 获取当前统计数据
     now = datetime.now()
@@ -491,6 +795,33 @@ async def root(request: Request):
     # 获取最近的日志
     recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
     
+    # 获取缓存统计
+    total_cache = len(response_cache)
+    valid_cache = 0
+    cache_by_model = {}
+    recent_cache_operations = []
+    
+    # 分析缓存数据
+    for cache_key, cache_data in response_cache.items():
+        if time.time() < cache_data.get('expiry_time', 0):
+            valid_cache += 1
+            
+            # 按模型统计缓存
+            model = cache_data.get('response', {}).model
+            if model:
+                if model in cache_by_model:
+                    cache_by_model[model] += 1
+                else:
+                    cache_by_model[model] = 1
+    
+    # 获取请求历史统计
+    history_count = len(client_request_history)
+    
+    # 获取活跃请求统计
+    active_count = len(active_requests_pool)
+    active_done = sum(1 for task in active_requests_pool.values() if task.done())
+    active_pending = active_count - active_done
+    
     # 准备模板上下文
     context = {
         "key_count": len(key_manager.api_keys),
@@ -506,8 +837,229 @@ async def root(request: Request):
         # 添加版本信息
         "local_version": local_version,
         "remote_version": remote_version,
-        "has_update": has_update
+        "has_update": has_update,
+        # 添加缓存信息
+        "cache_entries": total_cache,
+        "valid_cache": valid_cache,
+        "expired_cache": total_cache - valid_cache,
+        "cache_expiry_time": CACHE_EXPIRY_TIME,
+        "max_cache_entries": MAX_CACHE_ENTRIES,
+        "cache_by_model": cache_by_model,
+        "request_history_count": history_count,
+        "enable_reconnect_detection": ENABLE_RECONNECT_DETECTION,
+        "remove_cache_after_use": REMOVE_CACHE_AFTER_USE,
+        # 添加活跃请求池信息
+        "active_count": active_count,
+        "active_done": active_done,
+        "active_pending": active_pending
     }
     
     # 使用Jinja2模板引擎正确渲染HTML
     return templates.TemplateResponse("index.html", {"request": request, **context})
+
+# 请求响应缓存
+response_cache: Dict[str, Dict[str, Any]] = {}
+# 活跃请求池 - 存储正在处理的请求
+active_requests_pool: Dict[str, asyncio.Task] = {}
+# 缓存过期时间（秒）
+CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "300"))  # 默认5分钟
+# 是否在缓存命中后立即清除
+REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
+# 客户端IP到最近请求的映射，用于识别重连请求
+client_request_history: Dict[str, Dict[str, Any]] = {}
+# 请求历史记录保留时间（秒）
+REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
+# 是否启用重连检测
+ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
+# 缓存大小限制（项数）
+MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "1000"))  # 默认最多缓存1000条响应
+
+# 清理过期的活跃请求
+def clean_expired_active_requests():
+    now = time.time()
+    expired_keys = []
+    
+    for req_key, task in active_requests_pool.items():
+        if task.done() or task.cancelled():
+            expired_keys.append(req_key)
+    
+    for key in expired_keys:
+        del active_requests_pool[key]
+    
+    if expired_keys:
+        log_msg = format_log_message('INFO', f"清理已完成请求任务: {len(expired_keys)}个", extra={'cleanup': 'active_requests'})
+        logger.info(log_msg)
+    
+    # 检查长时间运行的任务（超过5分钟）
+    long_running_keys = []
+    # 任务开始时间是在构建池键之前记录的，这里使用粗略估计
+    five_minutes_ago = now - 300  # 5分钟 = 300秒
+    
+    for req_key, task in active_requests_pool.items():
+        if req_key.startswith("cache:") and not task.done() and not task.cancelled():
+            # 检查任务是否已经运行太长时间
+            if hasattr(task, 'creation_time') and task.creation_time < five_minutes_ago:
+                long_running_keys.append(req_key)
+                # 取消长时间运行的任务
+                task.cancel()
+    
+    if long_running_keys:
+        log_msg = format_log_message('WARNING', f"取消长时间运行的任务: {len(long_running_keys)}个", extra={'cleanup': 'long_running_tasks'})
+        logger.warning(log_msg)
+
+# 生成简化的请求特征键
+def generate_simplified_request_key(client_ip: str, model: str, messages: list) -> str:
+    """
+    生成一个简化的请求特征键，用于快速识别相似请求
+    主要基于模型和消息内容，不依赖客户端IP（因为酒馆重试时可能使用不同连接）
+    """
+    # 收集所有用户消息形成特征
+    user_messages = []
+    for msg in messages:
+        if msg.role == "user":
+            if isinstance(msg.content, str):
+                user_messages.append(msg.content[:100])  # 只取前100个字符
+    
+    # 使用最后一条用户消息和消息数量作为特征
+    last_message = user_messages[-1] if user_messages else ""
+    message_count = len(messages)
+    
+    # 计算消息总长度作为特征
+    total_length = sum(len(m.content) if isinstance(m.content, str) else 10 for m in messages)
+    
+    # 组合特征生成键 - 不包含客户端IP，因为重试请求的IP特征可能会变化
+    feature_string = f"{model}:{message_count}:{total_length}:{last_message[:100]}"
+    return hashlib.md5(feature_string.encode()).hexdigest()
+
+# 清理过期缓存的函数
+def clean_expired_cache():
+    now = time.time()
+    expired_keys = []
+    
+    # 找出过期的缓存项
+    for cache_key, cache_data in response_cache.items():
+        if now > cache_data.get('expiry_time', 0):
+            expired_keys.append(cache_key)
+    
+    # 删除过期的缓存项
+    for key in expired_keys:
+        log_msg = format_log_message('INFO', f"清理过期缓存: {key[:8]}...", extra={'cache_operation': 'clean'})
+        logger.info(log_msg)
+        del response_cache[key]
+    
+    # 如果缓存数量超过限制，清除最旧的缓存
+    if len(response_cache) > MAX_CACHE_ENTRIES:
+        # 按创建时间排序
+        sorted_keys = sorted(response_cache.keys(), 
+                           key=lambda k: response_cache[k].get('created_at', 0))
+        
+        # 计算需要删除的数量
+        to_remove = len(response_cache) - MAX_CACHE_ENTRIES
+        
+        # 删除最旧的项
+        for key in sorted_keys[:to_remove]:
+            log_msg = format_log_message('INFO', f"缓存容量限制，删除旧缓存: {key[:8]}...", 
+                                       extra={'cache_operation': 'limit'})
+            logger.info(log_msg)
+            del response_cache[key]
+    
+    # 同时清理过期的请求历史记录
+    expired_ips = []
+    for client_ip, history_data in client_request_history.items():
+        if now > history_data.get('expiry_time', 0):
+            expired_ips.append(client_ip)
+    
+    for ip in expired_ips:
+        del client_request_history[ip]
+
+# 定期清理缓存的定时任务
+def schedule_cache_cleanup():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(clean_expired_cache, 'interval', minutes=1)  # 每分钟清理一次
+    scheduler.add_job(clean_expired_active_requests, 'interval', seconds=30)  # 每30秒清理一次活跃请求
+    scheduler.start()
+
+# 添加请求历史记录，用于识别重连请求
+def record_client_request(client_ip: str, request_data: Dict[str, Any]):
+    now = time.time()
+    client_request_history[client_ip] = {
+        'request_data': request_data,
+        'timestamp': now,
+        'expiry_time': now + REQUEST_HISTORY_EXPIRY_TIME
+    }
+
+# 提取请求的关键特征，用于识别相似请求
+def extract_request_features(request: ChatCompletionRequest) -> Dict[str, Any]:
+    # 创建包含请求关键信息的字典
+    features = {
+        'model': request.model,
+        'temperature': request.temperature,
+        'max_tokens': request.max_tokens,
+        'last_message': ''
+    }
+    
+    # 提取最后一条用户消息
+    for msg in reversed(request.messages):
+        if msg.role == "user":
+            if isinstance(msg.content, str):
+                features['last_message'] = msg.content[:100]  # 只取前100个字符
+            break
+    
+    return features
+
+# 检查当前请求是否与客户端之前的请求相似（可能是重连请求）
+def is_reconnect_request(client_ip: str, current_request: Dict[str, Any]) -> bool:
+    if client_ip not in client_request_history:
+        return False
+    
+    previous_request = client_request_history[client_ip]['request_data']
+    
+    # 比较模型、温度和最大令牌数
+    if (previous_request['model'] != current_request['model'] or
+        abs(previous_request['temperature'] - current_request['temperature']) > 0.001 or
+        previous_request['max_tokens'] != current_request['max_tokens']):
+        return False
+    
+    # 检查最后一条消息是否相似（前50个字符）
+    prev_msg = previous_request['last_message'][:50]
+    curr_msg = current_request['last_message'][:50]
+    
+    # 如果最后一条消息完全相同，很可能是重连请求
+    if prev_msg == curr_msg and prev_msg != "":
+        return True
+    
+    return False
+
+# 生成请求的唯一缓存键
+def generate_cache_key(chat_request: ChatCompletionRequest) -> str:
+    # 创建包含请求关键信息的字典
+    request_data = {
+        'model': chat_request.model,
+        'temperature': chat_request.temperature,
+        'max_tokens': chat_request.max_tokens,
+        'messages': []
+    }
+    
+    # 添加消息内容
+    for msg in chat_request.messages:
+        if isinstance(msg.content, str):
+            message_data = {'role': msg.role, 'content': msg.content}
+            request_data['messages'].append(message_data)
+        elif isinstance(msg.content, list):
+            content_list = []
+            for item in msg.content:
+                if item.get('type') == 'text':
+                    content_list.append({'type': 'text', 'text': item.get('text')})
+                # 对于图像数据，我们只使用标识符而不是全部数据
+                elif item.get('type') == 'image_url':
+                    image_data = item.get('image_url', {}).get('url', '')
+                    if image_data.startswith('data:image/'):
+                        # 对于base64图像，使用前32字符作为标识符
+                        content_list.append({'type': 'image_url', 'hash': hashlib.md5(image_data[:32].encode()).hexdigest()})
+                    else:
+                        content_list.append({'type': 'image_url', 'url': image_data})
+            request_data['messages'].append({'role': msg.role, 'content': content_list})
+    
+    # 将字典转换为JSON字符串并计算哈希值
+    json_data = json.dumps(request_data, sort_keys=True)
+    return hashlib.md5(json_data.encode()).hexdigest()

@@ -179,10 +179,6 @@ class GeminiClient:
                             logger.error(log_msg)
                             raise e
                 except Exception as e:
-                    error_msg = f"流式处理错误: {str(e)}"
-                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                    log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
-                    logger.error(log_msg)
                     raise e
                 finally:
                     log_msg = format_log_message('INFO', "流式请求结束", extra=extra_log)
@@ -218,10 +214,6 @@ class GeminiClient:
             
             return ResponseWrapper(response.json())
         except Exception as e:
-            error_msg = f"非流式请求错误: {str(e)}"
-            extra_log_error = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-            log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
-            logger.error(log_msg)
             raise
 
     def convert_messages(self, messages, use_system_prompt=False):

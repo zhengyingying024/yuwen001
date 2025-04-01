@@ -5,7 +5,7 @@
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
 
 ###  更新日志
-*   0.0.2 修复了在log中错误暴露apikey的问题，修改了客户端断开连接的处理逻辑（感谢[@Moonfanz](https://github.com/warming-afternoon)）
+*   0.0.2 修复了在log中错误暴露apikey的问题，修改了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
 
 ## ✨ 主要功能：
 

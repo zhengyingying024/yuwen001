@@ -48,7 +48,7 @@
     ...(还有一些变量,但是没啥大用,可以到代码里找)
 4.  确保 `requirements.txt` 文件已包含必要的依赖。
 5.  Space 将会自动构建并运行。
-6.  URL格式为`https://your-space-url.hf.space`。
+6.  URL格式为`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`。
 
 ### 💻 本地运行（可选,未测试但是应该能行）：
 

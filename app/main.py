@@ -459,7 +459,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root(request: Request):
     # 先清理过期数据，确保统计数据是最新的
     clean_expired_stats()
-    
+    await check_version()
     # 获取当前统计数据
     now = datetime.now()
     

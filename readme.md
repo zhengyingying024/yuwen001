@@ -59,7 +59,7 @@
 ### 🔌 接入其他服务
 
 1.  在连接中选择OpenAI
-2.  在API Base URL中填入`https://your-space-url.hf.space/v1`
+2.  在API Base URL中填入`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`
 3.  在API Key中填入`PASSWORD`环境变量的值,如未设置则填入`123`
 
 ## ⚠️ 注意事项：

@@ -120,7 +120,7 @@ class GeminiClient:
         
         # 检查是否启用假流式请求
         if FAKE_STREAMING:
-            log_msg = format_log_message('INFO', "使用假流式请求模式", extra=extra_log)
+            log_msg = format_log_message('INFO', "使用假流式请求模式（发送空格保持连接）", extra=extra_log)
             logger.info(log_msg)
             
             try:
@@ -167,8 +167,11 @@ class GeminiClient:
                     logger.warning(log_msg)
                     
                 # 更新API调用统计
-                from app.main import update_api_call_stats
-                update_api_call_stats()
+                # 注意：这里不直接导入update_api_call_stats以避免循环导入
+                # 而是在日志中记录，让main.py中的代码自行处理统计
+                log_msg = format_log_message('INFO', "假流式请求完成，需要更新API调用统计",
+                                            extra={'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model})
+                logger.info(log_msg)
                 
             except Exception as e:
                 error_msg = f"假流式处理期间发生错误: {str(e)}"

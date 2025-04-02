@@ -880,8 +880,8 @@ async def process_stream_request(
                 safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
                 system_instruction
             ):
-                # 如果是空字符串或只有空格（假流式请求的空内容），跳过
-                if not chunk or chunk.isspace():
+                # 空字符串跳过
+                if not chunk:
                     continue
                     
                 formatted_chunk = {

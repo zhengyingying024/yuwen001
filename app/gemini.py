@@ -120,63 +120,38 @@ class GeminiClient:
         
         # 检查是否启用假流式请求
         if FAKE_STREAMING:
-            log_msg = format_log_message('INFO', "使用假流式请求模式（发送空格保持连接）", extra=extra_log)
+            log_msg = format_log_message('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
             logger.info(log_msg)
             
             try:
-                # 创建非流式请求任务
-                non_stream_task = asyncio.create_task(
-                    asyncio.to_thread(
-                        self.complete_chat,
-                        request,
-                        contents,
-                        safety_settings,
-                        system_instruction
-                    )
-                )
+                # 这个方法不再直接使用self.api_key，而是由main.py提供API密钥列表和管理
+                # 在这里，我们只负责持续发送换行符，直到main.py那边获取到响应
                 
-                # 在获取非流式响应前，每隔一定时间返回空格
-                # 这确保了流式响应的开启
+                # 持续发送换行符，直到外部取消此生成器
                 start_time = time.time()
-                while not non_stream_task.done():
-                    # 发送空行作为保活消息
+                while True:
+                    # 发送换行符作为保活消息
                     yield "\n"
                     # 等待一段时间
                     await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                     
-                    # 如果等待时间过长（超过120秒），防止无限等待
-                    if time.time() - start_time > 120:
+                    # 如果等待时间过长（超过300秒），防止无限等待
+                    if time.time() - start_time > 300:
                         log_msg = format_log_message('WARNING', "假流式请求等待时间过长，强制结束", extra=extra_log)
                         logger.warning(log_msg)
-                        break
-                
-                # 获取非流式响应
-                response_content = await non_stream_task
-                
-                if response_content and response_content.text:
-                    # 将完整响应分割成小块，模拟流式返回
-                    full_text = response_content.text
-                    chunk_size = max(len(full_text) // 10, 1)  # 至少分成10块，每块至少1个字符
-                    
-                    for i in range(0, len(full_text), chunk_size):
-                        chunk = full_text[i:i+chunk_size]
-                        yield chunk
-                else:
-                    log_msg = format_log_message('WARNING', "假流式请求获取到空响应", extra=extra_log)
-                    logger.warning(log_msg)
-                    
-                # 更新API调用统计
-                # 注意：这里不直接导入update_api_call_stats以避免循环导入
-                # 而是在日志中记录，让main.py中的代码自行处理统计
-                log_msg = format_log_message('INFO', "假流式请求完成，需要更新API调用统计",
-                                            extra={'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model})
-                logger.info(log_msg)
+                        # 抛出超时异常，让外部处理
+                        error_msg = "假流式请求等待时间过长，所有API密钥均已尝试"
+                        extra_log_timeout = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'TIMEOUT', 'error_message': error_msg}
+                        log_msg = format_log_message('ERROR', error_msg, extra=extra_log_timeout)
+                        logger.error(log_msg)
+                        raise TimeoutError(error_msg)
                 
             except Exception as e:
-                error_msg = f"假流式处理期间发生错误: {str(e)}"
-                extra_log_error = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
-                logger.error(log_msg)
+                if not isinstance(e, asyncio.CancelledError):  # 忽略取消异常的日志记录
+                    error_msg = f"假流式处理期间发生错误: {str(e)}"
+                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                    log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
+                    logger.error(log_msg)
                 raise e
             finally:
                 log_msg = format_log_message('INFO', "假流式请求结束", extra=extra_log)

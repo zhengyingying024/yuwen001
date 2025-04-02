@@ -805,9 +805,6 @@ async def root(request: Request):
         "active_count": active_count,
         "active_done": active_done,
         "active_pending": active_pending,
-        # 添加假流式请求配置信息
-        "fake_streaming": FAKE_STREAMING,
-        "fake_streaming_interval": FAKE_STREAMING_INTERVAL
     }
     
     # 使用Jinja2模板引擎正确渲染HTML

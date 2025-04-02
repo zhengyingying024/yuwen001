@@ -12,8 +12,8 @@ from app.utils import format_log_message
 
 logger = logging.getLogger('my_logger')
 
-# 是否启用假流式请求
-FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "false").lower() in ["true", "1", "yes"]
+# 是否启用假流式请求 默认启用
+FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1", "yes"]
 # 假流式请求的空内容返回间隔（秒）
 FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1"))
 

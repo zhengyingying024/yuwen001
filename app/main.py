@@ -31,29 +31,220 @@ logger.setLevel(logging.DEBUG)
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-def translate_error(message: str) -> str:
-    if "quota exceeded" in message.lower():
-        return "API 密钥配额已用尽"
-    if "invalid argument" in message.lower():
-        return "无效参数"
-    if "internal server error" in message.lower():
-        return "服务器内部错误"
-    if "service unavailable" in message.lower():
-        return "服务不可用"
-    return message
-
-
-def handle_exception(exc_type, exc_value, exc_traceback):
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.excepthook(exc_type, exc_value, exc_traceback)
-        return
-    error_message = translate_error(str(exc_value))
-    log_msg = format_log_message('ERROR', f"未捕获的异常: %s" % error_message, extra={'status_code': 500, 'error_message': error_message})
-    logger.error(log_msg)
-
-
-sys.excepthook = handle_exception
 app = FastAPI()
+
+# --------------- 缓存管理类 ---------------
+
+class ResponseCacheManager:
+    """管理API响应缓存的类"""
+    
+    def __init__(self, expiry_time: int, max_entries: int, remove_after_use: bool = True, 
+                cache_dict: Dict[str, Dict[str, Any]] = None):
+        self.cache = cache_dict if cache_dict is not None else {}  # 使用传入的缓存字典或创建新字典
+        self.expiry_time = expiry_time
+        self.max_entries = max_entries
+        self.remove_after_use = remove_after_use
+    
+    def get(self, cache_key: str):
+        """获取缓存项，如果存在且未过期"""
+        now = time.time()
+        if cache_key in self.cache and now < self.cache[cache_key].get('expiry_time', 0):
+            cached_item = self.cache[cache_key]
+            
+            # 获取响应但先不删除
+            response = cached_item['response']
+            
+            # 返回响应
+            return response, True
+        
+        return None, False
+    
+    def store(self, cache_key: str, response, client_ip: str = None):
+        """存储响应到缓存"""
+        now = time.time()
+        self.cache[cache_key] = {
+            'response': response,
+            'expiry_time': now + self.expiry_time,
+            'created_at': now,
+            'client_ip': client_ip
+        }
+        
+        log('info', f"响应已缓存: {cache_key[:8]}...", 
+            extra={'cache_operation': 'store', 'request_type': 'non-stream'})
+        
+        # 如果缓存超过限制，清理最旧的
+        self.clean_if_needed()
+    
+    def clean_expired(self):
+        """清理所有过期的缓存项"""
+        now = time.time()
+        expired_keys = [k for k, v in self.cache.items() if now > v.get('expiry_time', 0)]
+        
+        for key in expired_keys:
+            del self.cache[key]
+            log('info', f"清理过期缓存: {key[:8]}...", extra={'cache_operation': 'clean'})
+    
+    def clean_if_needed(self):
+        """如果缓存数量超过限制，清理最旧的项目"""
+        if len(self.cache) <= self.max_entries:
+            return
+        
+        # 按创建时间排序
+        sorted_keys = sorted(self.cache.keys(),
+                           key=lambda k: self.cache[k].get('created_at', 0))
+        
+        # 计算需要删除的数量
+        to_remove = len(self.cache) - self.max_entries
+        
+        # 删除最旧的项
+        for key in sorted_keys[:to_remove]:
+            del self.cache[key]
+            log('info', f"缓存容量限制，删除旧缓存: {key[:8]}...", extra={'cache_operation': 'limit'})
+
+# --------------- 活跃请求管理类 ---------------
+
+class ActiveRequestsManager:
+    """管理活跃API请求的类"""
+    
+    def __init__(self, requests_pool: Dict[str, asyncio.Task] = None):
+        self.active_requests = requests_pool if requests_pool is not None else {}  # 存储活跃请求
+    
+    def add(self, key: str, task: asyncio.Task):
+        """添加新的活跃请求任务"""
+        task.creation_time = time.time()  # 添加创建时间属性
+        self.active_requests[key] = task
+    
+    def get(self, key: str):
+        """获取活跃请求任务"""
+        return self.active_requests.get(key)
+    
+    def remove(self, key: str):
+        """移除活跃请求任务"""
+        if key in self.active_requests:
+            del self.active_requests[key]
+            return True
+        return False
+    
+    def remove_by_prefix(self, prefix: str):
+        """移除所有以特定前缀开头的活跃请求任务"""
+        keys_to_remove = [k for k in self.active_requests.keys() if k.startswith(prefix)]
+        for key in keys_to_remove:
+            self.remove(key)
+        return len(keys_to_remove)
+    
+    def clean_completed(self):
+        """清理所有已完成或已取消的任务"""
+        keys_to_remove = []
+        
+        for key, task in self.active_requests.items():
+            if task.done() or task.cancelled():
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            self.remove(key)
+        
+        # if keys_to_remove:
+        #    log('info', f"清理已完成请求任务: {len(keys_to_remove)}个", cleanup='active_requests')
+    
+    def clean_long_running(self, max_age_seconds: int = 300):
+        """清理长时间运行的任务"""
+        now = time.time()
+        long_running_keys = []
+        
+        for key, task in list(self.active_requests.items()):
+            if (hasattr(task, 'creation_time') and
+                task.creation_time < now - max_age_seconds and
+                not task.done() and not task.cancelled()):
+                
+                long_running_keys.append(key)
+                task.cancel()  # 取消长时间运行的任务
+        
+        if long_running_keys:
+            log('warning', f"取消长时间运行的任务: {len(long_running_keys)}个", cleanup='long_running_tasks')
+
+
+
+# --------------- 全局实例 ---------------
+
+PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
+MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
+MAX_REQUESTS_PER_DAY_PER_IP = int(
+    os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
+# MAX_RETRIES = int(os.environ.get('MaxRetries', '3').strip() or '3')
+RETRY_DELAY = 1
+MAX_RETRY_DELAY = 16
+MAX_RETRY_DELAY = 16
+safety_settings = [
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
+        "threshold": 'BLOCK_NONE'
+    }
+]
+safety_settings_g2 = [
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "OFF"
+    },
+    {
+        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
+        "threshold": 'OFF'
+    }
+]
+
+key_manager = APIKeyManager() # 实例化 APIKeyManager，栈会在 __init__ 中初始化
+current_api_key = key_manager.get_available_key()
+
+# 初始化缓存管理器
+CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
+MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
+REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
+
+# 创建全局缓存字典，将作为缓存管理器的内部存储
+# 注意：所有缓存操作都应通过 response_cache_manager 进行，不要直接操作此字典
+response_cache: Dict[str, Dict[str, Any]] = {}
+
+# 初始化缓存管理器，使用全局字典作为存储
+response_cache_manager = ResponseCacheManager(
+    expiry_time=CACHE_EXPIRY_TIME,
+    max_entries=MAX_CACHE_ENTRIES,
+    remove_after_use=REMOVE_CACHE_AFTER_USE,
+    cache_dict=response_cache  # 使用同一个字典实例，确保统一
+)
+
+# 活跃请求池 - 将作为活跃请求管理器的内部存储
+# 注意：所有活跃请求操作都应通过 active_requests_manager 进行，不要直接操作此字典
+active_requests_pool: Dict[str, asyncio.Task] = {}
+
+# 初始化活跃请求管理器
+active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_pool)
 
 # 添加API调用计数器
 api_call_stats = {
@@ -112,64 +303,7 @@ def update_api_call_stats():
     api_call_stats['hourly'][hour_key] += 1
     api_call_stats['minute'][minute_key] += 1
     
-    log_msg = format_log_message('INFO', f"API调用统计已更新: 24小时={sum(api_call_stats['last_24h'].values())}, 1小时={sum(api_call_stats['hourly'].values())}, 1分钟={sum(api_call_stats['minute'].values())}")
-    logger.info(log_msg)
-
-PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
-MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
-MAX_REQUESTS_PER_DAY_PER_IP = int(
-    os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
-# MAX_RETRIES = int(os.environ.get('MaxRetries', '3').strip() or '3')
-RETRY_DELAY = 1
-MAX_RETRY_DELAY = 16
-MAX_RETRY_DELAY = 16
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'BLOCK_NONE'
-    }
-]
-safety_settings_g2 = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'OFF'
-    }
-]
-
-key_manager = APIKeyManager() # 实例化 APIKeyManager，栈会在 __init__ 中初始化
-current_api_key = key_manager.get_available_key()
+    log('info', "API调用统计已更新: 24小时=%s, 1小时=%s, 1分钟=%s" % (sum(api_call_stats['last_24h'].values()), sum(api_call_stats['hourly'].values()), sum(api_call_stats['minute'].values())))
 
 
 def switch_api_key():
@@ -177,11 +311,9 @@ def switch_api_key():
     key = key_manager.get_available_key() # get_available_key 会处理栈的逻辑
     if key:
         current_api_key = key
-        log_msg = format_log_message('INFO', f"API key 替换为 → {current_api_key[:8]}...", extra={'key': current_api_key[:8], 'request_type': 'switch_key'})
-        logger.info(log_msg)
+        log('info', f"API key 替换为 → {current_api_key[:8]}...", extra={'key': current_api_key[:8], 'request_type': 'switch_key'})
     else:
-        log_msg = format_log_message('ERROR', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
-        logger.error(log_msg)
+        log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
 
 
 async def check_keys():
@@ -189,13 +321,11 @@ async def check_keys():
     for key in key_manager.api_keys:
         is_valid = await test_api_key(key)
         status_msg = "有效" if is_valid else "无效"
-        log_msg = format_log_message('INFO', f"API Key {key[:10]}... {status_msg}.")
-        logger.info(log_msg)
+        log('info', f"API Key {key[:10]}... {status_msg}.")
         if is_valid:
             available_keys.append(key)
     if not available_keys:
-        log_msg = format_log_message('ERROR', "没有可用的 API 密钥！", extra={'key': 'N/A', 'request_type': 'startup', 'status_code': 'N/A'})
-        logger.error(log_msg)
+        log('error', "没有可用的 API 密钥！", extra={'key': 'N/A', 'request_type': 'startup', 'status_code': 'N/A'})
     return available_keys
 
 
@@ -238,19 +368,67 @@ async def check_version():
                 elif remote_parts[i] < local_parts[i]:
                     break
             
-            log_msg = format_log_message('INFO', f"版本检查: 本地版本 {local_version}, 远程版本 {remote_version}, 有更新: {has_update}")
-            logger.info(log_msg)
+            log('info', f"版本检查: 本地版本 {local_version}, 远程版本 {remote_version}, 有更新: {has_update}")
         else:
-            log_msg = format_log_message('WARNING', f"无法获取远程版本信息，HTTP状态码: {response.status_code}")
-            logger.warning(log_msg)
+            log('warning', f"无法获取远程版本信息，HTTP状态码: {response.status_code}")
     except Exception as e:
-        log_msg = format_log_message('ERROR', f"版本检查失败: {str(e)}")
-        logger.error(log_msg)
+        log('error', f"版本检查失败: {str(e)}")
+
+
+# --------------- 工具函数 ---------------
+
+def log(level: str, message: str, **extra):
+    """简化日志记录的统一函数"""
+    msg = format_log_message(level.upper(), message, extra=extra)
+    getattr(logger, level.lower())(msg)
+
+def translate_error(message: str) -> str:
+    if "quota exceeded" in message.lower():
+        return "API 密钥配额已用尽"
+    if "invalid argument" in message.lower():
+        return "无效参数"
+    if "internal server error" in message.lower():
+        return "服务器内部错误"
+    if "service unavailable" in message.lower():
+        return "服务不可用"
+    return message
+
+def create_chat_response(model: str, choices: list, id: str = None) -> ChatCompletionResponse:
+    """创建标准响应对象的工厂函数"""
+    return ChatCompletionResponse(
+        id=id or f"chatcmpl-{int(time.time()*1000)}",
+        object="chat.completion",
+        created=int(time.time()),
+        model=model,
+        choices=choices
+    )
+
+def create_error_response(model: str, error_message: str) -> ChatCompletionResponse:
+    """创建错误响应对象的工厂函数"""
+    return create_chat_response(
+        model=model,
+        choices=[{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": error_message
+            },
+            "finish_reason": "error"
+        }]
+    )
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.excepthook(exc_type, exc_value, exc_traceback)
+        return
+    error_message = translate_error(str(exc_value))
+    log('error', f"未捕获的异常: {error_message}", status_code=500, error_message=error_message)
+
+sys.excepthook = handle_exception
 
 @app.on_event("startup")
 async def startup_event():
-    log_msg = format_log_message('INFO', "Starting Gemini API proxy...")
-    logger.info(log_msg)
+    log('info', "Starting Gemini API proxy...")
     
     # 启动缓存清理定时任务
     schedule_cache_cleanup()
@@ -263,22 +441,18 @@ async def startup_event():
         key_manager.api_keys = available_keys
         key_manager._reset_key_stack() # 启动时也确保创建随机栈
         key_manager.show_all_keys()
-        log_msg = format_log_message('INFO', f"可用 API 密钥数量：{len(key_manager.api_keys)}")
-        logger.info(log_msg)
+        log('info', f"可用 API 密钥数量：{len(key_manager.api_keys)}")
         # MAX_RETRIES = len(key_manager.api_keys)
-        log_msg = format_log_message('INFO', f"最大重试次数设置为：{len(key_manager.api_keys)}") # 添加日志
-        logger.info(log_msg)
+        log('info', f"最大重试次数设置为：{len(key_manager.api_keys)}") # 添加日志
         if key_manager.api_keys:
             all_models = await GeminiClient.list_available_models(key_manager.api_keys[0])
             GeminiClient.AVAILABLE_MODELS = [model.replace(
                 "models/", "") for model in all_models]
-            log_msg = format_log_message('INFO', "Available models loaded.")
-            logger.info(log_msg)
+            log('info', "Available models loaded.")
 
 @app.get("/v1/models", response_model=ModelList)
 def list_models():
-    log_msg = format_log_message('INFO', "Received request to list models", extra={'request_type': 'list_models', 'status_code': 200})
-    logger.info(log_msg)
+    log('info', "Received request to list models", extra={'request_type': 'list_models', 'status_code': 200})
     return ModelList(data=[{"id": model, "object": "model", "created": 1678888888, "owned_by": "organization-owner"} for model in GeminiClient.AVAILABLE_MODELS])
 
 
@@ -306,445 +480,214 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     # 生成完整缓存键 - 用于精确匹配
     cache_key = generate_cache_key(request)
     
-    # 生成简化请求特征键（主要基于模型和消息内容）- 用于相似匹配
-    simplified_key = generate_simplified_request_key(client_ip, request.model, request.messages)
-    
     # 记录请求缓存键信息
-    log_msg = format_log_message('INFO', f"请求缓存键: {cache_key[:8]}..., 简化键: {simplified_key[:8]}...", 
-                               extra={'cache_key': cache_key[:8], 'request_type': 'non-stream'})
-    logger.info(log_msg)
+    log('info', f"请求缓存键: {cache_key[:8]}...", 
+        extra={'cache_key': cache_key[:8], 'request_type': 'non-stream'})
     
     # 检查精确缓存是否存在且未过期
-    if cache_key in response_cache and time.time() < response_cache[cache_key].get('expiry_time', 0):
+    cached_response, cache_hit = response_cache_manager.get(cache_key)
+    if cache_hit:
         # 精确缓存命中
-        log_msg = format_log_message('INFO', f"精确缓存命中: {cache_key[:8]}...", 
-                                   extra={'cache_operation': 'hit', 'request_type': 'non-stream'})
-        logger.info(log_msg)
+        log('info', f"精确缓存命中: {cache_key[:8]}...", 
+            extra={'cache_operation': 'hit', 'request_type': 'non-stream'})
         
-        # 获取缓存的响应
-        cached_response = response_cache[cache_key]['response']
+        # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
+        active_requests_manager.remove_by_prefix(f"cache:{cache_key}")
         
-        # 根据配置决定是否删除缓存项
-        if REMOVE_CACHE_AFTER_USE:
-            del response_cache[cache_key]
-            log_msg = format_log_message('INFO', f"缓存使用后已清除: {cache_key[:8]}...", 
-                                      extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
-            logger.info(log_msg)
-            
-            # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
-            task_keys_to_delete = []
-            for task_key in active_requests_pool.keys():
-                if task_key.startswith(f"cache:{cache_key}:"):
-                    task_keys_to_delete.append(task_key)
-            
-            for task_key in task_keys_to_delete:
-                if task_key in active_requests_pool:
-                    # 不取消任务，只从池中移除，避免任务被中断
-                    del active_requests_pool[task_key]
-                    log_msg = format_log_message('INFO', f"缓存使用后移除相关活跃任务: {task_key}", 
-                                              extra={'cache_operation': 'task-removed', 'request_type': 'non-stream'})
-                    logger.info(log_msg)
+        # 安全删除缓存
+        if cache_key in response_cache_manager.cache:
+            del response_cache_manager.cache[cache_key]
+            log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
+                extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
         
-        # 返回缓存响应（但创建新的响应对象）
-        return ChatCompletionResponse(
-            id=f"chatcmpl-{int(time.time()*1000)}",
-            object="chat.completion", 
-            created=int(time.time()),
-            model=cached_response.model,
-            choices=cached_response.choices
-        )
+        # 返回缓存响应
+        return cached_response
+    
+    # 构建包含缓存键的活跃请求池键
+    pool_key = f"cache:{cache_key}"
     
     # 查找所有使用相同缓存键的活跃任务
-    for key, task in active_requests_pool.items():
-        if not task.done() and key.startswith(f"cache:{cache_key}"):
-            log_msg = format_log_message('INFO', f"发现相同请求的进行中任务", 
-                                      extra={'request_type': 'non-stream', 'model': request.model})
-            logger.info(log_msg)
+    active_task = active_requests_manager.get(pool_key)
+    if active_task and not active_task.done():
+        log('info', f"发现相同请求的进行中任务", 
+            extra={'request_type': 'non-stream', 'model': request.model})
+        
+        # 等待已有任务完成
+        try:
+            # 设置超时，避免无限等待
+            await asyncio.wait_for(active_task, timeout=180)
             
-            # 等待已有任务完成
-            try:
-                # 设置超时，避免无限等待
-                result = await asyncio.wait_for(task, timeout=60)
-                # 如果任务成功完成，返回结果
+            # 通过缓存管理器获取已完成任务的结果
+            cached_response, cache_hit = response_cache_manager.get(cache_key)
+            if cache_hit:
+                # 安全删除缓存
+                if cache_key in response_cache_manager.cache:
+                    del response_cache_manager.cache[cache_key]
+                    log('info', f"使用已完成任务的缓存后删除: {cache_key[:8]}...", 
+                        extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
+                
+                return cached_response
+                
+            # 如果缓存已被清除或不存在，使用任务结果
+            if active_task.done() and not active_task.cancelled():
+                result = active_task.result()
                 if result:
-                    log_msg = format_log_message('INFO', f"使用已完成任务的结果", 
-                                              extra={'request_type': 'non-stream', 'model': request.model})
-                    logger.info(log_msg)
+                    # log('info', f"使用已完成任务的原始结果", 
+                    #     extra={'request_type': 'non-stream', 'model': request.model})
                     
-                    # 如果配置了使用后清除缓存，检查并清除相关缓存
-                    if REMOVE_CACHE_AFTER_USE:
-                        # 从活跃任务键中提取缓存键
-                        parts = key.split(":")
-                        if len(parts) >= 2 and parts[0] == "cache":
-                            cache_key_from_task = parts[1]
-                            if cache_key_from_task in response_cache:
-                                del response_cache[cache_key_from_task]
-                                log_msg = format_log_message('INFO', f"活跃任务完成后清除缓存: {cache_key_from_task[:8]}...", 
-                                                          extra={'cache_operation': 'task-used-and-removed', 'request_type': 'non-stream'})
-                                logger.info(log_msg)
-                    
-                    # 返回活跃任务的结果
-                    return ChatCompletionResponse(
+                    # 使用原始结果时，我们需要创建一个新的响应对象
+                    # 避免使用可能已被其他请求修改的对象
+                    new_response = ChatCompletionResponse(
                         id=f"chatcmpl-{int(time.time()*1000)}",
                         object="chat.completion", 
                         created=int(time.time()),
                         model=result.model,
                         choices=result.choices
                     )
-            except (asyncio.TimeoutError, asyncio.CancelledError) as e:
-                # 任务超时或被取消的情况下，记录日志然后让代码继续执行
-                # 不要重新抛出异常
-                error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"
-                log_msg = format_log_message('WARNING', f"等待已有任务{error_type}: {key}", 
-                                          extra={'request_type': 'non-stream', 'model': request.model})
-                logger.warning(log_msg)
-                
-                # 从活跃请求池移除该任务
-                if key in active_requests_pool and (task.done() or task.cancelled()):
-                    del active_requests_pool[key]
-                    log_msg = format_log_message('INFO', f"已从活跃请求池移除{error_type}任务: {key}", 
-                                              extra={'request_type': 'non-stream'})
-                    logger.info(log_msg)
                     
-                # 不抛出异常，继续处理，尝试查找其他缓存或创建新请求
-    
-    # 检查相似缓存 - 查找来自任何客户端的相似请求缓存
-    for key, cache_data in response_cache.items():
-        # 检查是否有相同模型、相似内容的已缓存响应
-        simplified_stored = cache_data.get('simplified_key')
-        if (simplified_stored == simplified_key and 
-            time.time() < cache_data.get('expiry_time', 0)):
+                    # 不要缓存此结果，因为它很可能是一个已存在但被使用后清除的缓存
+                    return new_response
+        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+            # 任务超时或被取消的情况下，记录日志然后让代码继续执行
+            error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"
+            log('warning', f"等待已有任务{error_type}: {pool_key}", 
+                extra={'request_type': 'non-stream', 'model': request.model})
             
-            log_msg = format_log_message('INFO', f"相似缓存命中: {key[:8]}... (简化键: {simplified_key[:8]}...)", 
-                                       extra={'cache_operation': 'similar-hit', 'request_type': 'non-stream'})
-            logger.info(log_msg)
-            
-            # 获取缓存的响应
-            cached_response = cache_data['response']
-            
-            # 根据配置决定是否删除缓存项
-            if REMOVE_CACHE_AFTER_USE:
-                del response_cache[key]
-                log_msg = format_log_message('INFO', f"相似缓存使用后已清除: {key[:8]}...", 
-                                          extra={'cache_operation': 'similar-used-and-removed', 'request_type': 'non-stream'})
-                logger.info(log_msg)
-                
-                # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
-                task_keys_to_delete = []
-                for task_key in active_requests_pool.keys():
-                    if task_key.startswith(f"cache:{key}:") or task_key.endswith(f":{simplified_key}"):
-                        task_keys_to_delete.append(task_key)
-                
-                for task_key in task_keys_to_delete:
-                    if task_key in active_requests_pool:
-                        # 不取消任务，只从池中移除，避免任务被中断
-                        del active_requests_pool[task_key]
-                        log_msg = format_log_message('INFO', f"相似缓存使用后移除相关活跃任务: {task_key}", 
-                                                  extra={'cache_operation': 'similar-task-removed', 'request_type': 'non-stream'})
-                        logger.info(log_msg)
-            
-            # 返回缓存响应（但创建新的响应对象）
-            return ChatCompletionResponse(
-                id=f"chatcmpl-{int(time.time()*1000)}",
-                object="chat.completion", 
-                created=int(time.time()),
-                model=cached_response.model,
-                choices=cached_response.choices
-            )
-    
-    # 构建包含缓存键的活跃请求池键
-    pool_key = f"cache:{cache_key}:{simplified_key}"
-    
+            # 从活跃请求池移除该任务
+            if active_task.done() or active_task.cancelled():
+                active_requests_manager.remove(pool_key)
+                log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
+                    extra={'request_type': 'non-stream'})
+     
     # 创建请求处理任务
     process_task = asyncio.create_task(
-        process_request(request, http_request, "non-stream", cache_key=cache_key, client_ip=client_ip, simplified_key=simplified_key)
+        process_request(request, http_request, "non-stream", cache_key=cache_key, client_ip=client_ip)
     )
     
-    # 给任务添加创建时间属性，用于清理长时间运行的任务
-    process_task.creation_time = time.time()
-    
     # 将任务添加到活跃请求池
-    active_requests_pool[pool_key] = process_task
+    active_requests_manager.add(pool_key, process_task)
     
     # 等待任务完成
     try:
         response = await process_task
-        # 检查结果是否为None（表示任务被取消）
-        if response is None:
-            log_msg = format_log_message('INFO', f"任务已被取消，回退到创建新请求", 
-                                      extra={'request_type': 'non-stream', 'model': request.model})
-            logger.info(log_msg)
-            
-            # 如果在活跃请求池中，移除任务
-            if pool_key in active_requests_pool:
-                del active_requests_pool[pool_key]
-            
-            # 创建新的处理任务（不添加到活跃请求池，避免重复问题）
-            new_process_task = asyncio.create_task(
-                process_request(request, http_request, "non-stream", cache_key=cache_key, client_ip=client_ip, simplified_key=simplified_key)
-            )
-            
-            # 等待新任务完成
-            response = await new_process_task
-            if response is None:
-                # 如果新任务也被取消，则返回错误
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-                    detail="请求处理失败，任务被取消"
-                )
-        
         return response
     except Exception as e:
         # 如果任务失败，从活跃请求池中移除
-        if pool_key in active_requests_pool:
-            del active_requests_pool[pool_key]
+        active_requests_manager.remove(pool_key)
+        
+        # 检查是否已有缓存的结果（可能是由另一个任务创建的）
+        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        if cache_hit:
+            log('info', f"任务失败但找到缓存，使用缓存结果: {cache_key[:8]}...", 
+                extra={'request_type': 'non-stream', 'model': request.model})
+            return cached_response
+        
+        # 重新抛出异常
         raise
 
-async def process_request(chat_request: ChatCompletionRequest, http_request: Request, request_type: Literal['stream', 'non-stream'], cache_key: str = None, client_ip: str = None, simplified_key: str = None):
+async def process_request(chat_request: ChatCompletionRequest, http_request: Request, request_type: Literal['stream', 'non-stream'], cache_key: str = None, client_ip: str = None):
+    """处理API请求的主函数，根据需要处理流式或非流式请求"""
     global current_api_key
+    
+    # 请求前基本检查
     protect_from_abuse(
         http_request, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_DAY_PER_IP)
     if chat_request.model not in GeminiClient.AVAILABLE_MODELS:
         error_msg = "无效的模型"
         extra_log = {'request_type': request_type, 'model': chat_request.model, 'status_code': 400, 'error_message': error_msg}
-        log_msg = format_log_message('ERROR', error_msg, extra=extra_log)
-        logger.error(log_msg)
+        log('error', error_msg, extra=extra_log)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
-    key_manager.reset_tried_keys_for_request() # 在每次请求处理开始时重置 tried_keys 集合
-
+    # 重置已尝试的密钥
+    key_manager.reset_tried_keys_for_request()
+    
+    # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
         GeminiClient, chat_request.messages)
 
-    retry_attempts = len(key_manager.api_keys) if key_manager.api_keys else 1 # 重试次数等于密钥数量，至少尝试 1 次
+    # 设置重试次数（使用可用API密钥数量作为最大重试次数）
+    retry_attempts = len(key_manager.api_keys) if key_manager.api_keys else 1
+    
+    # 尝试使用不同API密钥
     for attempt in range(1, retry_attempts + 1):
-        if attempt == 1:
-            current_api_key = key_manager.get_available_key() # 每次循环开始都获取新的 key, 栈逻辑在 get_available_key 中处理
+        # 获取下一个密钥
+        current_api_key = key_manager.get_available_key()
         
-        if current_api_key is None: # 检查是否获取到 API 密钥
-            log_msg_no_key = format_log_message('WARNING', "没有可用的 API 密钥，跳过本次尝试", extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 'N/A'})
-            logger.warning(log_msg_no_key)
-            break  # 如果没有可用密钥，跳出循环
+        # 检查API密钥是否可用
+        if current_api_key is None:
+            log('warning', "没有可用的 API 密钥，跳过本次尝试", 
+                extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 'N/A'})
+            break
+        
+        # 记录当前尝试的密钥信息
+        log('info', f"第 {attempt}/{retry_attempts} 次尝试 ... 使用密钥: {current_api_key[:8]}...", 
+            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
 
-        extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 'N/A', 'error_message': ''}
-        log_msg = format_log_message('INFO', f"第 {attempt}/{retry_attempts} 次尝试 ... 使用密钥: {current_api_key[:8]}...", extra=extra_log)
-        logger.info(log_msg)
-
-        gemini_client = GeminiClient(current_api_key)
-        try:
-            if chat_request.stream:
-                async def stream_generator():
-                    try:
-                        # 标记是否成功获取到响应
-                        success = False
-                        async for chunk in gemini_client.stream_chat(chat_request, contents, safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings, system_instruction):
-                            formatted_chunk = {"id": "chatcmpl-someid", "object": "chat.completion.chunk", "created": 1234567,
-                                               "model": chat_request.model, "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]}
-                            success = True  # 只要有一个chunk成功，就标记为成功
-                            yield f"data: {json.dumps(formatted_chunk)}\n\n"
-                        
-                        # 如果成功获取到响应，更新API调用统计
-                        if success:
-                            update_api_call_stats()
-                            
-                        yield "data: [DONE]\n\n"
-
-                    except asyncio.CancelledError:
-                        extra_log_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端已断开连接'}
-                        log_msg = format_log_message('INFO', "客户端连接已中断", extra=extra_log_cancel)
-                        logger.info(log_msg)
-                    except Exception as e:
-                        error_detail = handle_gemini_error(
-                            e, current_api_key, key_manager)
-                        yield f"data: {json.dumps({'error': {'message': error_detail, 'type': 'gemini_error'}})}\n\n"
-                return StreamingResponse(stream_generator(), media_type="text/event-stream")
-            else:
-                async def run_gemini_completion():
-                    try:
-                        response_content = await asyncio.to_thread(gemini_client.complete_chat, chat_request, contents, safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings, system_instruction)
-                        return response_content
-                    except asyncio.CancelledError:
-                        extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端断开导致API调用取消'}
-                        log_msg = format_log_message('INFO', "API调用因客户端断开而取消", extra=extra_log_gemini_cancel)
-                        logger.info(log_msg)
-                        # 不继续抛出异常，而是返回None，表示任务被取消
-                        return None
-
-                async def check_client_disconnect():
-                    while True:
-                        if await http_request.is_disconnected():
-                            extra_log_client_disconnect = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '检测到客户端断开连接'}
-                            log_msg = format_log_message('INFO', "客户端连接已中断，等待API请求完成", extra=extra_log_client_disconnect)
-                            logger.info(log_msg)
-                            return True
-                        await asyncio.sleep(0.5)
-
-                gemini_task = asyncio.create_task(run_gemini_completion())
-                disconnect_task = asyncio.create_task(check_client_disconnect())
-
-                try:
-                    done, pending = await asyncio.wait(
-                        [gemini_task, disconnect_task],
-                        return_when=asyncio.FIRST_COMPLETED
+        # 服务器错误重试逻辑
+        server_error_retries = 3
+        for server_retry in range(1, server_error_retries + 1):
+            try:
+                # 根据请求类型分别处理
+                if chat_request.stream:
+                    return await process_stream_request(
+                        chat_request, 
+                        http_request, 
+                        contents, 
+                        system_instruction, 
+                        current_api_key
                     )
+                else:
+                    return await process_nonstream_request(
+                        chat_request,
+                        http_request,
+                        request_type,
+                        contents,
+                        system_instruction,
+                        current_api_key,
+                        cache_key,
+                        client_ip
+                    )
+            except HTTPException as e:
+                if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
+                    log('error', "客户端连接中断", 
+                        extra={'key': current_api_key[:8], 'request_type': request_type, 
+                              'model': chat_request.model, 'status_code': 408})
+                    raise
+                else:
+                    raise
+            except Exception as e:
+                # 使用统一的API错误处理函数
+                error_result = await handle_api_error(
+                    e, 
+                    current_api_key, 
+                    key_manager, 
+                    request_type, 
+                    chat_request.model, 
+                    server_retry - 1
+                )
+                
+                # 如果需要删除缓存，清除缓存
+                if error_result.get('remove_cache', False) and cache_key and cache_key in response_cache_manager.cache:
+                    log('info', f"因API错误，删除缓存: {cache_key[:8]}...", 
+                        extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
+                    del response_cache_manager.cache[cache_key]
+                
+                if error_result.get('should_retry', False):
+                    # 服务器错误需要重试（等待已在handle_api_error中完成）
+                    continue
+                elif error_result.get('should_switch_key', False) and attempt < retry_attempts:
+                    # 跳出服务器错误重试循环，获取下一个可用密钥
+                    log('info', f"API密钥 {current_api_key[:8]}... 失败，准备尝试下一个密钥", 
+                        extra={'key': current_api_key[:8], 'request_type': request_type})
+                    break  
+                else:
+                    # 无法处理的错误或已达到重试上限
+                    break
 
-                    if disconnect_task in done:
-                        # 不立即取消API请求，而是等待其完成
-                        try:
-                            response_content = await gemini_task
-                            # 检查响应内容是否为None（表示任务被取消）
-                            if response_content is None:
-                                log_msg = format_log_message('INFO', "API任务已取消，跳过处理", 
-                                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                                logger.info(log_msg)
-                                # 继续循环，尝试其他API密钥
-                                continue
-                            
-                            # 检查响应文本是否为空
-                            if response_content.text == "":
-                                extra_log_empty_response = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 204}
-                                log_msg = format_log_message('INFO', "Gemini API 返回空响应", extra=extra_log_empty_response)
-                                logger.info(log_msg)
-                                # 继续循环
-                                continue
-                            
-                            # 生成符合OpenAI标准的响应ID
-                            response_id = f"chatcmpl-{int(time.time()*1000)}"
-                            
-                            response = ChatCompletionResponse(
-                                id=response_id,
-                                object="chat.completion", 
-                                created=int(time.time()),
-                                model=chat_request.model,
-                                choices=[{
-                                    "index": 0, 
-                                    "message": {
-                                        "role": "assistant", 
-                                        "content": response_content.text
-                                    }, 
-                                    "finish_reason": "stop"
-                                }]
-                            )
-                            
-                            # 缓存响应
-                            if cache_key:
-                                now = time.time()
-                                response_cache[cache_key] = {
-                                    'response': response,
-                                    'expiry_time': now + CACHE_EXPIRY_TIME,
-                                    'created_at': now,
-                                    'client_ip': client_ip,
-                                    'simplified_key': simplified_key
-                                }
-                                log_msg = format_log_message('INFO', f"响应已缓存: {cache_key[:8]}...", 
-                                                           extra={'cache_operation': 'store', 'request_type': request_type})
-                                logger.info(log_msg)
-                            
-                            extra_log_success = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 200}
-                            log_msg = format_log_message('INFO', "请求处理成功", extra=extra_log_success)
-                            logger.info(log_msg)
-                            
-                            # 更新API调用统计
-                            update_api_call_stats()
-                            
-                            return response
-                        except Exception as e:
-                            extra_log_error = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 408, 'error_message': 'API请求失败'}
-                            log_msg = format_log_message('ERROR', "API请求失败", extra=extra_log_error)
-                            logger.error(log_msg)
-                            raise HTTPException(status_code=status.HTTP_408_REQUEST_TIMEOUT, detail="API请求失败")
-
-                    if gemini_task in done:
-                        disconnect_task.cancel()
-                        try:
-                            await disconnect_task
-                        except asyncio.CancelledError:
-                            pass
-                        response_content = gemini_task.result()
-                        if response_content.text == "":
-                            extra_log_empty_response = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 204}
-                            log_msg = format_log_message('INFO', "Gemini API 返回空响应", extra=extra_log_empty_response)
-                            logger.info(log_msg)
-                            # 继续循环
-                            continue
-                        
-                        # 生成符合OpenAI标准的响应ID
-                        response_id = f"chatcmpl-{int(time.time()*1000)}"
-                        
-                        response = ChatCompletionResponse(
-                            id=response_id,
-                            object="chat.completion", 
-                            created=int(time.time()),
-                            model=chat_request.model,
-                            choices=[{
-                                "index": 0, 
-                                "message": {
-                                    "role": "assistant", 
-                                    "content": response_content.text
-                                }, 
-                                "finish_reason": "stop"
-                            }]
-                        )
-                        
-                        # 缓存响应
-                        if cache_key:
-                            now = time.time()
-                            response_cache[cache_key] = {
-                                'response': response,
-                                'expiry_time': now + CACHE_EXPIRY_TIME,
-                                'created_at': now,
-                                'client_ip': client_ip,
-                                'simplified_key': simplified_key
-                            }
-                            log_msg = format_log_message('INFO', f"响应已缓存: {cache_key[:8]}...", 
-                                        extra={'cache_operation': 'store', 'request_type': request_type})
-                            logger.info(log_msg)
-                        
-                        extra_log_success = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 200}
-                        log_msg = format_log_message('INFO', "请求处理成功", extra=extra_log_success)
-                        logger.info(log_msg)
-                        
-                        # 更新API调用统计
-                        update_api_call_stats()
-                        
-                        return response
-
-                except asyncio.CancelledError:
-                    extra_log_request_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message':"请求被取消" }
-                    log_msg = format_log_message('INFO', "请求取消", extra=extra_log_request_cancel)
-                    logger.info(log_msg)
-                    
-                    # 在请求被取消时清理相关资源
-                    for pool_key in list(active_requests_pool.keys()):
-                        if cache_key and pool_key.startswith(f"cache:{cache_key}:"):
-                            del active_requests_pool[pool_key]
-                            log_msg = format_log_message('INFO', f"请求取消时清理相关活跃任务: {pool_key}", 
-                                                      extra={'cleanup': 'cancelled_task'})
-                            logger.info(log_msg)
-                    
-                    # 不再抛出CancelledError，而是返回None，使用另一种方法处理取消
-                    return None
-
-        except HTTPException as e:
-            if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
-                extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 
-                            'status_code': 408, 'error_message': '客户端连接中断'}
-                log_msg = format_log_message('ERROR', "客户端连接中断，终止后续重试", extra=extra_log)
-                logger.error(log_msg)
-                raise  
-            else:
-                raise  
-        except Exception as e:
-            handle_gemini_error(e, current_api_key, key_manager)
-            if attempt < retry_attempts: 
-                switch_api_key() 
-                continue
-
-    msg = "所有API密钥均失败,请稍后重试"
-    extra_log_all_fail = {'key': "ALL", 'request_type': request_type, 'model': chat_request.model, 'status_code': 500, 'error_message': msg}
-    log_msg = format_log_message('ERROR', msg, extra=extra_log_all_fail)
-    logger.error(log_msg)
+    # 如果所有尝试都失败
+    msg = "所有API密钥均请求失败,请稍后重试"
+    log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
 
@@ -753,8 +696,7 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
 async def global_exception_handler(request: Request, exc: Exception):
     error_message = translate_error(str(exc))
     extra_log_unhandled_exception = {'status_code': 500, 'error_message': error_message}
-    log_msg = format_log_message('ERROR', f"Unhandled exception: {error_message}", extra=extra_log_unhandled_exception)
-    logger.error(log_msg)
+    log('error', f"Unhandled exception: {error_message}", extra=extra_log_unhandled_exception)
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=ErrorResponse(message=str(exc), type="internal_error").dict())
 
 
@@ -762,7 +704,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root(request: Request):
     # 先清理过期数据，确保统计数据是最新的
     clean_expired_stats()
-    clean_expired_cache()
+    response_cache_manager.clean_expired()  # 使用管理器清理缓存
+    active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
     await check_version()
     # 获取当前统计数据
     now = datetime.now()
@@ -796,16 +739,14 @@ async def root(request: Request):
     recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
     
     # 获取缓存统计
-    total_cache = len(response_cache)
-    valid_cache = 0
+    total_cache = len(response_cache_manager.cache)
+    valid_cache = sum(1 for _, data in response_cache_manager.cache.items() 
+                     if time.time() < data.get('expiry_time', 0))
     cache_by_model = {}
-    recent_cache_operations = []
     
     # 分析缓存数据
-    for cache_key, cache_data in response_cache.items():
+    for _, cache_data in response_cache_manager.cache.items():
         if time.time() < cache_data.get('expiry_time', 0):
-            valid_cache += 1
-            
             # 按模型统计缓存
             model = cache_data.get('response', {}).model
             if model:
@@ -818,8 +759,8 @@ async def root(request: Request):
     history_count = len(client_request_history)
     
     # 获取活跃请求统计
-    active_count = len(active_requests_pool)
-    active_done = sum(1 for task in active_requests_pool.values() if task.done())
+    active_count = len(active_requests_manager.active_requests)
+    active_done = sum(1 for task in active_requests_manager.active_requests.values() if task.done())
     active_pending = active_count - active_done
     
     # 准备模板上下文
@@ -851,192 +792,33 @@ async def root(request: Request):
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,
-        "active_pending": active_pending
+        "active_pending": active_pending,
     }
     
     # 使用Jinja2模板引擎正确渲染HTML
     return templates.TemplateResponse("index.html", {"request": request, **context})
 
-# 请求响应缓存
-response_cache: Dict[str, Dict[str, Any]] = {}
-# 活跃请求池 - 存储正在处理的请求
-active_requests_pool: Dict[str, asyncio.Task] = {}
-# 缓存过期时间（秒）
-CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "300"))  # 默认5分钟
-# 是否在缓存命中后立即清除
-REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
 # 客户端IP到最近请求的映射，用于识别重连请求
 client_request_history: Dict[str, Dict[str, Any]] = {}
 # 请求历史记录保留时间（秒）
 REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
 # 是否启用重连检测
 ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
-# 缓存大小限制（项数）
-MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "1000"))  # 默认最多缓存1000条响应
-
-# 清理过期的活跃请求
-def clean_expired_active_requests():
-    now = time.time()
-    expired_keys = []
-    
-    for req_key, task in active_requests_pool.items():
-        if task.done() or task.cancelled():
-            expired_keys.append(req_key)
-    
-    for key in expired_keys:
-        del active_requests_pool[key]
-    
-    if expired_keys:
-        log_msg = format_log_message('INFO', f"清理已完成请求任务: {len(expired_keys)}个", extra={'cleanup': 'active_requests'})
-        logger.info(log_msg)
-    
-    # 检查长时间运行的任务（超过5分钟）
-    long_running_keys = []
-    # 任务开始时间是在构建池键之前记录的，这里使用粗略估计
-    five_minutes_ago = now - 300  # 5分钟 = 300秒
-    
-    for req_key, task in active_requests_pool.items():
-        if req_key.startswith("cache:") and not task.done() and not task.cancelled():
-            # 检查任务是否已经运行太长时间
-            if hasattr(task, 'creation_time') and task.creation_time < five_minutes_ago:
-                long_running_keys.append(req_key)
-                # 取消长时间运行的任务
-                task.cancel()
-    
-    if long_running_keys:
-        log_msg = format_log_message('WARNING', f"取消长时间运行的任务: {len(long_running_keys)}个", extra={'cleanup': 'long_running_tasks'})
-        logger.warning(log_msg)
-
-# 生成简化的请求特征键
-def generate_simplified_request_key(client_ip: str, model: str, messages: list) -> str:
-    """
-    生成一个简化的请求特征键，用于快速识别相似请求
-    主要基于模型和消息内容，不依赖客户端IP（因为酒馆重试时可能使用不同连接）
-    """
-    # 收集所有用户消息形成特征
-    user_messages = []
-    for msg in messages:
-        if msg.role == "user":
-            if isinstance(msg.content, str):
-                user_messages.append(msg.content[:100])  # 只取前100个字符
-    
-    # 使用最后一条用户消息和消息数量作为特征
-    last_message = user_messages[-1] if user_messages else ""
-    message_count = len(messages)
-    
-    # 计算消息总长度作为特征
-    total_length = sum(len(m.content) if isinstance(m.content, str) else 10 for m in messages)
-    
-    # 组合特征生成键 - 不包含客户端IP，因为重试请求的IP特征可能会变化
-    feature_string = f"{model}:{message_count}:{total_length}:{last_message[:100]}"
-    return hashlib.md5(feature_string.encode()).hexdigest()
-
-# 清理过期缓存的函数
-def clean_expired_cache():
-    now = time.time()
-    expired_keys = []
-    
-    # 找出过期的缓存项
-    for cache_key, cache_data in response_cache.items():
-        if now > cache_data.get('expiry_time', 0):
-            expired_keys.append(cache_key)
-    
-    # 删除过期的缓存项
-    for key in expired_keys:
-        log_msg = format_log_message('INFO', f"清理过期缓存: {key[:8]}...", extra={'cache_operation': 'clean'})
-        logger.info(log_msg)
-        del response_cache[key]
-    
-    # 如果缓存数量超过限制，清除最旧的缓存
-    if len(response_cache) > MAX_CACHE_ENTRIES:
-        # 按创建时间排序
-        sorted_keys = sorted(response_cache.keys(), 
-                           key=lambda k: response_cache[k].get('created_at', 0))
-        
-        # 计算需要删除的数量
-        to_remove = len(response_cache) - MAX_CACHE_ENTRIES
-        
-        # 删除最旧的项
-        for key in sorted_keys[:to_remove]:
-            log_msg = format_log_message('INFO', f"缓存容量限制，删除旧缓存: {key[:8]}...", 
-                                       extra={'cache_operation': 'limit'})
-            logger.info(log_msg)
-            del response_cache[key]
-    
-    # 同时清理过期的请求历史记录
-    expired_ips = []
-    for client_ip, history_data in client_request_history.items():
-        if now > history_data.get('expiry_time', 0):
-            expired_ips.append(client_ip)
-    
-    for ip in expired_ips:
-        del client_request_history[ip]
 
 # 定期清理缓存的定时任务
 def schedule_cache_cleanup():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(clean_expired_cache, 'interval', minutes=1)  # 每分钟清理一次
-    scheduler.add_job(clean_expired_active_requests, 'interval', seconds=30)  # 每30秒清理一次活跃请求
+    scheduler.add_job(response_cache_manager.clean_expired, 'interval', minutes=1)  # 每分钟清理过期缓存
+    scheduler.add_job(active_requests_manager.clean_completed, 'interval', seconds=30)  # 每30秒清理已完成的活跃请求
+    scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])  # 每5分钟清理运行超过5分钟的任务
+    scheduler.add_job(clean_expired_stats, 'interval', minutes=5)  # 每5分钟清理过期的统计数据
     scheduler.start()
-
-# 添加请求历史记录，用于识别重连请求
-def record_client_request(client_ip: str, request_data: Dict[str, Any]):
-    now = time.time()
-    client_request_history[client_ip] = {
-        'request_data': request_data,
-        'timestamp': now,
-        'expiry_time': now + REQUEST_HISTORY_EXPIRY_TIME
-    }
-
-# 提取请求的关键特征，用于识别相似请求
-def extract_request_features(request: ChatCompletionRequest) -> Dict[str, Any]:
-    # 创建包含请求关键信息的字典
-    features = {
-        'model': request.model,
-        'temperature': request.temperature,
-        'max_tokens': request.max_tokens,
-        'last_message': ''
-    }
-    
-    # 提取最后一条用户消息
-    for msg in reversed(request.messages):
-        if msg.role == "user":
-            if isinstance(msg.content, str):
-                features['last_message'] = msg.content[:100]  # 只取前100个字符
-            break
-    
-    return features
-
-# 检查当前请求是否与客户端之前的请求相似（可能是重连请求）
-def is_reconnect_request(client_ip: str, current_request: Dict[str, Any]) -> bool:
-    if client_ip not in client_request_history:
-        return False
-    
-    previous_request = client_request_history[client_ip]['request_data']
-    
-    # 比较模型、温度和最大令牌数
-    if (previous_request['model'] != current_request['model'] or
-        abs(previous_request['temperature'] - current_request['temperature']) > 0.001 or
-        previous_request['max_tokens'] != current_request['max_tokens']):
-        return False
-    
-    # 检查最后一条消息是否相似（前50个字符）
-    prev_msg = previous_request['last_message'][:50]
-    curr_msg = current_request['last_message'][:50]
-    
-    # 如果最后一条消息完全相同，很可能是重连请求
-    if prev_msg == curr_msg and prev_msg != "":
-        return True
-    
-    return False
 
 # 生成请求的唯一缓存键
 def generate_cache_key(chat_request: ChatCompletionRequest) -> str:
     # 创建包含请求关键信息的字典
     request_data = {
-        'model': chat_request.model,
-        'temperature': chat_request.temperature,
-        'max_tokens': chat_request.max_tokens,
+        'model': chat_request.model, 
         'messages': []
     }
     
@@ -1063,3 +845,422 @@ def generate_cache_key(chat_request: ChatCompletionRequest) -> str:
     # 将字典转换为JSON字符串并计算哈希值
     json_data = json.dumps(request_data, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
+
+# 拆分process_request为更小的函数
+
+async def process_stream_request(
+    chat_request: ChatCompletionRequest,
+    http_request: Request,
+    contents,
+    system_instruction,
+    current_api_key: str
+) -> StreamingResponse:
+    """处理流式API请求"""
+    gemini_client = GeminiClient(current_api_key)
+    
+    async def stream_generator():
+        try:
+            # 标记是否成功获取到响应
+            success = False
+            async for chunk in gemini_client.stream_chat(
+                chat_request,
+                contents,
+                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                system_instruction
+            ):
+                # 空字符串跳过
+                if not chunk:
+                    continue
+                    
+                formatted_chunk = {
+                    "id": "chatcmpl-someid",
+                    "object": "chat.completion.chunk",
+                    "created": 1234567,
+                    "model": chat_request.model,
+                    "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]
+                }
+                success = True  # 只要有一个chunk成功，就标记为成功
+                yield f"data: {json.dumps(formatted_chunk)}\n\n"
+            
+            # 如果成功获取到响应，更新API调用统计
+            if success:
+                update_api_call_stats()
+                
+            yield "data: [DONE]\n\n"
+
+        except asyncio.CancelledError:
+            extra_log_cancel = {'key': current_api_key[:8], 'request_type': 'stream', 'model': chat_request.model, 'error_message': '客户端已断开连接'}
+            log('info', "客户端连接已中断", extra=extra_log_cancel)
+        except Exception as e:
+            error_detail = handle_gemini_error(e, current_api_key, key_manager)
+            yield f"data: {json.dumps({'error': {'message': error_detail, 'type': 'gemini_error'}})}\n\n"
+            
+    return StreamingResponse(stream_generator(), media_type="text/event-stream")
+
+async def run_gemini_completion(
+    gemini_client, 
+    chat_request: ChatCompletionRequest, 
+    contents,
+    system_instruction,
+    request_type: str,
+    current_api_key: str
+):
+    """运行Gemini非流式请求"""
+    # 记录函数调用状态
+    run_fn = run_gemini_completion
+    
+    try:
+        # 创建一个不会被客户端断开影响的任务
+        response_future = asyncio.create_task(
+            asyncio.to_thread(
+                gemini_client.complete_chat, 
+                chat_request, 
+                contents, 
+                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings, 
+                system_instruction
+            )
+        )
+        
+        # 使用shield防止任务被外部取消
+        response_content = await asyncio.shield(response_future)
+        
+        # 只在第一次调用时记录完成日志
+        if not hasattr(run_fn, 'logged_complete'):
+            log('info', "非流式请求成功完成", extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+            run_fn.logged_complete = True
+        return response_content
+    except asyncio.CancelledError:
+        # 即使任务被取消，我们也确保正在进行的API请求能够完成
+        if 'response_future' in locals() and not response_future.done():
+            try:
+                # 使用shield确保任务不被取消，并等待它完成
+                response_content = await asyncio.shield(response_future)
+                log('info', "API请求在客户端断开后完成", extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                return response_content
+            except Exception as e:
+                extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': f'API请求在客户端断开后失败: {str(e)}'}
+                log('info', "API调用因客户端断开而失败", extra=extra_log_gemini_cancel)
+                raise
+        
+        # 如果任务尚未开始或已经失败，记录日志
+        extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端断开导致API调用取消'}
+        log('info', "API调用因客户端断开而取消", extra=extra_log_gemini_cancel)
+        raise
+
+async def check_client_disconnect(http_request: Request, current_api_key: str, request_type: str, model: str):
+    """检查客户端是否断开连接"""
+    while True:
+        if await http_request.is_disconnected():
+            extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': model, 'error_message': '检测到客户端断开连接'}
+            log('info', "客户端连接已中断，等待API请求完成", extra=extra_log)
+            return True
+        await asyncio.sleep(0.5)
+
+async def handle_client_disconnect(
+    gemini_task: asyncio.Task, 
+    chat_request: ChatCompletionRequest, 
+    request_type: str, 
+    current_api_key: str,
+    cache_key: str = None,
+    client_ip: str = None
+):
+
+    try:
+        # 等待API任务完成，使用shield防止它被取消
+        response_content = await asyncio.shield(gemini_task)
+        
+        # 检查响应文本是否为空
+        if response_content is None or response_content.text == "":
+            if response_content is None:
+                log('info', "客户端断开后API任务返回None", 
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+            else:
+                extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'status_code': 204}
+                log('info', "客户端断开后Gemini API 返回空响应", extra=extra_log)
+            
+            # 删除任何现有缓存，因为响应为空
+            if cache_key and cache_key in response_cache_manager.cache:
+                log('info', f"因空响应，删除缓存: {cache_key[:8]}...", 
+                    extra={'cache_operation': 'remove-on-empty', 'request_type': request_type})
+                del response_cache_manager.cache[cache_key]
+                
+            # 返回错误响应而不是None
+            return create_error_response(chat_request.model, "AI未返回任何内容，请重试")
+        
+        # 首先检查是否有现有缓存
+        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        if cache_hit:
+            log('info', f"客户端断开但找到已存在缓存，将删除: {cache_key[:8]}...", 
+                extra={'cache_operation': 'disconnect-found-cache', 'request_type': request_type})
+            
+            # 安全删除缓存
+            if cache_key in response_cache_manager.cache:
+                del response_cache_manager.cache[cache_key]
+            
+            # 不返回缓存，而是创建新响应并缓存
+        
+        # 创建新响应
+        # log('info', f"客户端断开后创建新缓存: {cache_key[:8] if cache_key else 'none'}...", 
+        #     extra={'cache_operation': 'create-after-disconnect', 'request_type': request_type})
+        response = create_response(chat_request, response_content)
+        
+        # 客户端已断开，此响应不会实际发送，可以考虑将其缓存以供后续使用
+        # 如果确实需要缓存，则可以取消下面的注释
+        # cache_response(response, cache_key, client_ip)
+        
+        return response
+    except asyncio.CancelledError:
+        # 对于取消异常，仍然尝试继续完成任务
+        log('info', "客户端断开后任务被取消，但我们仍会尝试完成", 
+            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+        
+        # 检查任务是否已经完成
+        if gemini_task.done() and not gemini_task.cancelled():
+            try:
+                response_content = gemini_task.result()
+                
+                # 首先检查是否有现有缓存
+                cached_response, cache_hit = response_cache_manager.get(cache_key)
+                if cache_hit:
+                    log('info', f"任务被取消但找到已存在缓存，将删除: {cache_key[:8]}...", 
+                        extra={'cache_operation': 'cancel-found-cache', 'request_type': request_type})
+                    
+                    # 安全删除缓存
+                    if cache_key in response_cache_manager.cache:
+                        del response_cache_manager.cache[cache_key]
+                
+                # 创建但不缓存响应
+                response = create_response(chat_request, response_content)
+                return response
+            except Exception as inner_e:
+                log('error', f"客户端断开后从已完成任务获取结果失败: {str(inner_e)}", 
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                
+                # 删除缓存，因为出现错误
+                if cache_key and cache_key in response_cache_manager.cache:
+                    log('info', f"因任务获取结果失败，删除缓存: {cache_key[:8]}...", 
+                        extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
+                    del response_cache_manager.cache[cache_key]
+        
+        # 创建错误响应而不是返回None
+        return create_error_response(chat_request.model, "请求处理过程中发生错误，请重试")
+    except Exception as e:
+        # 处理API任务异常
+        error_msg = str(e)
+        extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': error_msg}
+        log('error', f"客户端断开后处理API响应时出错: {error_msg}", extra=extra_log)
+        
+        # 删除缓存，因为出现错误
+        if cache_key and cache_key in response_cache_manager.cache:
+            log('info', f"因API响应错误，删除缓存: {cache_key[:8]}...", 
+                extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
+            del response_cache_manager.cache[cache_key]
+            
+        # 创建错误响应而不是返回None
+        return create_error_response(chat_request.model, f"请求处理错误: {error_msg}")
+
+async def process_nonstream_request(
+    chat_request: ChatCompletionRequest, 
+    http_request: Request, 
+    request_type: str,
+    contents,
+    system_instruction,
+    current_api_key: str,
+    cache_key: str = None,
+    client_ip: str = None
+):
+    """处理非流式API请求"""
+    gemini_client = GeminiClient(current_api_key)
+    
+    # 创建任务
+    gemini_task = asyncio.create_task(
+        run_gemini_completion(
+            gemini_client,
+            chat_request,
+            contents,
+            system_instruction,
+            request_type,
+            current_api_key
+        )
+    )
+    
+    disconnect_task = asyncio.create_task(
+        check_client_disconnect(
+            http_request,
+            current_api_key,
+            request_type,
+            chat_request.model
+        )
+    )
+
+    try:
+        # 先等待看是否API任务先完成，或者客户端先断开连接
+        done, pending = await asyncio.wait(
+            [gemini_task, disconnect_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+
+        if disconnect_task in done:
+            # 客户端已断开连接，但我们仍继续完成API请求以便缓存结果
+            return await handle_client_disconnect(
+                gemini_task,
+                chat_request,
+                request_type,
+                current_api_key,
+                cache_key,
+                client_ip
+            )
+        else:
+            # API任务先完成，取消断开检测任务
+            disconnect_task.cancel()
+            
+            # 获取响应内容
+            response_content = await gemini_task
+            
+            # 检查缓存是否已经存在，如果存在则不再创建新缓存
+            cached_response, cache_hit = response_cache_manager.get(cache_key)
+            if cache_hit:
+                log('info', f"缓存已存在，直接返回: {cache_key[:8]}...", 
+                    extra={'cache_operation': 'use-existing', 'request_type': request_type})
+                
+                # 安全删除缓存
+                if cache_key in response_cache_manager.cache:
+                    del response_cache_manager.cache[cache_key]
+                    log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
+                        extra={'cache_operation': 'used-and-removed', 'request_type': request_type})
+                
+                return cached_response
+            
+            # 创建响应
+            response = create_response(chat_request, response_content)
+            
+            # 缓存响应
+            cache_response(response, cache_key, client_ip)
+            
+            # 立即删除缓存，确保只能使用一次
+            if cache_key and cache_key in response_cache_manager.cache:
+                del response_cache_manager.cache[cache_key]
+                log('info', f"缓存创建后立即删除: {cache_key[:8]}...", 
+                    extra={'cache_operation': 'store-and-remove', 'request_type': request_type})
+            
+            # 返回响应
+            return response
+
+    except asyncio.CancelledError:
+        extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message':"请求被取消"}
+        log('info', "请求取消", extra=extra_log)
+        
+        # 在请求被取消时先检查缓存中是否已有结果
+        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        if cache_hit:
+            log('info', f"请求取消但找到有效缓存，使用缓存响应: {cache_key[:8]}...", 
+                extra={'cache_operation': 'use-cache-on-cancel', 'request_type': request_type})
+            
+            # 安全删除缓存
+            if cache_key in response_cache_manager.cache:
+                del response_cache_manager.cache[cache_key]
+                log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
+                    extra={'cache_operation': 'used-and-removed', 'request_type': request_type})
+            
+            return cached_response
+            
+        # 尝试完成正在进行的API请求
+        if not gemini_task.done():
+            log('info', "请求取消但API请求尚未完成，继续等待...", 
+                extra={'key': current_api_key[:8], 'request_type': request_type})
+            
+            # 使用shield确保任务不会被取消
+            response_content = await asyncio.shield(gemini_task)
+            
+            # 创建响应
+            response = create_response(chat_request, response_content)
+            
+            # 不缓存这个响应，直接返回
+            return response
+        else:
+            # 任务已完成，获取结果
+            response_content = gemini_task.result()
+            
+            # 创建响应
+            response = create_response(chat_request, response_content)
+            
+            # 不缓存这个响应，直接返回
+            return response
+
+    except HTTPException as e:
+        if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
+            extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 
+                        'status_code': 408, 'error_message': '客户端连接中断'}
+            log('error', "客户端连接中断，终止后续重试", extra=extra_log)
+            raise  
+        else:
+            raise
+
+# 添加通用响应处理函数
+def create_response(
+    chat_request, response_content
+):
+    """创建标准响应对象但不缓存"""
+    # 创建响应对象
+    return create_chat_response(
+        model=chat_request.model,
+        choices=[{
+            "index": 0, 
+            "message": {
+                "role": "assistant", 
+                "content": response_content.text
+            }, 
+            "finish_reason": "stop"
+        }]
+    )
+
+def cache_response(response, cache_key, client_ip):
+    """将响应存入缓存"""
+    if not cache_key:
+        return
+        
+    # 先检查缓存是否已存在
+    existing_cache = cache_key in response_cache_manager.cache
+    
+    if existing_cache:
+        log('info', f"缓存已存在，跳过存储: {cache_key[:8]}...", 
+            extra={'cache_operation': 'skip-existing', 'request_type': 'non-stream'})
+    else:
+        response_cache_manager.store(cache_key, response, client_ip)
+        log('info', f"API响应已缓存: {cache_key[:8]}...", 
+            extra={'cache_operation': 'store-new', 'request_type': 'non-stream'})
+    
+    # 更新API调用统计
+    update_api_call_stats()
+
+# 统一的API错误处理函数
+async def handle_api_error(e, api_key, key_manager, request_type, model, retry_count=0):
+    """统一处理API错误，对500和503错误实现自动重试机制"""
+    error_detail = handle_gemini_error(e, api_key, key_manager)
+    
+    # 处理500和503服务器错误
+    if isinstance(e, requests.exceptions.HTTPError) and ('500' in str(e) or '503' in str(e)):
+        status_code = '500' if '500' in str(e) else '503'
+        
+        # 最多重试3次
+        if retry_count < 3:
+            wait_time = min(RETRY_DELAY * (2 ** retry_count), MAX_RETRY_DELAY)
+            log('warning', f"Gemini服务器错误({status_code})，等待{wait_time}秒后重试 ({retry_count+1}/3)", 
+                key=api_key[:8], request_type=request_type, model=model, status_code=int(status_code))
+            
+            # 等待后返回重试信号
+            await asyncio.sleep(wait_time)
+            return {'should_retry': True, 'error': error_detail, 'remove_cache': False}
+        
+        # 重试次数用尽，直接返回错误状态码
+        log('error', f"服务器错误({status_code})重试{retry_count}次后仍然失败", 
+            key=api_key[:8], request_type=request_type, model=model, status_code=int(status_code))
+        
+        # 不建议切换密钥，直接抛出HTTP异常
+        raise HTTPException(status_code=int(status_code), 
+                          detail=f"Gemini API 服务器错误({status_code})，请稍后重试")
+    
+    # 对于其他错误，返回切换密钥的信号
+    log('error', f"API错误: {error_detail}", 
+        key=api_key[:8], request_type=request_type, model=model, error_message=error_detail)
+    return {'should_retry': False, 'should_switch_key': True, 'error': error_detail, 'remove_cache': True}

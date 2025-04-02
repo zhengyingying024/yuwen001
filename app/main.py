@@ -804,7 +804,10 @@ async def root(request: Request):
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,
-        "active_pending": active_pending
+        "active_pending": active_pending,
+        # 添加假流式请求配置信息
+        "fake_streaming": FAKE_STREAMING,
+        "fake_streaming_interval": FAKE_STREAMING_INTERVAL
     }
     
     # 使用Jinja2模板引擎正确渲染HTML
@@ -875,16 +878,20 @@ async def process_stream_request(
             # 标记是否成功获取到响应
             success = False
             async for chunk in gemini_client.stream_chat(
-                chat_request, 
-                contents, 
-                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings, 
+                chat_request,
+                contents,
+                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
                 system_instruction
             ):
+                # 如果是空字符串（假流式请求的空内容），跳过
+                if not chunk:
+                    continue
+                    
                 formatted_chunk = {
-                    "id": "chatcmpl-someid", 
-                    "object": "chat.completion.chunk", 
+                    "id": "chatcmpl-someid",
+                    "object": "chat.completion.chunk",
                     "created": 1234567,
-                    "model": chat_request.model, 
+                    "model": chat_request.model,
                     "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]
                 }
                 success = True  # 只要有一个chunk成功，就标记为成功

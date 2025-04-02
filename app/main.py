@@ -31,69 +31,7 @@ logger.setLevel(logging.DEBUG)
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR))
 
-# --------------- 工具函数 ---------------
-
-def log(level: str, message: str, **extra):
-    """简化日志记录的统一函数"""
-    msg = format_log_message(level.upper(), message, extra=extra)
-    getattr(logger, level.lower())(msg)
-
-def translate_error(message: str) -> str:
-    if "quota exceeded" in message.lower():
-        return "API 密钥配额已用尽"
-    if "invalid argument" in message.lower():
-        return "无效参数"
-    if "internal server error" in message.lower():
-        return "服务器内部错误"
-    if "service unavailable" in message.lower():
-        return "服务不可用"
-    return message
-
-def create_chat_response(model: str, choices: list, id: str = None) -> ChatCompletionResponse:
-    """创建标准响应对象的工厂函数"""
-    return ChatCompletionResponse(
-        id=id or f"chatcmpl-{int(time.time()*1000)}",
-        object="chat.completion",
-        created=int(time.time()),
-        model=model,
-        choices=choices
-    )
-
-def create_error_response(model: str, error_message: str) -> ChatCompletionResponse:
-    """创建错误响应对象的工厂函数"""
-    return create_chat_response(
-        model=model,
-        choices=[{
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": error_message
-            },
-            "finish_reason": "error"
-        }]
-    )
-
-async def handle_gemini_error_with_retry(e, api_key, key_manager, request_type, model):
-    """统一处理Gemini API错误"""
-    error_detail = handle_gemini_error(e, api_key, key_manager)
-    
-    if isinstance(e, requests.exceptions.HTTPError) and '500' in str(e):
-        # 服务器错误应该重试
-        log('warning', f"Gemini服务器错误(500)", 
-            key=api_key[:8], request_type=request_type, model=model, status_code=500)
-        return {'should_retry': True, 'error': error_detail, 'remove_cache': False}
-    
-    # 对于其他错误或配额用尽，应该切换API密钥
-    log('error', f"API错误: {error_detail}", key=api_key[:8], 
-        request_type=request_type, model=model, error_message=error_detail)
-    return {'should_retry': False, 'should_switch_key': True, 'error': error_detail, 'remove_cache': True}
-
-def handle_exception(exc_type, exc_value, exc_traceback):
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.excepthook(exc_type, exc_value, exc_traceback)
-        return
-    error_message = translate_error(str(exc_value))
-    log('error', f"未捕获的异常: {error_message}", status_code=500, error_message=error_message)
+app = FastAPI()
 
 # --------------- 缓存管理类 ---------------
 
@@ -225,14 +163,68 @@ class ActiveRequestsManager:
             log('warning', f"取消长时间运行的任务: {len(long_running_keys)}个", cleanup='long_running_tasks')
 
 
-sys.excepthook = handle_exception
-app = FastAPI()
 
 # --------------- 全局实例 ---------------
 
+PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
+MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
+MAX_REQUESTS_PER_DAY_PER_IP = int(
+    os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
+# MAX_RETRIES = int(os.environ.get('MaxRetries', '3').strip() or '3')
+RETRY_DELAY = 1
+MAX_RETRY_DELAY = 16
+MAX_RETRY_DELAY = 16
+safety_settings = [
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_NONE"
+    },
+    {
+        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
+        "threshold": 'BLOCK_NONE'
+    }
+]
+safety_settings_g2 = [
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "OFF"
+    },
+    {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "OFF"
+    },
+    {
+        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
+        "threshold": 'OFF'
+    }
+]
+
+key_manager = APIKeyManager() # 实例化 APIKeyManager，栈会在 __init__ 中初始化
+current_api_key = key_manager.get_available_key()
+
 # 初始化缓存管理器
-CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "300"))  # 默认5分钟
-MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "1000"))  # 默认最多缓存1000条响应
+CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
+MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
 REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
 
 # 创建全局缓存字典，将作为缓存管理器的内部存储
@@ -313,62 +305,6 @@ def update_api_call_stats():
     
     log('info', "API调用统计已更新: 24小时=%s, 1小时=%s, 1分钟=%s" % (sum(api_call_stats['last_24h'].values()), sum(api_call_stats['hourly'].values()), sum(api_call_stats['minute'].values())))
 
-PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
-MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
-MAX_REQUESTS_PER_DAY_PER_IP = int(
-    os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
-# MAX_RETRIES = int(os.environ.get('MaxRetries', '3').strip() or '3')
-RETRY_DELAY = 1
-MAX_RETRY_DELAY = 16
-MAX_RETRY_DELAY = 16
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'BLOCK_NONE'
-    }
-]
-safety_settings_g2 = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'OFF'
-    }
-]
-
-key_manager = APIKeyManager() # 实例化 APIKeyManager，栈会在 __init__ 中初始化
-current_api_key = key_manager.get_available_key()
-
 
 def switch_api_key():
     global current_api_key
@@ -437,6 +373,58 @@ async def check_version():
             log('warning', f"无法获取远程版本信息，HTTP状态码: {response.status_code}")
     except Exception as e:
         log('error', f"版本检查失败: {str(e)}")
+
+
+# --------------- 工具函数 ---------------
+
+def log(level: str, message: str, **extra):
+    """简化日志记录的统一函数"""
+    msg = format_log_message(level.upper(), message, extra=extra)
+    getattr(logger, level.lower())(msg)
+
+def translate_error(message: str) -> str:
+    if "quota exceeded" in message.lower():
+        return "API 密钥配额已用尽"
+    if "invalid argument" in message.lower():
+        return "无效参数"
+    if "internal server error" in message.lower():
+        return "服务器内部错误"
+    if "service unavailable" in message.lower():
+        return "服务不可用"
+    return message
+
+def create_chat_response(model: str, choices: list, id: str = None) -> ChatCompletionResponse:
+    """创建标准响应对象的工厂函数"""
+    return ChatCompletionResponse(
+        id=id or f"chatcmpl-{int(time.time()*1000)}",
+        object="chat.completion",
+        created=int(time.time()),
+        model=model,
+        choices=choices
+    )
+
+def create_error_response(model: str, error_message: str) -> ChatCompletionResponse:
+    """创建错误响应对象的工厂函数"""
+    return create_chat_response(
+        model=model,
+        choices=[{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": error_message
+            },
+            "finish_reason": "error"
+        }]
+    )
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.excepthook(exc_type, exc_value, exc_traceback)
+        return
+    error_message = translate_error(str(exc_value))
+    log('error', f"未捕获的异常: {error_message}", status_code=500, error_message=error_message)
+
+sys.excepthook = handle_exception
 
 @app.on_event("startup")
 async def startup_event():
@@ -527,7 +515,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         # 等待已有任务完成
         try:
             # 设置超时，避免无限等待
-            await asyncio.wait_for(active_task, timeout=60)
+            await asyncio.wait_for(active_task, timeout=180)
             
             # 通过缓存管理器获取已完成任务的结果
             cached_response, cache_hit = response_cache_manager.get(cache_key)
@@ -618,13 +606,13 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
     contents, system_instruction = GeminiClient.convert_messages(
         GeminiClient, chat_request.messages)
 
-    # 设置重试次数
+    # 设置重试次数（使用可用API密钥数量作为最大重试次数）
     retry_attempts = len(key_manager.api_keys) if key_manager.api_keys else 1
     
     # 尝试使用不同API密钥
     for attempt in range(1, retry_attempts + 1):
-        if attempt == 1:
-            current_api_key = key_manager.get_available_key()
+        # 获取下一个密钥
+        current_api_key = key_manager.get_available_key()
         
         # 检查API密钥是否可用
         if current_api_key is None:
@@ -632,7 +620,7 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                 extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 'N/A'})
             break
         
-        # 记录当前尝试
+        # 记录当前尝试的密钥信息
         log('info', f"第 {attempt}/{retry_attempts} 次尝试 ... 使用密钥: {current_api_key[:8]}...", 
             extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
 
@@ -662,7 +650,7 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                     )
             except HTTPException as e:
                 if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
-                    log('error', "客户端连接中断，终止后续重试", 
+                    log('error', "客户端连接中断", 
                         extra={'key': current_api_key[:8], 'request_type': request_type, 
                               'model': chat_request.model, 'status_code': 408})
                     raise
@@ -689,17 +677,17 @@ async def process_request(chat_request: ChatCompletionRequest, http_request: Req
                     # 服务器错误需要重试（等待已在handle_api_error中完成）
                     continue
                 elif error_result.get('should_switch_key', False) and attempt < retry_attempts:
-                    # 需要切换API密钥
-                    switch_api_key()
-                    break  # 跳出服务器错误重试循环，尝试下一个API密钥
+                    # 跳出服务器错误重试循环，获取下一个可用密钥
+                    log('info', f"API密钥 {current_api_key[:8]}... 失败，准备尝试下一个密钥", 
+                        extra={'key': current_api_key[:8], 'request_type': request_type})
+                    break  
                 else:
                     # 无法处理的错误或已达到重试上限
                     break
 
     # 如果所有尝试都失败
-    msg = "所有API密钥均失败,请稍后重试"
-    log('error', msg, extra={'key': "ALL", 'request_type': request_type, 
-                         'model': chat_request.model, 'status_code': 500})
+    msg = "所有API密钥均请求失败,请稍后重试"
+    log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
 
@@ -880,6 +868,9 @@ async def process_stream_request(
                 safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
                 system_instruction
             ):
+                # 空字符串跳过
+                if not chunk:
+                    continue
                     
                 formatted_chunk = {
                     "id": "chatcmpl-someid",

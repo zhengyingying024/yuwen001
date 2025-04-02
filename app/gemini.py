@@ -139,8 +139,8 @@ class GeminiClient:
                 # 这确保了流式响应的开启
                 start_time = time.time()
                 while not non_stream_task.done():
-                    # 发送空字符，保持连接
-                    yield " "
+                    # 发送空行作为保活消息
+                    yield "\n"
                     # 等待一段时间
                     await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                     

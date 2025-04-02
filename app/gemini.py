@@ -15,7 +15,7 @@ logger = logging.getLogger('my_logger')
 # 是否启用假流式请求
 FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "false").lower() in ["true", "1", "yes"]
 # 假流式请求的空内容返回间隔（秒）
-FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "0.5"))
+FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "5"))
 
 @dataclass
 class GeneratedText:
@@ -135,12 +135,12 @@ class GeminiClient:
                     )
                 )
                 
-                # 在获取非流式响应前，每隔一定时间返回空内容
+                # 在获取非流式响应前，每隔一定时间返回空格
                 # 这确保了流式响应的开启
                 start_time = time.time()
                 while not non_stream_task.done():
-                    # 发送空内容，保持连接
-                    yield ""
+                    # 发送空格，保持连接
+                    yield " "
                     # 等待一段时间
                     await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                     

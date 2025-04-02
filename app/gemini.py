@@ -161,7 +161,6 @@ class GeminiClient:
                     for i in range(0, len(full_text), chunk_size):
                         chunk = full_text[i:i+chunk_size]
                         yield chunk
-                        await asyncio.sleep(FAKE_STREAMING_INTERVAL * 0.5)  # 返回实际内容时可以稍快一些
                 else:
                     log_msg = format_log_message('WARNING', "假流式请求获取到空响应", extra=extra_log)
                     logger.warning(log_msg)

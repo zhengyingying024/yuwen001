@@ -880,9 +880,6 @@ async def process_stream_request(
                 safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
                 system_instruction
             ):
-                # 空字符串跳过
-                if not chunk:
-                    continue
                     
                 formatted_chunk = {
                     "id": "chatcmpl-someid",

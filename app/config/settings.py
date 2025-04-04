@@ -36,8 +36,8 @@ REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", 
 ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
 
 # 版本信息
-local_version = "0.0.0"
-remote_version = "0.0.0"
+local_version = "0.0.4"
+remote_version = "0.0.4"
 has_update = False
 
 # API调用统计

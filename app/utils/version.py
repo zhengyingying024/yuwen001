@@ -1,7 +1,7 @@
 import requests
 import logging
 from app.utils.logging import log
-
+import app.config.settings as settings
 async def check_version():
     """
     检查应用程序版本更新
@@ -9,7 +9,6 @@ async def check_version():
     从本地和远程获取版本信息，并比较版本号以确定是否有更新
     """
     # 导入全局变量
-    import app.config.settings as settings
     try:
         # 读取本地版本
         with open("./version.txt", "r") as f:

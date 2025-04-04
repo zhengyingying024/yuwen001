@@ -65,3 +65,8 @@ def format_log_message(level, message, extra=None):
     log_manager.add_log(log_entry)
     
     return formatted_log
+
+def log(level: str, message: str, **extra):
+    """简化日志记录的统一函数"""
+    msg = format_log_message(level.upper(), message, extra=extra)
+    getattr(logger, level.lower())(msg)

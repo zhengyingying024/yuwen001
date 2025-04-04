@@ -3,8 +3,10 @@ import hashlib
 import json
 from typing import Dict, Any, Optional
 import logging
-from app.utils import log
-
+from app.utils.logging import log
+from app.config.settings import (
+    api_call_stats
+)
 logger = logging.getLogger("my_logger")
 
 class ResponseCacheManager:
@@ -122,4 +124,4 @@ def cache_response(response, cache_key, client_ip, response_cache_manager, updat
             extra={'cache_operation': 'store-new', 'request_type': 'non-stream'})
     
     # 更新API调用统计
-    update_api_call_stats()
+    update_api_call_stats(api_call_stats)

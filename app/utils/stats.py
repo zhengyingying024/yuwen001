@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from app.utils import log
+from app.utils.logging import log
 
 def clean_expired_stats(api_call_stats):
     """清理过期统计数据的函数"""

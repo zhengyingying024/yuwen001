@@ -1,7 +1,7 @@
 import asyncio
 import time
 from typing import Dict, Any
-from app.utils import log
+from app.utils.logging import log
 
 class ActiveRequestsManager:
     """管理活跃API请求的类"""

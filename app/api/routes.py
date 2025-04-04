@@ -19,8 +19,11 @@ import json
 import asyncio
 import time
 import logging
+import random
 from typing import Literal
-
+from app.config.settings import (
+    api_call_stats
+)
 # 获取logger
 logger = logging.getLogger("my_logger")
 
@@ -447,7 +450,7 @@ async def process_stream_request(
                                     success = True
                                     # 更新API调用统计
                                     from app.utils.stats import update_api_call_stats
-                                    update_api_call_stats()
+                                    update_api_call_stats(api_call_stats)
                                     break  # 成功获取响应，退出循环
                                 else:
                                     log('warning', f"假流式模式: API密钥 {api_key[:8]}... 返回空响应",
@@ -580,7 +583,7 @@ async def process_stream_request(
                 # 如果成功获取到响应，更新API调用统计
                 if success:
                     from app.utils.stats import update_api_call_stats
-                    update_api_call_stats()
+                    update_api_call_stats(api_call_stats)
                     
                 yield "data: [DONE]\n\n"
                 

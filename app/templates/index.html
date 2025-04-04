@@ -185,15 +185,15 @@
         <h3 class="section-title">API调用统计</h3>
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value">{{ last_24h_calls }}</div>
+                <div class="stat-value" id="last-24h-calls">{{ last_24h_calls }}</div>
                 <div class="stat-label">24小时内调用次数</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ hourly_calls }}</div>
+                <div class="stat-value" id="hourly-calls">{{ hourly_calls }}</div>
                 <div class="stat-label">一小时内调用次数</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ minute_calls }}</div>
+                <div class="stat-value" id="minute-calls">{{ minute_calls }}</div>
                 <div class="stat-label">一分钟内调用次数</div>
             </div>
         </div>
@@ -211,7 +211,7 @@
                 <div class="stat-label">每IP每日请求限制</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value">{{ current_time }}</div>
+                <div class="stat-value" id="current-time">{{ current_time }}</div>
                 <div class="stat-label">当前服务器时间</div>
             </div>
         </div>
@@ -250,7 +250,7 @@
             <button data-level="WARNING">警告</button>
             <button data-level="ERROR">错误</button>
         </div>
-        <div class="log-container">
+        <div class="log-container" id="log-container">
             {% for log in logs %}
             <div class="log-entry {{ log.level }}" data-level="{{ log.level }}">
                 <span class="log-timestamp">{{ log.timestamp }}</span>
@@ -268,7 +268,7 @@
             </div>
             {% endfor %}
         </div>
-        <button class="refresh-button" onclick="window.location.reload()">刷新日志</button>
+        <button class="refresh-button" id="refresh-button">刷新数据</button>
     </div>
 
     <script>
@@ -296,11 +296,129 @@
             });
         });
         
-        // 页面加载时自动滚动到日志底部
+        // 动态刷新功能
+        let refreshInterval;
+        const refreshRate = 1000; // 1秒刷新一次
+        let isRefreshing = false;
+        
+        // 开始自动刷新
+        function startAutoRefresh() {
+            if (!refreshInterval) {
+                refreshInterval = setInterval(fetchDashboardData, refreshRate);
+                console.log('自动刷新已启动');
+            }
+        }
+        
+        // 停止自动刷新
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+                console.log('自动刷新已停止');
+            }
+        }
+        
+        // 获取仪表盘数据
+        async function fetchDashboardData() {
+            if (isRefreshing) return; // 防止重复请求
+            
+            isRefreshing = true;
+            try {
+                const response = await fetch('/api/dashboard-data');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('获取数据失败:', error);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        
+        // 更新仪表盘数据
+        function updateDashboard(data) {
+            // 更新时间
+            document.getElementById('current-time').textContent = data.current_time;
+            
+            // 更新调用统计
+            document.getElementById('last-24h-calls').textContent = data.last_24h_calls;
+            document.getElementById('hourly-calls').textContent = data.hourly_calls;
+            document.getElementById('minute-calls').textContent = data.minute_calls;
+            
+            // 更新日志
+            updateLogs(data.logs);
+        }
+        
+        // 更新日志
+        function updateLogs(logs) {
+            const logContainer = document.getElementById('log-container');
+            const currentFilter = document.querySelector('.log-filter button.active').getAttribute('data-level');
+            
+            // 保存当前滚动位置
+            const wasScrolledToBottom = logContainer.scrollHeight - logContainer.clientHeight <= logContainer.scrollTop + 5;
+            
+            // 清空现有日志
+            logContainer.innerHTML = '';
+            
+            // 添加新日志
+            logs.forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${log.level}`;
+                logEntry.setAttribute('data-level', log.level);
+                
+                // 根据当前过滤器设置显示状态
+                if (currentFilter !== 'ALL' && log.level !== currentFilter) {
+                    logEntry.style.display = 'none';
+                }
+                
+                const timestampSpan = document.createElement('span');
+                timestampSpan.className = 'log-timestamp';
+                timestampSpan.textContent = log.timestamp;
+                
+                const levelSpan = document.createElement('span');
+                levelSpan.className = `log-level ${log.level}`;
+                levelSpan.textContent = log.level;
+                
+                const messageSpan = document.createElement('span');
+                messageSpan.className = 'log-message';
+                
+                // 构建消息内容
+                let messageContent = '';
+                if (log.key !== 'N/A') messageContent += `[${log.key}] `;
+                if (log.request_type !== 'N/A') messageContent += log.request_type + ' ';
+                if (log.model !== 'N/A') messageContent += `[${log.model}] `;
+                if (log.status_code !== 'N/A') messageContent += log.status_code + ' ';
+                messageContent += ': ' + log.message;
+                if (log.error_message) messageContent += ' - ' + log.error_message;
+                
+                messageSpan.textContent = messageContent;
+                
+                logEntry.appendChild(timestampSpan);
+                logEntry.appendChild(levelSpan);
+                logEntry.appendChild(messageSpan);
+                
+                logContainer.appendChild(logEntry);
+            });
+            
+            // 如果之前是滚动到底部的，则保持滚动到底部
+            if (wasScrolledToBottom) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+        
+        // 页面加载时自动滚动到日志底部并启动自动刷新
         window.onload = function() {
-            const logContainer = document.querySelector('.log-container');
+            const logContainer = document.getElementById('log-container');
             logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // 启动自动刷新
+            startAutoRefresh();
         };
+        
+        // 手动刷新按钮
+        document.getElementById('refresh-button').addEventListener('click', fetchDashboardData);
     </script>
 </body>
 </html>

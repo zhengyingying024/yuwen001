@@ -18,7 +18,7 @@ from app.utils import (
     handle_exception,
     log
 )
-from app.api import router, init_router
+from app.api import router, init_router, dashboard_router, init_dashboard_router
 from app.config.settings import (
     FAKE_STREAMING,
     FAKE_STREAMING_INTERVAL,
@@ -142,6 +142,13 @@ async def startup_event():
         MAX_REQUESTS_PER_MINUTE,
         MAX_REQUESTS_PER_DAY_PER_IP
     )
+    
+    # 初始化仪表盘路由器
+    init_dashboard_router(
+        key_manager,
+        response_cache_manager,
+        active_requests_manager
+    )
 
 # --------------- 异常处理 ---------------
 
@@ -157,11 +164,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # 包含API路由
 app.include_router(router)
+app.include_router(dashboard_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     # 先清理过期数据，确保统计数据是最新的
-    clean_expired_stats()
+    clean_expired_stats(api_call_stats)
     response_cache_manager.clean_expired()  # 使用管理器清理缓存
     active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
     await check_version()

@@ -7,16 +7,16 @@
 
 ### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。
-- 注册完成后，进入[spaces](https://huggingface.co/spaces)如图所示，点击new spaces。<br>![spaces](图片地址)
-- 如图所示，填入创建选项，注意space name不要使用符号，填写完成后，点击create space<br>![create_space](图片地址)
-- 如图所示，选择upload files<br>![files](图片地址)
-- 如图所示，将1.1下载并解压的文件全部拖入，上传完成后点击Commit changes to main<br>![upload_files](图片地址)
+- 注册完成后，进入[spaces](https://huggingface.co/spaces)如图所示，点击new spaces。<br>![spaces](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/spaces.png)
+- 如图所示，填入创建选项，注意space name不要使用符号，填写完成后，点击create space<br>![create_space](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/create_space.png)
+- 如图所示，选择upload files<br>![files](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/files.png)
+- 如图所示，将1.1下载并解压的文件全部拖入，上传完成后点击Commit changes to main<br>![upload_files](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/upload_files.png)
 
 ### 1.2 配置环境变量
-- 如图所示，进入settings界面<br>![settings](图片地址)
-- 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](图片地址)
-- 添加环境变量，如图所示为添加GENMINI_API_KEY环境变量，在value中填入具体apikey<br>![KEY](图片地址)
-- 等待项目部署完成，app界面显示如图界面，即完成<br>![app](图片地址)
+- 如图所示，进入settings界面<br>![settings](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/settings.png)
+- 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/secrets.png)
+- 添加环境变量，如图所示为添加GENMINI_API_KEY环境变量，在value中填入具体apikey<br>![KEY](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/KEY.png)
+- 等待项目部署完成，app界面显示如图界面，即完成<br>![app](https://github.com/wyeeeee/hajimi/blob/dev/wiki/img/app.png)
 
 ### 1.3 环境变量说明
 #### 重要环境变量

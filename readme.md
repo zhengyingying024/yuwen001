@@ -6,11 +6,11 @@
 ###  使用文档
 - [使用文档](https://github.com/wyeeeee/hajimi/blob/main/wiki/wiki.md)
 ###  更新日志
-*   0.0.3 
+*   v0.0.3beta
     * 完善了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
     * 新增“假流式传输模式”，该模式默认开启，以解决在某些情况下客户端断开连接的问题。如需关闭，请将环境变量 `FAKE_STREAMING` 设置为 `false`。
 
-*   0.0.2 修复了在log中错误暴露apikey的问题，修改了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
+*   v0.0.2 修复了在log中错误暴露apikey的问题，修改了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
 
 ## ✨ 主要功能：
 

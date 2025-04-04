@@ -3,7 +3,7 @@ import json
 import os
 import asyncio
 import time
-from app.models import ChatCompletionRequest, Message  # 相对导入
+from app.models import ChatCompletionRequest, Message
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx

@@ -13,7 +13,8 @@ from app.utils import (
     cache_response,
     create_chat_response,
     create_error_response,
-    handle_api_error
+    handle_api_error,
+    update_api_call_stats
 )
 import json
 import asyncio
@@ -851,7 +852,7 @@ async def process_nonstream_request(
             response = create_response(chat_request, response_content)
             
             # 缓存响应
-            cache_response(response, cache_key, client_ip)
+            cache_response(response, cache_key, client_ip,response_cache_manager,update_api_call_stats)
             
             # 立即删除缓存，确保只能使用一次
             if cache_key and cache_key in response_cache_manager.cache:

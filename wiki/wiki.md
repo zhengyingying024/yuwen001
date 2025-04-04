@@ -26,6 +26,7 @@
 -   `MAX_REQUESTS_PER_MINUTE`：（可选）每分钟最大请求数。
 -   `MAX_REQUESTS_PER_DAY_PER_IP`：（可选）每天每个 IP 最大请求数。
 -   `FAKE_STREAMING`：（可选）是否启用假流式传输，默认为true。
+-   `API_KEY_DAILY_LIMIT`: （可选）单api 24小时最大使用次数，默认值为25
 
 ### 1.4 在酒馆中使用
 在酒馆api连接配置中，选择兼容openai格式，URL格式为`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`（注意为https）。自定义 API 密钥为1.3中配置的`PASSWORD`。

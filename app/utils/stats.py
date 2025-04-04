@@ -46,6 +46,14 @@ def update_api_call_stats(api_call_stats):
     # 检查并清理过期统计
     clean_expired_stats(api_call_stats)
     
+    # 初始化键（如果不存在）
+    if hour_key not in api_call_stats['last_24h']:
+        api_call_stats['last_24h'][hour_key] = 0
+    if hour_key not in api_call_stats['hourly']:
+        api_call_stats['hourly'][hour_key] = 0
+    if minute_key not in api_call_stats['minute']:
+        api_call_stats['minute'][minute_key] = 0
+    
     # 更新统计
     api_call_stats['last_24h'][hour_key] += 1
     api_call_stats['hourly'][hour_key] += 1

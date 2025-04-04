@@ -3,7 +3,8 @@
 基于某论坛上一位大佬[@Mrjwj34](https://github.com/Moonfanz)基于另一位大佬[@Moonfanzp](https://github.com/Moonfanz)的代码的修改修改而来，由于大佬好长时间没有维护，我自己也遇到些bug，就魔改了一下，求star求star求star
 
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
-
+###  使用文档
+- [使用文档](https://github.com/wyeeeee/hajimi/blob/main/wiki/wiki.md)
 ###  更新日志
 *   v0.0.3beta
     * 完善了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
@@ -37,34 +38,6 @@
 ### 🧩 服务兼容
 
 *   提供的接口与 OpenAI API 格式兼容,便于接入各种服务
-
-## 🛠️ 使用方式：
-
-### 🚀 部署到 Hugging Face Spaces：
-
-1.  创建一个新的 Space。
-2.  将本项目代码上传到 Space。
-3.  在 Space 的 `Settings` -> `Secrets` 中设置以下环境变量：
-    *   `GEMINI_API_KEYS`：你的 Gemini API 密钥，用逗号分隔（例如：`key1,key2,key3`）。
-    *   `PASSWORD`：（可选）设置访问密码，留空则使用默认密码 `"123"`。
-    *   `MAX_REQUESTS_PER_MINUTE`：（可选）每分钟最大请求数。
-    *   `MAX_REQUESTS_PER_DAY_PER_IP`：（可选）每天每个 IP 最大请求数。
-    ...(还有一些变量,但是没啥大用,可以到代码里找)
-4.  确保 `requirements.txt` 文件已包含必要的依赖。
-5.  Space 将会自动构建并运行。
-6.  URL格式为`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`。
-
-### 💻 本地运行（可选,未测试但是应该能行）：
-
-1.  安装依赖：`pip install -r requirements.txt`
-2.  设置环境变量（如上所述）。
-3.  运行：`uvicorn app.main:app --reload --host 0.0.0.0 --port 7860`
-
-### 🔌 接入其他服务
-
-1.  在连接中选择OpenAI
-2.  在API Base URL中填入`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`
-3.  在API Key中填入`PASSWORD`环境变量的值,如未设置则填入`123`
 
 ## ⚠️ 注意事项：
 

@@ -12,30 +12,41 @@ from app.utils import (
     ResponseCacheManager,
     ActiveRequestsManager,
     clean_expired_stats,
-    update_api_call_stats
+    update_api_call_stats,
+    check_version,
+    schedule_cache_cleanup,
+    handle_exception,
+    log
 )
 from app.api import router, init_router
+from app.config.settings import (
+    FAKE_STREAMING,
+    FAKE_STREAMING_INTERVAL,
+    PASSWORD,
+    MAX_REQUESTS_PER_MINUTE,
+    MAX_REQUESTS_PER_DAY_PER_IP,
+    RETRY_DELAY,
+    MAX_RETRY_DELAY,
+    CACHE_EXPIRY_TIME,
+    MAX_CACHE_ENTRIES,
+    REMOVE_CACHE_AFTER_USE,
+    REQUEST_HISTORY_EXPIRY_TIME,
+    ENABLE_RECONNECT_DETECTION,
+    api_call_stats,
+    client_request_history,
+    local_version,
+    remote_version,
+    has_update
+)
+from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 import os
 import json
 import asyncio
-import requests
+import time
 import logging
 from datetime import datetime, timedelta
-from apscheduler.schedulers.background import BackgroundScheduler
 import sys
 import pathlib
-import random
-
-# 配置环境变量
-FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1", "yes"]
-# 假流式请求的空内容返回间隔（秒）
-FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1"))
-logging.getLogger("uvicorn").disabled = True
-logging.getLogger("uvicorn.access").disabled = True
-
-# 配置 logger
-logger = logging.getLogger("my_logger")
-logger.setLevel(logging.DEBUG)
 
 # 设置模板目录
 BASE_DIR = pathlib.Path(__file__).parent
@@ -45,68 +56,9 @@ app = FastAPI()
 
 # --------------- 全局实例 ---------------
 
-PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
-MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
-MAX_REQUESTS_PER_DAY_PER_IP = int(
-    os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
-RETRY_DELAY = 1
-MAX_RETRY_DELAY = 16
-
-# 安全设置
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "BLOCK_NONE"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'BLOCK_NONE'
-    }
-]
-
-safety_settings_g2 = [
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-        "threshold": "OFF"
-    },
-    {
-        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-        "threshold": "OFF"
-    },
-    {
-        "category": 'HARM_CATEGORY_CIVIC_INTEGRITY',
-        "threshold": 'OFF'
-    }
-]
-
 # 初始化API密钥管理器
 key_manager = APIKeyManager()
 current_api_key = key_manager.get_available_key()
-
-# 初始化缓存管理器
-CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
-MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
-REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
 
 # 创建全局缓存字典，将作为缓存管理器的内部存储
 response_cache = {}
@@ -125,31 +77,7 @@ active_requests_pool = {}
 # 初始化活跃请求管理器
 active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_pool)
 
-# 添加API调用计数器
-api_call_stats = {
-    'last_24h': {},  # 按小时统计过去24小时
-    'hourly': {},    # 按小时统计过去一小时
-    'minute': {},    # 按分钟统计过去一分钟
-}
-
-# 客户端IP到最近请求的映射，用于识别重连请求
-client_request_history = {}
-# 请求历史记录保留时间（秒）
-REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
-# 是否启用重连检测
-ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
-
-# 存储版本信息的全局变量
-local_version = "0.0.0"
-remote_version = "0.0.0"
-has_update = False
-
 # --------------- 工具函数 ---------------
-
-def log(level: str, message: str, **extra):
-    """简化日志记录的统一函数"""
-    msg = format_log_message(level.upper(), message, extra=extra)
-    getattr(logger, level.lower())(msg)
 
 def switch_api_key():
     global current_api_key
@@ -172,64 +100,8 @@ async def check_keys():
         log('error', "没有可用的 API 密钥！", extra={'key': 'N/A', 'request_type': 'startup', 'status_code': 'N/A'})
     return available_keys
 
-# 检查版本更新
-async def check_version():
-    global local_version, remote_version, has_update
-    try:
-        # 读取本地版本
-        with open("version.txt", "r") as f:
-            version_line = f.read().strip()
-            local_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
-        
-        # 获取远程版本
-        github_url = "https://raw.githubusercontent.com/wyeeeee/hajimi/refs/heads/main/version.txt"
-        response = requests.get(github_url, timeout=5)
-        if response.status_code == 200:
-            version_line = response.text.strip()
-            remote_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
-            
-            # 比较版本号
-            local_parts = [int(x) for x in local_version.split(".")]
-            remote_parts = [int(x) for x in remote_version.split(".")]
-            
-            # 确保两个列表长度相同
-            while len(local_parts) < len(remote_parts):
-                local_parts.append(0)
-            while len(remote_parts) < len(local_parts):
-                remote_parts.append(0)
-                
-            # 比较版本号
-            for i in range(len(local_parts)):
-                if remote_parts[i] > local_parts[i]:
-                    has_update = True
-                    break
-                elif remote_parts[i] < local_parts[i]:
-                    break
-            
-            log('info', f"版本检查: 本地版本 {local_version}, 远程版本 {remote_version}, 有更新: {has_update}")
-        else:
-            log('warning', f"无法获取远程版本信息，HTTP状态码: {response.status_code}")
-    except Exception as e:
-        log('error', f"版本检查失败: {str(e)}")
-
-def handle_exception(exc_type, exc_value, exc_traceback):
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.excepthook(exc_type, exc_value, exc_traceback)
-        return
-    from app.utils import translate_error
-    error_message = translate_error(str(exc_value))
-    log('error', f"未捕获的异常: {error_message}", status_code=500, error_message=error_message)
-
+# 设置全局异常处理
 sys.excepthook = handle_exception
-
-# 定期清理缓存的定时任务
-def schedule_cache_cleanup():
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(response_cache_manager.clean_expired, 'interval', minutes=1)  # 每分钟清理过期缓存
-    scheduler.add_job(active_requests_manager.clean_completed, 'interval', seconds=30)  # 每30秒清理已完成的活跃请求
-    scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])  # 每5分钟清理运行超过5分钟的任务
-    scheduler.add_job(clean_expired_stats, 'interval', minutes=5)  # 每5分钟清理过期的统计数据
-    scheduler.start()
 
 # --------------- 事件处理 ---------------
 
@@ -238,7 +110,7 @@ async def startup_event():
     log('info', "Starting Gemini API proxy...")
     
     # 启动缓存清理定时任务
-    schedule_cache_cleanup()
+    schedule_cache_cleanup(response_cache_manager, active_requests_manager)
     
     # 检查版本
     await check_version()
@@ -261,8 +133,8 @@ async def startup_event():
         key_manager,
         response_cache_manager,
         active_requests_manager,
-        safety_settings,
-        safety_settings_g2,
+        SAFETY_SETTINGS,
+        SAFETY_SETTINGS_G2,
         current_api_key,
         FAKE_STREAMING,
         FAKE_STREAMING_INTERVAL,

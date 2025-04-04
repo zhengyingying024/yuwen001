@@ -13,7 +13,7 @@
 - 如图所示，将1.1下载并解压的文件全部拖入，上传完成后点击Commit changes to main<br>![upload_files](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/upload_files.png)
 
 ### 1.2 配置环境变量
-- 如图所示，进入settings界面<br>![settings](https://github.com/wyeeeee/hajimi/blob/main/wiki/main/settings.png)
+- 如图所示，进入settings界面<br>![settings](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/settings.png)
 - 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/secrets.png)
 - 添加环境变量，如图所示为添加GENMINI_API_KEY环境变量，在value中填入具体apikey<br>![KEY](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/KEY.png)
 - 等待项目部署完成，app界面显示如图界面，即完成<br>![app](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/app.png)

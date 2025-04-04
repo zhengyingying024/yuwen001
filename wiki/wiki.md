@@ -2,7 +2,7 @@
 
 ## 1. 安装
 ### 1.1 下载
-- 从[releases](https://github.com/zhengyuxiang/hajimi/releases)下载最新版本。
+- 从[releases](https://github.com/wyeeeee/hajimi/releases))下载最新版本。
 - 下载完成后解压到任意目录。
 
 ### 1.2 使用huggingface space部署项目

@@ -451,7 +451,7 @@ async def process_stream_request(
                                     success = True
                                     # 更新API调用统计
                                     from app.utils.stats import update_api_call_stats
-                                    update_api_call_stats(api_call_stats)
+                                    update_api_call_stats(api_call_stats,api_key)
                                     break  # 成功获取响应，退出循环
                                 else:
                                     log('warning', f"假流式模式: API密钥 {api_key[:8]}... 返回空响应",
@@ -584,7 +584,7 @@ async def process_stream_request(
                 # 如果成功获取到响应，更新API调用统计
                 if success:
                     from app.utils.stats import update_api_call_stats
-                    update_api_call_stats(api_call_stats)
+                    update_api_call_stats(api_call_stats, current_api_key)
                     
                 yield "data: [DONE]\n\n"
                 
@@ -852,7 +852,7 @@ async def process_nonstream_request(
             response = create_response(chat_request, response_content)
             
             # 缓存响应
-            cache_response(response, cache_key, client_ip,response_cache_manager,update_api_call_stats)
+            cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, current_api_key)
             
             # 立即删除缓存，确保只能使用一次
             if cache_key and cache_key in response_cache_manager.cache:

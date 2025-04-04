@@ -107,8 +107,18 @@ def generate_cache_key(chat_request) -> str:
     json_data = json.dumps(request_data, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
 
-def cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats):
-    """将响应存入缓存"""
+def cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, endpoint=None):
+    """
+    将响应存入缓存
+    
+    参数:
+    - response: 响应对象
+    - cache_key: 缓存键
+    - client_ip: 客户端IP
+    - response_cache_manager: 缓存管理器
+    - update_api_call_stats: 更新统计的函数
+    - endpoint: API端点路径，如果为None则只更新总调用次数
+    """
     if not cache_key:
         return
         
@@ -116,12 +126,12 @@ def cache_response(response, cache_key, client_ip, response_cache_manager, updat
     existing_cache = cache_key in response_cache_manager.cache
     
     if existing_cache:
-        log('info', f"缓存已存在，跳过存储: {cache_key[:8]}...", 
+        log('info', f"缓存已存在，跳过存储: {cache_key[:8]}...",
             extra={'cache_operation': 'skip-existing', 'request_type': 'non-stream'})
     else:
         response_cache_manager.store(cache_key, response, client_ip)
-        log('info', f"API响应已缓存: {cache_key[:8]}...", 
+        log('info', f"API响应已缓存: {cache_key[:8]}...",
             extra={'cache_operation': 'store-new', 'request_type': 'non-stream'})
     
     # 更新API调用统计
-    update_api_call_stats(api_call_stats)
+    update_api_call_stats(api_call_stats, endpoint)

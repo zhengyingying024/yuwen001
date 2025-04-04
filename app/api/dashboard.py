@@ -45,12 +45,12 @@ async def get_dashboard_data():
     now = datetime.now()
     
     # 计算过去24小时的调用总数
-    last_24h_calls = sum(api_call_stats['last_24h'].values())
+    last_24h_calls = sum(api_call_stats['last_24h']['total']['total'].values())
     
     # 计算过去一小时内的调用总数
     one_hour_ago = now - timedelta(hours=1)
     hourly_calls = 0
-    for hour_key, count in api_call_stats['hourly'].items():
+    for hour_key, count in api_call_stats['hourly']['total'].items():
         try:
             hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
             if hour_time >= one_hour_ago:
@@ -61,7 +61,7 @@ async def get_dashboard_data():
     # 计算过去一分钟内的调用总数
     one_minute_ago = now - timedelta(minutes=1)
     minute_calls = 0
-    for minute_key, count in api_call_stats['minute'].items():
+    for minute_key, count in api_call_stats['minute']['total'].items():
         try:
             minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
             if minute_time >= one_minute_ago:

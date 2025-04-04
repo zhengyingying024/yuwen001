@@ -38,9 +38,18 @@ has_update = False
 
 # API调用统计
 api_call_stats = {
-    'last_24h': {},  # 按小时统计过去24小时
-    'hourly': {},    # 按小时统计过去一小时
-    'minute': {},    # 按分钟统计过去一分钟
+    'last_24h': {
+        'total': {},  # 按小时统计过去24小时总调用次数
+        'by_endpoint': {}  # 按API端点分类的24小时统计
+    },
+    'hourly': {
+        'total': {},  # 按小时统计过去一小时总调用次数
+        'by_endpoint': {}  # 按API端点分类的小时统计
+    },
+    'minute': {
+        'total': {},  # 按分钟统计过去一分钟总调用次数
+        'by_endpoint': {}  # 按API端点分类的分钟统计
+    }
 }
 
 # 客户端IP到最近请求的映射，用于识别重连请求

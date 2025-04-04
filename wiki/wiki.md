@@ -15,12 +15,12 @@
 ### 1.2 配置环境变量
 - 如图所示，进入settings界面<br>![settings](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/settings.png)
 - 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/secrets.png)
-- 添加环境变量，如图所示为添加GENMINI_API_KEYS环境变量，在value中填入具体apikey<br>![KEYS](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/KEYS.png)
+- 添加环境变量，如图所示为添加GEMINI_API_KEYS环境变量，在value中填入具体apikey<br>![KEYS](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/KEYS.png)
 - 等待项目部署完成，app界面显示如图界面，即完成<br>![app](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/app.png)
 
 ### 1.3 环境变量说明
 #### 重要环境变量
-- `GENMINI_API_KEYS`：从google ai studio 获取的API密钥，支持多个API密钥，以英文逗号分隔（例:apikey1,apikey2,apikey3）。
+- `GEMINI_API_KEYS`：从google ai studio 获取的API密钥，支持多个API密钥，以英文逗号分隔（例:apikey1,apikey2,apikey3）。
 - `PASSWORD`：用户访问所需的password，如不填写默认为123。
 #### 可选环境变量
 -   `MAX_REQUESTS_PER_MINUTE`：（可选）每分钟最大请求数。

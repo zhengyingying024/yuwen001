@@ -22,6 +22,10 @@ MAX_REQUESTS_PER_DAY_PER_IP = int(os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", 
 RETRY_DELAY = 1
 MAX_RETRY_DELAY = 16
 
+# API密钥使用限制
+# 默认每个API密钥每24小时可使用次数
+API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "25"))
+
 # 缓存配置
 CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
 MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
@@ -40,15 +44,15 @@ has_update = False
 api_call_stats = {
     'last_24h': {
         'total': {},  # 按小时统计过去24小时总调用次数
-        'by_endpoint': {}  # 按API端点分类的24小时统计
+        'by_endpoint': {}  # 按API端点分类的24小时统计（也用于API密钥统计）
     },
     'hourly': {
         'total': {},  # 按小时统计过去一小时总调用次数
-        'by_endpoint': {}  # 按API端点分类的小时统计
+        'by_endpoint': {}  # 按API端点分类的小时统计（也用于API密钥统计）
     },
     'minute': {
         'total': {},  # 按分钟统计过去一分钟总调用次数
-        'by_endpoint': {}  # 按API端点分类的分钟统计
+        'by_endpoint': {}  # 按API端点分类的分钟统计（也用于API密钥统计）
     }
 }
 

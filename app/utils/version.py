@@ -12,9 +12,9 @@ async def check_version():
     import app.config.settings as settings
     try:
         # 读取本地版本
-        with open("version.txt", "r") as f:
+        with open("./version.txt", "r") as f:
             version_line = f.read().strip()
-            local_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
+            settings.local_version = version_line.split("=")[1] if "=" in version_line else "0.0.0"
         
         # 获取远程版本
         github_url = "https://raw.githubusercontent.com/wyeeeee/hajimi/refs/heads/main/version.txt"

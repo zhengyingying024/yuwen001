@@ -36,7 +36,8 @@ from app.config.settings import (
     client_request_history,
     local_version,
     remote_version,
-    has_update
+    has_update,
+    API_KEY_DAILY_LIMIT
 )
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 import os
@@ -172,7 +173,6 @@ async def root(request: Request):
     clean_expired_stats(api_call_stats)
     response_cache_manager.clean_expired()  # 使用管理器清理缓存
     active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
-    await check_version()
     # 获取当前统计数据
     now = datetime.now()
     
@@ -229,6 +229,31 @@ async def root(request: Request):
     active_done = sum(1 for task in active_requests_manager.active_requests.values() if task.done())
     active_pending = active_count - active_done
     
+    # 获取API密钥使用统计
+    api_key_stats = []
+    for api_key in key_manager.api_keys:
+        # 获取API密钥前8位作为标识
+        api_key_id = api_key[:8]
+        
+        # 计算24小时内的调用次数
+        calls_24h = 0
+        if 'by_endpoint' in api_call_stats['last_24h'] and api_key in api_call_stats['last_24h']['by_endpoint']:
+            calls_24h = sum(api_call_stats['last_24h']['by_endpoint'][api_key].values())
+        
+        # 计算使用百分比
+        usage_percent = (calls_24h / API_KEY_DAILY_LIMIT) * 100 if API_KEY_DAILY_LIMIT > 0 else 0
+        
+        # 添加到结果列表
+        api_key_stats.append({
+            'api_key': api_key_id,
+            'calls_24h': calls_24h,
+            'limit': API_KEY_DAILY_LIMIT,
+            'usage_percent': round(usage_percent, 2)
+        })
+    
+    # 按使用百分比降序排序
+    api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
+    
     # 准备模板上下文
     context = {
         "key_count": len(key_manager.api_keys),
@@ -259,6 +284,8 @@ async def root(request: Request):
         "active_count": active_count,
         "active_done": active_done,
         "active_pending": active_pending,
+        # 添加API密钥统计
+        "api_key_stats": api_key_stats,
     }
     
     # 使用Jinja2模板引擎正确渲染HTML

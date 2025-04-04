@@ -9,7 +9,7 @@ from app.utils import (
 from app.config.settings import (
     api_call_stats,
     client_request_history,
-    api_call_stats
+    API_KEY_DAILY_LIMIT
 )
 from app.services import GeminiClient
 
@@ -45,7 +45,7 @@ async def get_dashboard_data():
     now = datetime.now()
     
     # 计算过去24小时的调用总数
-    last_24h_calls = sum(api_call_stats['last_24h']['total']['total'].values())
+    last_24h_calls = sum(api_call_stats['last_24h']['total'].values())
     
     # 计算过去一小时内的调用总数
     one_hour_ago = now - timedelta(hours=1)
@@ -69,6 +69,31 @@ async def get_dashboard_data():
         except ValueError:
             continue
     
+    # 获取API密钥使用统计
+    api_key_stats = []
+    for api_key in key_manager.api_keys:
+        # 获取API密钥前8位作为标识
+        api_key_id = api_key[:8]
+        
+        # 计算24小时内的调用次数
+        calls_24h = 0
+        if 'by_endpoint' in api_call_stats['last_24h'] and api_key in api_call_stats['last_24h']['by_endpoint']:
+            calls_24h = sum(api_call_stats['last_24h']['by_endpoint'][api_key].values())
+        
+        # 计算使用百分比
+        usage_percent = (calls_24h / API_KEY_DAILY_LIMIT) * 100 if API_KEY_DAILY_LIMIT > 0 else 0
+        
+        # 添加到结果列表
+        api_key_stats.append({
+            'api_key': api_key_id,
+            'calls_24h': calls_24h,
+            'limit': API_KEY_DAILY_LIMIT,
+            'usage_percent': round(usage_percent, 2)
+        })
+    
+    # 按使用百分比降序排序
+    api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
+    
     # 获取最近的日志
     recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
     
@@ -81,5 +106,6 @@ async def get_dashboard_data():
         "hourly_calls": hourly_calls,
         "minute_calls": minute_calls,
         "current_time": datetime.now().strftime('%H:%M:%S'),
-        "logs": recent_logs
+        "logs": recent_logs,
+        "api_key_stats": api_key_stats
     }

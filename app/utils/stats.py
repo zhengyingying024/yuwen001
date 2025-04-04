@@ -91,7 +91,7 @@ def update_api_call_stats(api_call_stats, endpoint=None):
     
     参数:
     - api_call_stats: 统计数据字典
-    - endpoint: API端点路径，如果为None则只更新总调用次数
+    - endpoint: APIkey,为None则只更新总调用次数
     """
     now = datetime.now()
     hour_key = now.strftime('%Y-%m-%d %H:00')

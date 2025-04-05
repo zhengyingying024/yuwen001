@@ -55,7 +55,7 @@
 
 [docker 安装与配置 Hajimi 项目教程 由 **北极星星** 编写](./docker.md)
 
-### 1.9 🔌 接入其他服务
+### 1.10 🔌 接入其他服务
 
 1.  在连接中选择OpenAI
 2.  在API Base URL中填入`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`

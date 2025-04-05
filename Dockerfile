@@ -2,9 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY ./app /app/app
+# 安装 unzip 工具
+RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*
+
+COPY app.zip .
 COPY requirements.txt .
 COPY version.txt .
+RUN mkdir -p app
+# 解压 app.zip 文件
+RUN unzip app.zip -d app && rm app.zip
 
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -1,7 +1,8 @@
 import asyncio
 import json
 from typing import Literal
-from fastapi import HTTPException, Request, status, StreamingResponse
+from fastapi import HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import protect_from_abuse, handle_gemini_error, handle_api_error

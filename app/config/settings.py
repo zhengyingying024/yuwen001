@@ -58,3 +58,13 @@ api_call_stats = {
 
 # 客户端IP到最近请求的映射，用于识别重连请求
 client_request_history = {}
+
+# 模型屏蔽列表配置
+# 默认屏蔽的模型列表
+DEFAULT_BLOCKED_MODELS = []
+
+# 从环境变量中读取屏蔽模型列表，如果未设置则使用默认列表
+# 环境变量格式应为逗号分隔的模型名称字符串
+BLOCKED_MODELS = os.environ.get("BLOCKED_MODELS", ",".join(DEFAULT_BLOCKED_MODELS))
+# 将字符串转换为列表
+BLOCKED_MODELS = [model.strip() for model in BLOCKED_MODELS.split(",") if model.strip()]

@@ -23,7 +23,8 @@ import logging
 import random
 from typing import Literal
 from app.config.settings import (
-    api_call_stats
+    api_call_stats,
+    BLOCKED_MODELS
 )
 # 获取logger
 logger = logging.getLogger("my_logger")
@@ -97,7 +98,8 @@ async def verify_password(request: Request):
 @router.get("/v1/models", response_model=ModelList)
 def list_models():
     log('info', "Received request to list models", extra={'request_type': 'list_models', 'status_code': 200})
-    return ModelList(data=[{"id": model, "object": "model", "created": 1678888888, "owned_by": "organization-owner"} for model in GeminiClient.AVAILABLE_MODELS])
+    filtered_models = [model for model in GeminiClient.AVAILABLE_MODELS if model not in BLOCKED_MODELS]
+    return ModelList(data=[{"id": model, "object": "model", "created": 1678888888, "owned_by": "organization-owner"} for model in filtered_models])
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(verify_password)):

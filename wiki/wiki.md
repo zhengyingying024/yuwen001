@@ -47,6 +47,10 @@
 2.  设置环境变量（如上所述）。
 3.  运行：`uvicorn app.main:app --reload --host 0.0.0.0 --port 7860`
 
+### 1.8 💻 手机本地运行（可选,安装耗时长）：
+
+[Termux 安装与配置 Hajimi 项目教程](./Termux.md)
+
 ### 🔌 接入其他服务
 
 1.  在连接中选择OpenAI

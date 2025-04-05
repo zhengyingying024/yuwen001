@@ -2,7 +2,8 @@ import asyncio
 import json
 import time
 import random
-from fastapi import Request, StreamingResponse
+from fastapi import Request
+from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import handle_gemini_error, update_api_call_stats
@@ -62,8 +63,8 @@ async def process_stream_request(
                                 # 将格式化的换行符放入队列
                                 await queue.put(f"data: {json.dumps(formatted_chunk)}\n\n")
                     except asyncio.CancelledError:
-                        log('info', "保持连接任务被取消",
-                            extra={'key': current_api_key[:8], 'request_type': 'fake-stream'})
+                        # log('info', "保持连接任务被取消",
+                        #     extra={'key': current_api_key[:8], 'request_type': 'fake-stream'})
                         raise
                     except Exception as e:
                         log('error', f"保持连接任务出错: {str(e)}",

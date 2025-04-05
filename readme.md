@@ -4,13 +4,14 @@
 
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
 ###  使用文档
-- [使用文档](https://github.com/wyeeeee/hajimi/blob/main/wiki/wiki.md)
+- [使用文档](./wiki/wiki.md)
 ###  更新日志
 *   v0.0.4
     * 修改版本更新逻辑，现在为每四小时检查一次版本更新
     * 前端界面所有数据数据实现动态更新
     * 新增“单api使用次数统计”，在原API调用统计下方新增可折叠的单api使用次数统计，同时提供进度条查看剩余使用次数
     * 在环境变量中新增`API_KEY_DAILY_LIMIT`，为单api 24小时最大使用次数，默认值为25
+    * 在环境变量中新增`BLOCKED_MODELS`，为需要屏蔽的模型名称，多个模型用英文逗号分隔
 
 *   v0.0.3beta
     * 完善了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）

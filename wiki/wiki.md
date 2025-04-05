@@ -7,16 +7,16 @@
 
 ### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。
-- 注册完成后，进入[spaces](https://huggingface.co/spaces)如图所示，点击new spaces。<br>![spaces](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/spaces.png)
-- 如图所示，填入创建选项，注意space name不要使用符号，填写完成后，点击create space<br>![create_space](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/create_space.png)
-- 如图所示，选择upload files<br>![files](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/files.png)
-- 如图所示，将1.1下载并解压的文件全部拖入，上传完成后点击Commit changes to main<br>![upload_files](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/upload_files.png)
+- 注册完成后，进入[spaces](https://huggingface.co/spaces)如图所示，点击new spaces。<br>![spaces](./img/spaces.png)
+- 如图所示，填入创建选项，注意space name不要使用符号，填写完成后，点击create space<br>![create_space](./img/create_space.png)
+- 如图所示，选择upload files<br>![files](./img/files.png)
+- 如图所示，将1.1下载并解压的文件全部拖入，上传完成后点击Commit changes to main<br>![upload_files](./img/upload_files.png)
 
 ### 1.2 配置环境变量
-- 如图所示，进入settings界面<br>![settings](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/settings.png)
-- 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/secrets.png)
-- 添加环境变量，如图所示为添加GEMINI_API_KEYS环境变量，在value中填入具体apikey<br>![KEYS](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/KEYS.png)
-- 等待项目部署完成，app界面显示如图界面，即完成<br>![app](https://github.com/wyeeeee/hajimi/blob/main/wiki/img/app.png)
+- 如图所示，进入settings界面<br>![settings](./img/settings.png)
+- 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br>![secrets](./img/secrets.png)
+- 添加环境变量，如图所示为添加GEMINI_API_KEYS环境变量，在value中填入具体apikey<br>![KEYS](./img/KEYS.png)
+- 等待项目部署完成，app界面显示如图界面，即完成<br>![app](./img/app.png)
 
 ### 1.3 环境变量说明
 #### 重要环境变量
@@ -51,7 +51,7 @@
 
 [Termux 安装与配置 Hajimi 项目教程](./Termux.md)
 
-### 🔌 接入其他服务
+### 1.9 🔌 接入其他服务
 
 1.  在连接中选择OpenAI
 2.  在API Base URL中填入`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`

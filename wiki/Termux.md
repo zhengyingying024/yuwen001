@@ -1,4 +1,4 @@
-# Termux 安装与配置 Hajimi 项目教程
+# Termux 安装与配置 Hajimi 项目教程 由[@天命不又](https://github.com/tmby)编写
 
 ## 一、切换 Termux 清华源（有“魔法”的可跳过）
 

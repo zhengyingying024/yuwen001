@@ -28,7 +28,8 @@
 -   `FAKE_STREAMING`：（可选）是否启用假流式传输，默认为true。
 -   `API_KEY_DAILY_LIMIT`: 单api 24小时最大使用次数，默认值为25
 -   `BLOCKED_MODELS`，（可选）需要屏蔽的模型名称，多个模型用英文逗号分隔
-
+-   `RANDOM_STRING`，是否启用伪装信息，默认值为true
+-   `RANDOM_STRING_LENGTH`，伪装信息长度，默认为20
 ### 1.4 在酒馆中使用
 在酒馆api连接配置中，选择兼容openai格式，URL格式为`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`（注意为https）。自定义 API 密钥为1.3中配置的`PASSWORD`。
 

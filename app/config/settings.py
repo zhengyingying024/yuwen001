@@ -40,8 +40,8 @@ REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", 
 ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
 
 # 版本信息
-local_version = "0.0.4"
-remote_version = "0.0.4"
+local_version = "0.0.0"
+remote_version = "0.0.0"
 has_update = False
 
 # API调用统计
@@ -72,3 +72,13 @@ DEFAULT_BLOCKED_MODELS = []
 BLOCKED_MODELS = os.environ.get("BLOCKED_MODELS", ",".join(DEFAULT_BLOCKED_MODELS))
 # 将字符串转换为列表
 BLOCKED_MODELS = [model.strip() for model in BLOCKED_MODELS.split(",") if model.strip()]
+
+def set_local_version(version):
+    global local_version
+    local_version = version
+def set_remote_version(version):
+    global remote_version
+    remote_version = version
+def set_has_update(update):
+    global has_update
+    has_update = update

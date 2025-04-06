@@ -95,7 +95,7 @@ async def get_dashboard_data():
     api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
     
     # 获取最近的日志
-    recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
+    recent_logs = log_manager.get_recent_logs(500)  # 获取最近50条日志
     
     # 返回JSON格式的数据
     return {

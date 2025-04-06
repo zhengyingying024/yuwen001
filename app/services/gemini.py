@@ -8,7 +8,18 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx
 import logging
+import secrets
+import string
 from app.utils import format_log_message
+from app.config.settings import (    
+    RANDOM_STRING,
+    RANDOM_STRING_LENGTH
+)
+
+def generate_secure_random_string(length):
+    all_characters = string.ascii_letters + string.digits
+    secure_random_string = ''.join(secrets.choice(all_characters) for _ in range(length))
+    return secure_random_string
 
 logger = logging.getLogger('my_logger')
 
@@ -269,7 +280,6 @@ class GeminiClient:
         for i, message in enumerate(messages):
             role = message.role
             content = message.content
-
             if isinstance(content, str):
                 if is_system_phase and role == 'system':
                     if system_instruction_text:
@@ -331,6 +341,11 @@ class GeminiClient:
         if errors:
             return errors
         else:
+            if RANDOM_STRING:
+                gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
+                gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
+                log_msg = format_log_message('INFO', "伪装消息成功")
+                logger.info(log_msg)
             return gemini_history, {"parts": [{"text": system_instruction_text}]}
 
     @staticmethod

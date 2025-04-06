@@ -28,7 +28,8 @@
 -   `FAKE_STREAMING`：（可选）是否启用假流式传输，默认为true。
 -   `API_KEY_DAILY_LIMIT`: 单api 24小时最大使用次数，默认值为25
 -   `BLOCKED_MODELS`，（可选）需要屏蔽的模型名称，多个模型用英文逗号分隔
-
+-   `RANDOM_STRING`，是否启用伪装信息，默认值为true
+-   `RANDOM_STRING_LENGTH`，伪装信息长度，默认为20
 ### 1.4 在酒馆中使用
 在酒馆api连接配置中，选择兼容openai格式，URL格式为`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`（注意为https）。自定义 API 密钥为1.3中配置的`PASSWORD`。
 
@@ -49,9 +50,13 @@
 
 ### 1.8 💻 手机本地运行（可选,安装耗时长）：
 
-[Termux 安装与配置 Hajimi 项目教程](./Termux.md)
+[Termux 安装与配置 Hajimi 项目教程 由**天命不又**编写](./Termux.md)
 
-### 1.9 🔌 接入其他服务
+### 1.9 💻 docker部署运行：
+
+[docker 安装与配置 Hajimi 项目教程 由 **北极星星** 编写](./docker.md)
+
+### 1.10 🔌 接入其他服务
 
 1.  在连接中选择OpenAI
 2.  在API Base URL中填入`https://(huggingface用户名)-(huggingface项目名).hf.space/v1`

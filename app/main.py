@@ -22,6 +22,8 @@ from app.api import router, init_router, dashboard_router, init_dashboard_router
 from app.config.settings import (
     FAKE_STREAMING,
     FAKE_STREAMING_INTERVAL,
+    RANDOM_STRING,
+    RANDOM_STRING_LENGTH,
     PASSWORD,
     MAX_REQUESTS_PER_MINUTE,
     MAX_REQUESTS_PER_DAY_PER_IP,
@@ -34,9 +36,7 @@ from app.config.settings import (
     ENABLE_RECONNECT_DETECTION,
     api_call_stats,
     client_request_history,
-    local_version,
-    remote_version,
-    has_update,
+    version,
     API_KEY_DAILY_LIMIT
 )
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
@@ -115,7 +115,6 @@ async def startup_event():
     
     # 检查版本
     await check_version()
-    
     available_keys = await check_keys()
     if available_keys:
         key_manager.api_keys = available_keys
@@ -202,7 +201,7 @@ async def root(request: Request):
             continue
     
     # 获取最近的日志
-    recent_logs = log_manager.get_recent_logs(50)  # 获取最近50条日志
+    recent_logs = log_manager.get_recent_logs(500)  # 获取最近50条日志
     
     # 获取缓存统计
     total_cache = len(response_cache_manager.cache)
@@ -267,9 +266,15 @@ async def root(request: Request):
         "current_time": datetime.now().strftime('%H:%M:%S'),
         "logs": recent_logs,
         # 添加版本信息
-        "local_version": local_version,
-        "remote_version": remote_version,
-        "has_update": has_update,
+        "local_version": version["local_version"],
+        "remote_version": version["remote_version"],
+        "has_update": version["has_update"],
+        # 添加流式响应配置
+        "fake_streaming": FAKE_STREAMING,
+        "fake_streaming_interval": FAKE_STREAMING_INTERVAL,
+        # 添加随机字符串配置
+        "random_string": RANDOM_STRING,
+        "random_string_length": RANDOM_STRING_LENGTH,
         # 添加缓存信息
         "cache_entries": total_cache,
         "valid_cache": valid_cache,

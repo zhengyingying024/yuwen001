@@ -5,6 +5,8 @@ from app.utils.logging import log
 from app.utils.stats import clean_expired_stats
 from app.config import api_call_stats
 from app.utils import check_version
+from zoneinfo import ZoneInfo
+from app.config import settings
 def handle_exception(exc_type, exc_value, exc_traceback):
     """
     全局异常处理函数
@@ -45,7 +47,8 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
         response_cache_manager: 响应缓存管理器实例
         active_requests_manager: 活跃请求管理器实例
     """
-    scheduler = AsyncIOScheduler()  # 使用 AsyncIOScheduler 替代 BackgroundScheduler
+    beijing_tz = ZoneInfo("Asia/Shanghai")
+    scheduler = AsyncIOScheduler(timezone=beijing_tz)  # 使用 AsyncIOScheduler 替代 BackgroundScheduler
     
     # 添加任务时直接传递异步函数（无需额外包装）
     scheduler.add_job(response_cache_manager.clean_expired, 'interval', minutes=1)
@@ -53,6 +56,22 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])
     scheduler.add_job(clean_expired_stats, 'interval', minutes=5, args=[api_call_stats])
     scheduler.add_job(check_version, 'interval', hours=4)
-    
+    scheduler.add_job(api_call_stats_clean, 'cron', hour=16,minute=0)
     scheduler.start()
     return scheduler
+
+def api_call_stats_clean():
+    settings.api_call_stats = {
+    'last_24h': {
+        'total': {},  
+        'by_endpoint': {}  
+    },
+    'hourly': {
+        'total': {}, 
+        'by_endpoint': {}  
+    },
+    'minute': {
+        'total': {},  
+        'by_endpoint': {}  
+    }
+}

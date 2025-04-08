@@ -2,7 +2,7 @@ name: Auto Release
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小时执行一次
+    - cron: '0/5 * * * *'  # 每小时执行一次
   workflow_dispatch:     # 支持手动触发
 
 jobs:
@@ -31,7 +31,6 @@ jobs:
     - name: Add build timestamp
       run: date +%s > app/build_timestamp.txt
 
-    # 关键修改：进入app目录后打包内容到根目录的app.zip
     - name: Create app.zip (flat structure)
       run: |
         cd app && zip -r ../app.zip .  # 使用`.`打包当前目录所有文件，不包含父目录

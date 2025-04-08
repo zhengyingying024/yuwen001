@@ -1,8 +1,6 @@
-name: Auto Release hajimi
-
 on:
   schedule:
-    - cron: '0/5 * * * *'  # 每小时执行一次
+    - cron: '*/6 * * * *'
   workflow_dispatch:     # 支持手动触发
 
 jobs:

@@ -2,7 +2,7 @@
 
 ## 1. 安装
 ### 1.1 下载
-- 从[releases](https://github.com/wyeeeee/hajimi/releases))下载最新版本。
+- 从[releases](https://github.com/wyeeeee/hajimi/releases)下载最新版本。
 - 下载完成后解压到任意目录。
 
     * 解压后目录结构如下：
@@ -54,9 +54,9 @@
 
 ## 3. 使用
 ### 3.1 在酒馆中使用
-- 首先我们需要您确认您在1.2中记住的owner与space name，您需要在酒馆中填写的链接的格式为https://owner-space name.hf.space/v1，您应该同时检查二者中是否存在标点符号（注意这里的owner与space name只是代称，不是让您真的填入owner与space name这些英文单词）
-- 如果您对上述内容仍有疑问，我们假设小明的owner为xiaoming，space name为gemini，那么小明在酒馆中填写的链接应为https://xiaoming-gemini.hf.space/v1
-- 如果您想要测试以上链接是否正确，可以选择去掉链接末尾的v1，对于小明来说，链接应为https://xiaoming-gemini.hf.space，打开链接后，您应该正确的看到您所部署的界面
+- 首先我们需要您确认您在1.2中记住的owner与space name，您需要在酒馆中填写的链接的格式为`https://owner-space name.hf.space/v1`，您应该同时检查二者中是否存在标点符号（注意这里的owner与space name只是代称，不是让您真的填入owner与space name这些英文单词）
+- 如果您对上述内容仍有疑问，我们假设小明的owner为xiaoming，space name为gemini，那么小明在酒馆中填写的链接应为`https://xiaoming-gemini.hf.space/v1`
+- 如果您想要测试以上链接是否正确，可以选择去掉链接末尾的v1，对于小明来说，链接应为`https://xiaoming-gemini.hf.space`，打开链接后，您应该正确的看到您所部署的界面
 - 终于，您需要进入到酒馆界面，打开API连接配置（即插头），api选择 聊天补全，聊天补全来源选择 自定义（兼容 OpenAI），自定义端点（基础 URL）填入您的链接，自定义api秘钥填写您在2.1中配置的password，此时的酒馆应该如图所示<br>![sillytavern](./img/sillytavern.png)
 - 如果您在填写完以上信息后，下方没有模型供您选择，请您点击连接按钮，此时您应该可以看到模型，选择模型即可使用
 

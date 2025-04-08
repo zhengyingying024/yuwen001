@@ -9,7 +9,7 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # 需要写权限来创建release
+      contents: write
 
     steps:
     - name: Checkout code
@@ -17,12 +17,10 @@ jobs:
 
     - name: Install GitHub CLI
       run: |
-        type -p curl >/dev/null || sudo apt install curl -y
+        sudo apt update && sudo apt install -y curl
         curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-        sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-        sudo apt update
-        sudo apt install gh -y
+        sudo apt update && sudo apt install -y gh
 
     - name: Get version
       id: version
@@ -31,12 +29,12 @@ jobs:
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
     - name: Add build timestamp
-      run: |
-        mkdir -p app
-        date +%s > app/build_timestamp.txt
+      run: date +%s > app/build_timestamp.txt
 
-    - name: Create app.zip
-      run: zip -r app.zip app/
+    # 关键修改：进入app目录后打包内容到根目录的app.zip
+    - name: Create app.zip (flat structure)
+      run: |
+        cd app && zip -r ../app.zip .  # 使用`.`打包当前目录所有文件，不包含父目录
 
     - name: Create release bundle
       run: |

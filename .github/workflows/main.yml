@@ -1,0 +1,62 @@
+name: Versioned Hajimi Release
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # 每小时准点触发
+  workflow_dispatch:      # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract version
+      id: version
+      run: |
+        VERSION=$(cat version.txt | cut -d'=' -f2 | tr -d '[:space:]')
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "::notice:: Using version: ${VERSION}"
+
+    - name: Inject build uniqueness
+      run: |
+        TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+        # 向app注入唯一性标识
+        echo "build_time=${TIMESTAMP}" > app/build_info.env
+        # 构造最终文件名
+        echo "HAJIMI_NAME=hajimi-v${{ steps.version.outputs.version }}-${TIMESTAMP}.zip" >> $GITHUB_ENV
+        # 构造Release标题
+        echo "release_title=🕊️ Hajimi v${{ steps.version.outputs.version }} (${TIMESTAMP})" >> $GITHUB_ENV
+
+    - name: Create app.zip
+      run: |
+        cd app && zip -r ../app.zip ./*
+        # 生成哈希校验文件
+        sha256sum app.zip | awk '{print $1}' > hash.sha256
+
+    - name: Package final bundle
+      run: |
+        zip -r ${{ env.HAJIMI_NAME }} \
+          app.zip \
+          Dockerfile \
+          requirements.txt \
+          version.txt \
+          hash.sha256
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: "v${{ steps.version.outputs.version }}"
+        name: "${{ env.release_title }}"
+        body: | 
+          🚀 自动构建信息：
+          - 构建时间：${{ env.TIMESTAMP }}
+          - 应用哈希：$(cat hash.sha256)
+          - 版本文件：$(cat version.txt)
+        files: |
+          ${{ env.HAJIMI_NAME }}
+        draft: false
+        prerelease: false
+        overwrite_assets: true

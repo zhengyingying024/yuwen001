@@ -48,6 +48,8 @@ import logging
 from datetime import datetime, timedelta
 import sys
 import pathlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 # 设置模板目录
 BASE_DIR = pathlib.Path(__file__).parent
@@ -89,17 +91,54 @@ def switch_api_key():
     else:
         log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
 
+async def check_key(key):
+    """检查单个API密钥是否有效"""
+    is_valid = await test_api_key(key)
+    status_msg = "有效" if is_valid else "无效"
+    log('info', f"API Key {key[:10]}... {status_msg}.")
+    return key if is_valid else None
+
+def check_key_in_thread(key):
+    """在线程中运行异步检查密钥函数"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        valid_key = loop.run_until_complete(check_key(key))
+        if valid_key:
+            # 如果密钥有效，立即添加到可用列表中
+            key_manager.api_keys.append(valid_key)
+            # 重置密钥栈以包含新的有效密钥
+            key_manager._reset_key_stack()
+            log('info', f"API Key {valid_key[:8]}... 已添加到可用列表")
+        return valid_key
+    finally:
+        loop.close()
+
 async def check_keys():
-    available_keys = []
-    for key in key_manager.api_keys:
-        is_valid = await test_api_key(key)
-        status_msg = "有效" if is_valid else "无效"
-        log('info', f"API Key {key[:10]}... {status_msg}.")
-        if is_valid:
-            available_keys.append(key)
-    if not available_keys:
+    """启动线程池来并行检查所有密钥"""
+    # 保存原始密钥列表的副本
+    all_keys = key_manager.api_keys.copy()
+    # 清空当前密钥列表，将在检查过程中逐个添加有效密钥
+    key_manager.api_keys = []
+    
+    log('info', f"开始在单独线程中检查 {len(all_keys)} 个API密钥...")
+    
+    # 创建线程池
+    with ThreadPoolExecutor(max_workers=min(10, len(all_keys))) as executor:
+        # 提交所有密钥检查任务
+        future_to_key = {executor.submit(check_key_in_thread, key): key for key in all_keys}
+        
+        # 等待所有任务完成
+        for future in future_to_key:
+            try:
+                future.result()  # 获取结果但不需要处理，因为check_key_in_thread已经处理了有效密钥
+            except Exception as exc:
+                log('error', f"检查密钥时发生错误: {exc}")
+    
+    if not key_manager.api_keys:
         log('error', "没有可用的 API 密钥！", extra={'key': 'N/A', 'request_type': 'startup', 'status_code': 'N/A'})
-    return available_keys
+    
+    return key_manager.api_keys
 
 # 设置全局异常处理
 sys.excepthook = handle_exception
@@ -115,18 +154,84 @@ async def startup_event():
     
     # 检查版本
     await check_version()
-    available_keys = await check_keys()
-    if available_keys:
-        key_manager.api_keys = available_keys
-        key_manager._reset_key_stack() # 启动时也确保创建随机栈
-        key_manager.show_all_keys()
-        log('info', f"可用 API 密钥数量：{len(key_manager.api_keys)}")
-        log('info', f"最大重试次数设置为：{len(key_manager.api_keys)}")
-        if key_manager.api_keys:
-            all_models = await GeminiClient.list_available_models(key_manager.api_keys[0])
-            GeminiClient.AVAILABLE_MODELS = [model.replace(
-                "models/", "") for model in all_models]
-            log('info', "Available models loaded.")
+    
+    # 先同步检查一个密钥，用于加载可用模型
+    all_keys = key_manager.api_keys.copy()
+    key_manager.api_keys = []  # 清空当前密钥列表
+    
+    # 尝试找到一个有效的密钥
+    valid_key_found = False
+    for key in all_keys:
+        is_valid = await test_api_key(key)
+        if is_valid:
+            key_manager.api_keys.append(key)
+            key_manager._reset_key_stack()
+            log('info', f"初始检查: API Key {key[:8]}... 有效，已添加到可用列表")
+            valid_key_found = True
+            
+            # 使用这个有效密钥加载可用模型
+            try:
+                all_models = await GeminiClient.list_available_models(key)
+                GeminiClient.AVAILABLE_MODELS = [model.replace(
+                    "models/", "") for model in all_models]
+                log('info', "Available models loaded.")
+            except Exception as e:
+                log('warning', f"无法加载可用模型: {str(e)}")
+            
+            break  # 找到一个有效密钥后就跳出循环
+    
+    if not valid_key_found:
+        log('warning', "初始检查未找到有效密钥，将在后台继续检查")
+    
+    # 在后台线程中检查剩余的密钥
+    remaining_keys = [k for k in all_keys if k not in key_manager.api_keys]
+    if remaining_keys:
+        def check_remaining_keys():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                # 创建线程池检查剩余密钥
+                with ThreadPoolExecutor(max_workers=min(10, len(remaining_keys))) as executor:
+                    future_to_key = {executor.submit(check_key_in_thread, key): key for key in remaining_keys}
+                    for future in future_to_key:
+                        try:
+                            future.result()
+                        except Exception as exc:
+                            log('error', f"检查密钥时发生错误: {exc}")
+            finally:
+                loop.close()
+                log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
+        
+        # 启动后台线程检查剩余密钥
+        threading.Thread(target=check_remaining_keys, daemon=True).start()
+        log('info', f"后台线程已启动，正在检查剩余的 {len(remaining_keys)} 个API密钥...")
+    
+    # 显示当前可用密钥
+    key_manager.show_all_keys()
+    log('info', f"当前可用 API 密钥数量：{len(key_manager.api_keys)}")
+    log('info', f"最大重试次数设置为：{len(key_manager.api_keys)}")
+    
+    # 初始化路由器
+    init_router(
+        key_manager,
+        response_cache_manager,
+        active_requests_manager,
+        SAFETY_SETTINGS,
+        SAFETY_SETTINGS_G2,
+        current_api_key,
+        FAKE_STREAMING,
+        FAKE_STREAMING_INTERVAL,
+        PASSWORD,
+        MAX_REQUESTS_PER_MINUTE,
+        MAX_REQUESTS_PER_DAY_PER_IP
+    )
+    
+    # 初始化仪表盘路由器
+    init_dashboard_router(
+        key_manager,
+        response_cache_manager,
+        active_requests_manager
+    )
     
     # 初始化路由器
     init_router(

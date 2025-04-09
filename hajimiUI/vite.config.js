@@ -11,7 +11,7 @@ const __dirname = dirname(__filename);
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/assets/',  // 设置基础路径为 /assets/
+  base: '/', 
   plugins: [
     vue(),
     vueDevTools(),

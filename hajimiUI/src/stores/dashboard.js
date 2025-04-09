@@ -27,6 +27,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const apiKeyStats = ref([])
   const logs = ref([])
   const isRefreshing = ref(false)
+  
+  // 添加模型相关状态
+  const selectedModel = ref('all')
+  const availableModels = ref([])
 
   // 获取仪表盘数据
   async function fetchDashboardData() {
@@ -75,12 +79,33 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 更新API密钥统计
     if (data.api_key_stats) {
       apiKeyStats.value = data.api_key_stats
+      
+      // 提取所有可用的模型
+      const models = new Set(['all']) // 始终包含"全部"选项
+      data.api_key_stats.forEach(stat => {
+        if (stat.model_stats) {
+          Object.keys(stat.model_stats).forEach(model => {
+            models.add(model)
+          })
+        }
+      })
+      availableModels.value = Array.from(models)
+      
+      // 如果当前选择的模型不在可用模型列表中，重置为"all"
+      if (!availableModels.value.includes(selectedModel.value)) {
+        selectedModel.value = 'all'
+      }
     }
 
     // 更新日志
     if (data.logs) {
       logs.value = data.logs
     }
+  }
+  
+  // 设置选择的模型
+  function setSelectedModel(model) {
+    selectedModel.value = model
   }
 
   return {
@@ -89,6 +114,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     apiKeyStats,
     logs,
     isRefreshing,
-    fetchDashboardData
+    fetchDashboardData,
+    selectedModel,
+    availableModels,
+    setSelectedModel
   }
 })

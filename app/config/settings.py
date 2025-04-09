@@ -29,7 +29,7 @@ MAX_RETRY_DELAY = 16
 
 # API密钥使用限制
 # 默认每个API密钥每24小时可使用次数
-API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "25"))
+API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "100"))
 
 # 缓存配置
 CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟

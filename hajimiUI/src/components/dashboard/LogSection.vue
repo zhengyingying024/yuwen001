@@ -14,10 +14,6 @@ function filterLogs(level) {
 // 监听日志变化，保持滚动位置
 watch(() => dashboardStore.logs, async () => {
   await nextTick()
-  if (logContainer.value) {
-    // 滚动到底部
-    logContainer.value.scrollTop = logContainer.value.scrollHeight
-  }
 }, { deep: true })
 </script>
 

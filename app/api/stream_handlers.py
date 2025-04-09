@@ -125,7 +125,7 @@ async def process_stream_request(
                                     
                                     success = True
                                     # 更新API调用统计
-                                    update_api_call_stats(api_call_stats, api_key)
+                                    update_api_call_stats(api_call_stats, endpoint=api_key,model=chat_request.model)
                                     break  # 成功获取响应，退出循环
                                 else:
                                     log('warning', f"假流式模式: API密钥 {api_key[:8]}... 返回空响应",
@@ -257,7 +257,7 @@ async def process_stream_request(
                 
                 # 如果成功获取到响应，更新API调用统计
                 if success:
-                    update_api_call_stats(api_call_stats, current_api_key)
+                    update_api_call_stats(api_call_stats,endpoint=current_api_key,model=chat_request.model)
                     
                 yield "data: [DONE]\n\n"
                 

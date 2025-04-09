@@ -87,10 +87,16 @@ async def get_dashboard_data():
         # 获取API密钥前8位作为标识
         api_key_id = api_key[:8]
         
-        # 计算24小时内的调用次数
+        # 计算24小时内的调用次数和按模型分类的调用次数
         calls_24h = 0
+        model_stats = {}
+        
         if 'by_endpoint' in api_call_stats['last_24h'] and api_key in api_call_stats['last_24h']['by_endpoint']:
-            calls_24h = sum(api_call_stats['last_24h']['by_endpoint'][api_key].values())
+            # 遍历所有模型
+            for model, model_data in api_call_stats['last_24h']['by_endpoint'][api_key].items():
+                model_calls = sum(model_data.values())
+                calls_24h += model_calls
+                model_stats[model] = model_calls
         
         # 计算使用百分比
         usage_percent = (calls_24h / API_KEY_DAILY_LIMIT) * 100 if API_KEY_DAILY_LIMIT > 0 else 0
@@ -100,7 +106,8 @@ async def get_dashboard_data():
             'api_key': api_key_id,
             'calls_24h': calls_24h,
             'limit': API_KEY_DAILY_LIMIT,
-            'usage_percent': round(usage_percent, 2)
+            'usage_percent': round(usage_percent, 2),
+            'model_stats': model_stats  # 添加按模型分类的统计数据
         })
     
     # 按使用百分比降序排序

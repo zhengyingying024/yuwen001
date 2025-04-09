@@ -15,6 +15,7 @@ from app.config.settings import (
     RANDOM_STRING,
     RANDOM_STRING_LENGTH
 )
+from app.utils.logging import log
 
 def generate_secure_random_string(length):
     all_characters = string.ascii_letters + string.digits
@@ -125,50 +126,36 @@ class GeminiClient:
         self.api_key = api_key
 
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'N/A'}
-        log_msg = format_log_message('INFO', "流式请求开始", extra=extra_log)
-        logger.info(log_msg)
         
         # 检查是否启用假流式请求
         if FAKE_STREAMING:
-            log_msg = format_log_message('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
-            logger.info(log_msg)
-            
+            extra_log={'key': self.api_key[:8], 'request_type': 'fake_stream', 'model': request.model}
+            log('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
             try:
-                # 这个方法不再直接使用self.api_key，而是由main.py提供API密钥列表和管理
-                # 在这里，我们只负责持续发送换行符，直到main.py那边获取到响应
                 
-                # 持续发送换行符，直到外部取消此生成器
+                # 每隔一段时间发送换行符作为保活消息，直到外部取消此生成器
                 start_time = time.time()
                 while True:
-                    # 发送换行符作为保活消息
                     yield "\n"
-                    # 等待一段时间
                     await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                     
-                    # 如果等待时间过长（超过300秒），防止无限等待
+                    # 如果等待时间过长（超过300秒），抛出超时异常，让外部处理
                     if time.time() - start_time > 300:
-                        log_msg = format_log_message('WARNING', "假流式请求等待时间过长，强制结束", extra=extra_log)
-                        logger.warning(log_msg)
-                        # 抛出超时异常，让外部处理
-                        error_msg = "假流式请求等待时间过长，所有API密钥均已尝试"
-                        extra_log_timeout = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'TIMEOUT', 'error_message': error_msg}
-                        log_msg = format_log_message('ERROR', error_msg, extra=extra_log_timeout)
-                        logger.error(log_msg)
-                        raise TimeoutError(error_msg)
+                        log('ERROR', f"假流式请求等待时间过长",extra=extra_log)
+                        
+                        raise TimeoutError("假流式请求等待时间过长")
                 
             except Exception as e:
-                if not isinstance(e, asyncio.CancelledError):  # 忽略取消异常的日志记录
-                    error_msg = f"假流式处理期间发生错误: {str(e)}"
-                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                    log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
-                    logger.error(log_msg)
+                if not isinstance(e, asyncio.CancelledError):  
+                    log('ERROR', f"假流式处理期间发生错误: {str(e)}", extra=extra_log)
                 raise e
             finally:
-                log_msg = format_log_message('INFO', "假流式请求结束", extra=extra_log)
-                logger.info(log_msg)
+                log('INFO', "假流式请求结束", extra=extra_log)
         else:
-            # 原始流式请求处理逻辑
+            # 真流式请求处理逻辑
+            extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
+            log('INFO', "真流式请求开始", extra=extra_log)
+            
             api_version = "v1alpha" if "think" in request.model else "v1beta"
             url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {

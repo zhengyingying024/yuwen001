@@ -2,23 +2,18 @@ from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
 from app.services import GeminiClient
-from app.utils import (
-    generate_cache_key,
-    cache_response,
-    create_chat_response,
-    create_error_response
-)
+from app.utils import generate_cache_key
+
 from app.config.settings import (
     api_call_stats,
     BLOCKED_MODELS
 )
 import asyncio
 import time
-import logging
+from app.utils.logging import log
 
 # 导入拆分后的模块
 from .auth import verify_password
-from .logging_utils import log
 from .request_handlers import process_request
 
 # 创建路由器
@@ -83,7 +78,6 @@ def list_models():
 async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
     # 获取客户端IP
     client_ip = http_request.client.host if http_request.client else "unknown"
-    
     # 流式请求直接处理，不使用缓存
     if request.stream:
         return await process_request(
@@ -101,7 +95,6 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             MAX_REQUESTS_PER_MINUTE,
             MAX_REQUESTS_PER_DAY_PER_IP
         )
-    
     # 生成完整缓存键 - 用于精确匹配
     cache_key = generate_cache_key(request)
     
@@ -181,7 +174,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
                     extra={'request_type': 'non-stream'})
      
-    # 创建请求处理任务
+    # 创建非流式请求处理任务
     process_task = asyncio.create_task(
         process_request(
             request, 

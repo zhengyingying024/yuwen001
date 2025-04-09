@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from datetime import datetime, timedelta
+import time
 from app.utils import (
     log_manager,
     ResponseCacheManager,
@@ -9,7 +10,18 @@ from app.utils import (
 from app.config.settings import (
     api_call_stats,
     client_request_history,
-    API_KEY_DAILY_LIMIT
+    API_KEY_DAILY_LIMIT,
+    FAKE_STREAMING,
+    FAKE_STREAMING_INTERVAL,
+    RANDOM_STRING,
+    RANDOM_STRING_LENGTH,
+    MAX_REQUESTS_PER_MINUTE,
+    MAX_REQUESTS_PER_DAY_PER_IP,
+    CACHE_EXPIRY_TIME,
+    MAX_CACHE_ENTRIES,
+    REMOVE_CACHE_AFTER_USE,
+    ENABLE_RECONNECT_DETECTION,
+    version
 )
 from app.services import GeminiClient
 
@@ -95,7 +107,32 @@ async def get_dashboard_data():
     api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
     
     # 获取最近的日志
-    recent_logs = log_manager.get_recent_logs(500)  # 获取最近50条日志
+    recent_logs = log_manager.get_recent_logs(500)  # 获取最近500条日志
+    
+    # 获取缓存统计
+    total_cache = len(response_cache_manager.cache)
+    valid_cache = sum(1 for _, data in response_cache_manager.cache.items()
+                     if time.time() < data.get('expiry_time', 0))
+    cache_by_model = {}
+    
+    # 分析缓存数据
+    for _, cache_data in response_cache_manager.cache.items():
+        if time.time() < cache_data.get('expiry_time', 0):
+            # 按模型统计缓存
+            model = cache_data.get('response', {}).model
+            if model:
+                if model in cache_by_model:
+                    cache_by_model[model] += 1
+                else:
+                    cache_by_model[model] = 1
+    
+    # 获取请求历史统计
+    history_count = len(client_request_history)
+    
+    # 获取活跃请求统计
+    active_count = len(active_requests_manager.active_requests)
+    active_done = sum(1 for task in active_requests_manager.active_requests.values() if task.done())
+    active_pending = active_count - active_done
     
     # 返回JSON格式的数据
     return {
@@ -107,5 +144,32 @@ async def get_dashboard_data():
         "minute_calls": minute_calls,
         "current_time": datetime.now().strftime('%H:%M:%S'),
         "logs": recent_logs,
-        "api_key_stats": api_key_stats
+        "api_key_stats": api_key_stats,
+        # 添加配置信息
+        "max_requests_per_minute": MAX_REQUESTS_PER_MINUTE,
+        "max_requests_per_day_per_ip": MAX_REQUESTS_PER_DAY_PER_IP,
+        # 添加版本信息
+        "local_version": version["local_version"],
+        "remote_version": version["remote_version"],
+        "has_update": version["has_update"],
+        # 添加流式响应配置
+        "fake_streaming": FAKE_STREAMING,
+        "fake_streaming_interval": FAKE_STREAMING_INTERVAL,
+        # 添加随机字符串配置
+        "random_string": RANDOM_STRING,
+        "random_string_length": RANDOM_STRING_LENGTH,
+        # 添加缓存信息
+        "cache_entries": total_cache,
+        "valid_cache": valid_cache,
+        "expired_cache": total_cache - valid_cache,
+        "cache_expiry_time": CACHE_EXPIRY_TIME,
+        "max_cache_entries": MAX_CACHE_ENTRIES,
+        "cache_by_model": cache_by_model,
+        "request_history_count": history_count,
+        "enable_reconnect_detection": ENABLE_RECONNECT_DETECTION,
+        "remove_cache_after_use": REMOVE_CACHE_AFTER_USE,
+        # 添加活跃请求池信息
+        "active_count": active_count,
+        "active_done": active_done,
+        "active_pending": active_pending
     }

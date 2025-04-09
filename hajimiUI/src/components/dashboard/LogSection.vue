@@ -69,6 +69,19 @@ watch(() => dashboardStore.logs, async () => {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+/* 移动端优化 - 减小外边距 */
+@media (max-width: 768px) {
+  .info-box {
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .info-box {
+    margin-bottom: 8px;
+  }
+}
+
 .section-title {
   color: #495057;
   border-bottom: 1px solid #dee2e6;
@@ -81,6 +94,7 @@ watch(() => dashboardStore.logs, async () => {
   justify-content: center;
   margin-bottom: 15px;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .log-filter button {
@@ -89,12 +103,41 @@ watch(() => dashboardStore.logs, async () => {
   border-radius: 4px;
   background-color: #f8f9fa;
   cursor: pointer;
+  min-width: 60px;
 }
 
 .log-filter button.active {
   background-color: #007bff;
   color: white;
   border-color: #007bff;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .log-filter {
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  
+  .log-filter button {
+    padding: 4px 8px;
+    font-size: 12px;
+    min-width: 50px;
+  }
+}
+
+/* 小屏幕手机进一步优化 */
+@media (max-width: 480px) {
+  .log-filter {
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  
+  .log-filter button {
+    padding: 3px 6px;
+    font-size: 11px;
+    min-width: 40px;
+  }
 }
 
 .log-container {
@@ -114,6 +157,7 @@ watch(() => dashboardStore.logs, async () => {
   margin-bottom: 8px;
   padding: 8px;
   border-radius: 4px;
+  word-break: break-word;
 }
 
 .log-entry.INFO {
@@ -165,5 +209,43 @@ watch(() => dashboardStore.logs, async () => {
 
 .log-message {
   color: #212529;
+}
+
+@media (max-width: 768px) {
+  .log-container {
+    padding: 10px;
+    font-size: 13px;
+  }
+  
+  .log-entry {
+    padding: 6px;
+    margin-bottom: 6px;
+  }
+  
+  .log-timestamp {
+    font-size: 11px;
+    display: block;
+    margin-bottom: 3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .log-container {
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  .log-entry {
+    padding: 5px;
+    margin-bottom: 5px;
+  }
+  
+  .log-timestamp {
+    font-size: 10px;
+  }
+  
+  .log-level {
+    margin-right: 5px;
+  }
 }
 </style>

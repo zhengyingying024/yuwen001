@@ -26,7 +26,7 @@ const getProgressBarClass = (usagePercent) => {
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.status.keyCount }}</div>
-        <div class="stat-label">可用API密钥数量</div>
+        <div class="stat-label">可用密钥数量</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.status.modelCount }}</div>
@@ -42,15 +42,15 @@ const getProgressBarClass = (usagePercent) => {
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.status.last24hCalls }}</div>
-        <div class="stat-label">24小时内调用次数</div>
+        <div class="stat-label">24小时调用次数</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.status.hourlyCalls }}</div>
-        <div class="stat-label">一小时内调用次数</div>
+        <div class="stat-label">小时调用次数</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.status.minuteCalls }}</div>
-        <div class="stat-label">一分钟内调用次数</div>
+        <div class="stat-label">分钟调用次数</div>
       </div>
     </div>
     
@@ -96,6 +96,19 @@ const getProgressBarClass = (usagePercent) => {
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+/* 移动端优化 - 减小外边距 */
+@media (max-width: 768px) {
+  .info-box {
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .info-box {
+    margin-bottom: 8px;
+  }
+}
+
 .status {
   color: #28a745;
   font-weight: bold;
@@ -119,6 +132,13 @@ const getProgressBarClass = (usagePercent) => {
   margin-bottom: 20px;
 }
 
+/* 移动端优化 - 保持三栏但减小间距 */
+@media (max-width: 768px) {
+  .stats-grid {
+    gap: 6px;
+  }
+}
+
 .stat-card {
   background-color: #e9ecef;
   padding: 15px;
@@ -137,12 +157,50 @@ const getProgressBarClass = (usagePercent) => {
   font-size: 24px;
   font-weight: bold;
   color: #007bff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-label {
   font-size: 14px;
   color: #6c757d;
   margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 移动端优化 - 更紧凑的卡片 */
+@media (max-width: 768px) {
+  .stat-card {
+    padding: 8px 5px;
+  }
+  
+  .stat-value {
+    font-size: 16px;
+  }
+  
+  .stat-label {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+}
+
+/* 小屏幕手机进一步优化 */
+@media (max-width: 480px) {
+  .stat-card {
+    padding: 6px 3px;
+  }
+  
+  .stat-value {
+    font-size: 14px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+    margin-top: 2px;
+  }
 }
 
 /* API密钥统计样式 */
@@ -188,17 +246,59 @@ const getProgressBarClass = (usagePercent) => {
 .api-key-name {
   font-weight: bold;
   color: #495057;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
 }
 
 .api-key-usage {
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
 }
 
 .api-key-count {
   font-weight: bold;
   color: #007bff;
+}
+
+/* 移动端优化 - 更紧凑的API密钥项 */
+@media (max-width: 768px) {
+  .api-key-item {
+    padding: 8px;
+  }
+  
+  .api-key-header {
+    margin-bottom: 6px;
+  }
+  
+  .api-key-name {
+    font-size: 12px;
+  }
+  
+  .api-key-usage {
+    font-size: 12px;
+    gap: 5px;
+  }
+}
+
+/* 小屏幕手机进一步优化 */
+@media (max-width: 480px) {
+  .api-key-item {
+    padding: 6px;
+  }
+  
+  .api-key-name {
+    font-size: 11px;
+    max-width: 45%;
+  }
+  
+  .api-key-usage {
+    font-size: 11px;
+    gap: 3px;
+  }
 }
 
 .progress-container {

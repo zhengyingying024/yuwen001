@@ -83,6 +83,28 @@ h1 {
   color: #333;
   text-align: center;
   margin: 20px 0;
+  font-size: 1.8rem;
+}
+
+/* 移动端优化 - 减小整体边距 */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 10px 8px;
+  }
+  
+  h1 {
+    margin: 12px 0 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard {
+    padding: 6px 4px;
+  }
+  
+  h1 {
+    margin: 8px 0 6px;
+  }
 }
 
 .refresh-button {
@@ -100,5 +122,60 @@ h1 {
 
 .refresh-button:hover {
   background-color: #0069d9;
+}
+
+/* 全局响应式样式 - 保持三栏布局但优化显示 */
+@media (max-width: 768px) {
+  /* 覆盖所有组件中的卡片样式 */
+  :deep(.info-box) {
+    padding: 10px 6px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+  }
+  
+  :deep(.section-title) {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+  }
+  
+  :deep(.stats-grid) {
+    gap: 5px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+  }
+  
+  .refresh-button {
+    margin: 15px auto;
+    padding: 8px 16px;
+    font-size: 14px;
+  }
+}
+
+/* 小屏幕手机适配 */
+@media (max-width: 480px) {
+  :deep(.info-box) {
+    padding: 8px 4px;
+    margin-bottom: 6px;
+    border-radius: 5px;
+  }
+  
+  :deep(.section-title) {
+    font-size: 1rem;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+  }
+  
+  :deep(.stats-grid) {
+    gap: 4px;
+    margin-top: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .refresh-button {
+    margin: 10px auto;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
 }
 </style>

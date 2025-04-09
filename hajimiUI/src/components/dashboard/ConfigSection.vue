@@ -76,6 +76,19 @@ const dashboardStore = useDashboardStore()
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+/* 移动端优化 - 减小外边距 */
+@media (max-width: 768px) {
+  .info-box {
+    margin-bottom: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .info-box {
+    margin-bottom: 8px;
+  }
+}
+
 .section-title {
   color: #495057;
   border-bottom: 1px solid #dee2e6;
@@ -89,6 +102,13 @@ const dashboardStore = useDashboardStore()
   gap: 15px;
   margin-top: 15px;
   margin-bottom: 20px;
+}
+
+/* 移动端优化 - 保持三栏但减小间距 */
+@media (max-width: 768px) {
+  .stats-grid {
+    gap: 6px;
+  }
 }
 
 .stat-card {
@@ -109,12 +129,50 @@ const dashboardStore = useDashboardStore()
   font-size: 24px;
   font-weight: bold;
   color: #007bff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-label {
   font-size: 14px;
   color: #6c757d;
   margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 移动端优化 - 更紧凑的卡片 */
+@media (max-width: 768px) {
+  .stat-card {
+    padding: 8px 5px;
+  }
+  
+  .stat-value {
+    font-size: 16px;
+  }
+  
+  .stat-label {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+}
+
+/* 小屏幕手机进一步优化 */
+@media (max-width: 480px) {
+  .stat-card {
+    padding: 6px 3px;
+  }
+  
+  .stat-value {
+    font-size: 14px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+    margin-top: 2px;
+  }
 }
 
 /* 版本更新状态样式 */

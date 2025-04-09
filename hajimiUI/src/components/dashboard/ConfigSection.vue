@@ -68,12 +68,13 @@ const dashboardStore = useDashboardStore()
 
 <style scoped>
 .info-box {
-  background-color: #fff;
-  border: 1px solid #dee2e6;
+  background-color: var(--card-background);
+  border: 1px solid var(--card-border);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 /* 移动端优化 - 减小外边距 */
@@ -90,10 +91,11 @@ const dashboardStore = useDashboardStore()
 }
 
 .section-title {
-  color: #495057;
-  border-bottom: 1px solid #dee2e6;
+  color: var(--color-heading);
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 10px;
   margin-bottom: 20px;
+  transition: color 0.3s, border-color 0.3s;
 }
 
 .stats-grid {
@@ -112,12 +114,12 @@ const dashboardStore = useDashboardStore()
 }
 
 .stat-card {
-  background-color: #e9ecef;
+  background-color: var(--stats-item-bg);
   padding: 15px;
   border-radius: 8px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: transform 0.2s;
+  transition: transform 0.2s, background-color 0.3s, box-shadow 0.3s;
 }
 
 .stat-card:hover {
@@ -128,19 +130,21 @@ const dashboardStore = useDashboardStore()
 .stat-value {
   font-size: 24px;
   font-weight: bold;
-  color: #007bff;
+  color: var(--button-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #6c757d;
+  color: var(--color-text);
   margin-top: 5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s;
 }
 
 /* 移动端优化 - 更紧凑的卡片 */
@@ -177,10 +181,10 @@ const dashboardStore = useDashboardStore()
 
 /* 版本更新状态样式 */
 .update-needed {
-  color: #dc3545; /* 红色 - 需要更新 */
+  color: #dc3545 !important; /* 红色 - 需要更新 */
 }
 
 .up-to-date {
-  color: #28a745; /* 绿色 - 已是最新 */
+  color: #28a745 !important; /* 绿色 - 已是最新 */
 }
 </style>

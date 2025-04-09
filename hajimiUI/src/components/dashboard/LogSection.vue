@@ -57,12 +57,13 @@ watch(() => dashboardStore.logs, async () => {
 
 <style scoped>
 .info-box {
-  background-color: #fff;
-  border: 1px solid #dee2e6;
+  background-color: var(--card-background);
+  border: 1px solid var(--card-border);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 /* 移动端优化 - 减小外边距 */
@@ -79,10 +80,11 @@ watch(() => dashboardStore.logs, async () => {
 }
 
 .section-title {
-  color: #495057;
-  border-bottom: 1px solid #dee2e6;
+  color: var(--color-heading);
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 10px;
   margin-bottom: 20px;
+  transition: color 0.3s, border-color 0.3s;
 }
 
 .log-filter {
@@ -95,17 +97,19 @@ watch(() => dashboardStore.logs, async () => {
 
 .log-filter button {
   padding: 5px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--card-border);
   border-radius: 4px;
-  background-color: #f8f9fa;
+  background-color: var(--stats-item-bg);
+  color: var(--color-text);
   cursor: pointer;
   min-width: 60px;
+  transition: background-color 0.3s, color 0.3s, border-color 0.3s;
 }
 
 .log-filter button.active {
-  background-color: #007bff;
-  color: white;
-  border-color: #007bff;
+  background-color: var(--button-primary);
+  color: var(--button-text);
+  border-color: var(--button-primary);
 }
 
 /* 移动端优化 */
@@ -137,8 +141,8 @@ watch(() => dashboardStore.logs, async () => {
 }
 
 .log-container {
-  background-color: #f5f5f5;
-  border: 1px solid #ddd;
+  background-color: var(--log-entry-bg);
+  border: 1px solid var(--log-entry-border);
   border-radius: 8px;
   padding: 15px;
   margin-top: 20px;
@@ -147,6 +151,7 @@ watch(() => dashboardStore.logs, async () => {
   font-family: monospace;
   font-size: 14px;
   line-height: 1.5;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .log-entry {
@@ -154,32 +159,35 @@ watch(() => dashboardStore.logs, async () => {
   padding: 8px;
   border-radius: 4px;
   word-break: break-word;
+  transition: background-color 0.3s, border-color 0.3s;
 }
 
 .log-entry.INFO {
-  background-color: #e8f4f8;
+  background-color: rgba(23, 162, 184, 0.1);
   border-left: 4px solid #17a2b8;
 }
 
 .log-entry.WARNING {
-  background-color: #fff3cd;
+  background-color: rgba(255, 193, 7, 0.1);
   border-left: 4px solid #ffc107;
 }
 
 .log-entry.ERROR {
-  background-color: #f8d7da;
+  background-color: rgba(220, 53, 69, 0.1);
   border-left: 4px solid #dc3545;
 }
 
 .log-entry.DEBUG {
-  background-color: #d1ecf1;
+  background-color: rgba(23, 162, 184, 0.1);
   border-left: 4px solid #17a2b8;
 }
 
 .log-timestamp {
-  color: #6c757d;
+  color: var(--color-text);
   font-size: 12px;
   margin-right: 10px;
+  opacity: 0.8;
+  transition: color 0.3s;
 }
 
 .log-level {
@@ -204,7 +212,8 @@ watch(() => dashboardStore.logs, async () => {
 }
 
 .log-message {
-  color: #212529;
+  color: var(--color-text);
+  transition: color 0.3s;
 }
 
 @media (max-width: 768px) {

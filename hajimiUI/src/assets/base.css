@@ -34,10 +34,48 @@
   --color-text: var(--vt-c-text-light-1);
 
   --section-gap: 160px;
+  
+  /* 自定义颜色变量 */
+  --card-background: #ffffff;
+  --card-border: #e0e0e0;
+  --button-primary: #007bff;
+  --button-primary-hover: #0069d9;
+  --button-text: #ffffff;
+  --stats-item-bg: #f8f9fa;
+  --log-entry-bg: #f8f9fa;
+  --log-entry-border: #e9ecef;
+  --toggle-bg: #ccc;
+  --toggle-active: #007bff;
 }
 
+/* 夜间模式变量 */
+.dark-mode {
+  --color-background: var(--vt-c-black);
+  --color-background-soft: var(--vt-c-black-soft);
+  --color-background-mute: var(--vt-c-black-mute);
+
+  --color-border: var(--vt-c-divider-dark-2);
+  --color-border-hover: var(--vt-c-divider-dark-1);
+
+  --color-heading: var(--vt-c-text-dark-1);
+  --color-text: var(--vt-c-text-dark-2);
+  
+  /* 自定义夜间模式颜色 */
+  --card-background: #2d2d2d;
+  --card-border: #444444;
+  --button-primary: #0056b3;
+  --button-primary-hover: #004494;
+  --button-text: #ffffff;
+  --stats-item-bg: #333333;
+  --log-entry-bg: #333333;
+  --log-entry-border: #444444;
+  --toggle-bg: #555555;
+  --toggle-active: #0056b3;
+}
+
+/* 保留系统偏好设置的支持 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.dark-mode):not(.light-mode) {
     --color-background: var(--vt-c-black);
     --color-background-soft: var(--vt-c-black-soft);
     --color-background-mute: var(--vt-c-black-mute);
@@ -47,6 +85,18 @@
 
     --color-heading: var(--vt-c-text-dark-1);
     --color-text: var(--vt-c-text-dark-2);
+    
+    /* 自定义夜间模式颜色 */
+    --card-background: #2d2d2d;
+    --card-border: #444444;
+    --button-primary: #0056b3;
+    --button-primary-hover: #004494;
+    --button-text: #ffffff;
+    --stats-item-bg: #333333;
+    --log-entry-bg: #333333;
+    --log-entry-border: #444444;
+    --toggle-bg: #555555;
+    --toggle-active: #0056b3;
   }
 }
 

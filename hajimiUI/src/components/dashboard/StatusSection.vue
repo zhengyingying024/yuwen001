@@ -159,12 +159,13 @@
   
   <style scoped>
   .info-box {
-    background-color: #fff;
-    border: 1px solid #dee2e6;
+    background-color: var(--card-background);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
   }
   
   /* 移动端优化 - 减小外边距 */
@@ -189,10 +190,11 @@
   }
   
   .section-title {
-    color: #495057;
-    border-bottom: 1px solid #dee2e6;
+    color: var(--color-heading);
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 10px;
     margin-bottom: 20px;
+    transition: color 0.3s, border-color 0.3s;
   }
   
   .stats-grid {
@@ -211,12 +213,12 @@
   }
   
   .stat-card {
-    background-color: #e9ecef;
+    background-color: var(--stats-item-bg);
     padding: 15px;
     border-radius: 8px;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.2s;
+    transition: transform 0.2s, background-color 0.3s, box-shadow 0.3s;
   }
   
   .stat-card:hover {
@@ -227,19 +229,21 @@
   .stat-value {
     font-size: 24px;
     font-weight: bold;
-    color: #007bff;
+    color: var(--button-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.3s;
   }
   
   .stat-label {
     font-size: 14px;
-    color: #6c757d;
+    color: var(--color-text);
     margin-top: 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    transition: color 0.3s;
   }
   
   /* 移动端优化 - 更紧凑的卡片 */
@@ -301,10 +305,11 @@
   }
   
   .api-key-item {
-    background-color: #f8f9fa;
+    background-color: var(--stats-item-bg);
     border-radius: 8px;
     padding: 15px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: background-color 0.3s, box-shadow 0.3s;
   }
   
   .api-key-header {
@@ -316,11 +321,12 @@
   
   .api-key-name {
     font-weight: bold;
-    color: #495057;
+    color: var(--color-heading);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 50%;
+    transition: color 0.3s;
   }
   
   .api-key-usage {
@@ -332,7 +338,8 @@
   
   .api-key-count {
     font-weight: bold;
-    color: #007bff;
+    color: var(--button-primary);
+    transition: color 0.3s;
   }
   
   /* 移动端优化 - 更紧凑的API密钥项 */
@@ -375,15 +382,16 @@
   .progress-container {
     width: 100%;
     height: 10px;
-    background-color: #e9ecef;
+    background-color: var(--color-background-soft);
     border-radius: 5px;
     overflow: hidden;
+    transition: background-color 0.3s;
   }
   
   .progress-bar {
     height: 100%;
     border-radius: 5px;
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, background-color 0.3s;
   }
   
   .progress-bar.low {
@@ -401,8 +409,9 @@
   /* 模型统计样式 */
   .model-stats-container {
     margin-top: 10px;
-    border-top: 1px dashed #dee2e6;
+    border-top: 1px dashed var(--color-border);
     padding-top: 10px;
+    transition: border-color 0.3s;
   }
   
   .model-stats-header {
@@ -412,8 +421,9 @@
     cursor: pointer;
     user-select: none;
     margin-bottom: 8px;
-    color: #495057;
+    color: var(--color-heading);
     font-size: 14px;
+    transition: color 0.3s;
   }
   
   .model-stats-title {
@@ -435,59 +445,64 @@
     justify-content: space-between;
     align-items: center;
     padding: 6px 10px;
-    background-color: #f1f3f5;
+    background-color: var(--color-background-mute);
     border-radius: 4px;
     font-size: 13px;
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
   }
   
   .model-name {
     font-weight: 500;
-    color: #495057;
+    color: var(--color-heading);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 60%;
+    transition: color 0.3s;
   }
   
   .model-count {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #007bff;
+    color: var(--button-primary);
     font-weight: 600;
+    transition: color 0.3s;
   }
   
   .model-usage-text {
-    color: #6c757d;
+    color: var(--color-text);
     font-weight: normal;
     font-size: 12px;
+    transition: color 0.3s;
   }
   
   .model-progress-container {
     width: 60px;
     height: 6px;
-    background-color: #e9ecef;
+    background-color: var(--color-background-soft);
     border-radius: 3px;
     overflow: hidden;
     margin-left: 5px;
+    transition: background-color 0.3s;
   }
   
   .model-progress-bar {
     height: 100%;
     border-radius: 3px;
-    transition: width 0.3s ease;
+    transition: width 0.3s ease, background-color 0.3s;
   }
   
   .view-more-models {
     text-align: center;
-    color: #007bff;
+    color: var(--button-primary);
     font-size: 12px;
     cursor: pointer;
     padding: 8px;
     margin-top: 5px;
     border-radius: 4px;
     background-color: rgba(0, 123, 255, 0.05);
-    transition: all 0.2s ease;
+    transition: all 0.2s ease, color 0.3s, background-color 0.3s;
   }
   
   .view-more-models:hover {
@@ -509,7 +524,7 @@
   }
   
   .fold-header:hover {
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: var(--color-background-mute);
   }
   
   .fold-icon {
@@ -544,10 +559,6 @@
   }
   
   /* 模型统计项目悬停效果 */
-  .model-stat-item {
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  
   .model-stat-item:hover {
     transform: translateY(-2px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);

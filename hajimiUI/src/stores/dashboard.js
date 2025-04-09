@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // 状态
@@ -31,6 +31,27 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 添加模型相关状态
   const selectedModel = ref('all')
   const availableModels = ref([])
+  
+  // 夜间模式状态
+  const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+  
+  // 监听夜间模式变化，保存到localStorage
+  watch(isDarkMode, (newValue) => {
+    localStorage.setItem('darkMode', newValue)
+    applyDarkMode(newValue)
+  })
+  
+  // 应用夜间模式
+  function applyDarkMode(isDark) {
+    if (isDark) {
+      document.documentElement.classList.add('dark-mode')
+    } else {
+      document.documentElement.classList.remove('dark-mode')
+    }
+  }
+  
+  // 初始应用夜间模式
+  applyDarkMode(isDarkMode.value)
 
   // 获取仪表盘数据
   async function fetchDashboardData() {
@@ -108,6 +129,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     selectedModel.value = model
   }
 
+  // 切换夜间模式
+  function toggleDarkMode() {
+    isDarkMode.value = !isDarkMode.value
+  }
+
   return {
     status,
     config,
@@ -117,6 +143,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     fetchDashboardData,
     selectedModel,
     availableModels,
-    setSelectedModel
+    setSelectedModel,
+    isDarkMode,
+    toggleDarkMode
   }
 })

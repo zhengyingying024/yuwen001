@@ -3,7 +3,7 @@ from fastapi import HTTPException, status, Request
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import cache_response, update_api_call_stats
-from .logging_utils import log
+from app.utils.logging import log
 from .client_disconnect import check_client_disconnect, handle_client_disconnect
 from .gemini_handlers import run_gemini_completion
 

@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import protect_from_abuse, handle_gemini_error, handle_api_error
-from .logging_utils import log
+from app.utils.logging import log
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_nonstream_request
 
@@ -35,11 +35,10 @@ async def process_request(
     protect_from_abuse(
         http_request, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_DAY_PER_IP)
     if chat_request.model not in GeminiClient.AVAILABLE_MODELS:
-        error_msg = "无效的模型"
-        extra_log = {'request_type': request_type, 'model': chat_request.model, 'status_code': 400, 'error_message': error_msg}
-        log('error', error_msg, extra=extra_log)
+        log('error', "无效的模型", 
+            extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 400})
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
 
     # 重置已尝试的密钥
     key_manager.reset_tried_keys_for_request()
@@ -53,13 +52,13 @@ async def process_request(
     
     # 尝试使用不同API密钥
     for attempt in range(1, retry_attempts + 1):
-        # 获取下一个密钥
+        # 获取密钥
         current_api_key = key_manager.get_available_key()
         
         # 检查API密钥是否可用
         if current_api_key is None:
             log('warning', "没有可用的 API 密钥，跳过本次尝试", 
-                extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 'N/A'})
+                extra={'request_type': request_type, 'model': chat_request.model})
             break
         
         # 记录当前尝试的密钥信息
@@ -87,12 +86,11 @@ async def process_request(
                             FAKE_STREAMING_INTERVAL
                         )
                     except Exception as e:
-                        # 捕获流式请求的异常，但不立即返回错误
+                        # 捕获流式请求的异常，但不立即返回错误，而是抛出异常让外层循环处理
                         # 记录错误并继续尝试下一个API密钥
                         error_detail = handle_gemini_error(e, current_api_key, key_manager)
-                        log('error', f"流式请求失败: {error_detail}",
+                        log('info', f"流式请求失败: {error_detail}",
                             extra={'key': current_api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
-                        # 不返回错误，而是抛出异常让外层循环处理
                         raise
                 else:
                     return await process_nonstream_request(
@@ -112,7 +110,7 @@ async def process_request(
                     )
             except HTTPException as e:
                 if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
-                    log('error', "客户端连接中断", 
+                    log('info', "客户端连接中断", 
                         extra={'key': current_api_key[:8], 'request_type': request_type, 
                               'model': chat_request.model, 'status_code': 408})
                     raise
@@ -135,21 +133,13 @@ async def process_request(
                         extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
                     del response_cache_manager.cache[cache_key]
                 
-                if error_result.get('should_retry', False):
-                    # 服务器错误需要重试（等待已在handle_api_error中完成）
-                    continue
-                elif error_result.get('should_switch_key', False) and attempt < retry_attempts:
-                    # 跳出服务器错误重试循环，获取下一个可用密钥
-                    log('info', f"API密钥 {current_api_key[:8]}... 失败，准备尝试下一个密钥", 
-                        extra={'key': current_api_key[:8], 'request_type': request_type})
-                    break  
                 else:
-                    # 无法处理的错误或已达到重试上限
+                    # 跳出循环
                     break
 
     # 如果所有尝试都失败
     msg = "所有API密钥均请求失败,请稍后重试"
-    log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
+    log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
     
     # 对于流式请求，创建一个特殊的StreamingResponse返回错误
     if chat_request.stream:

@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import handle_gemini_error, update_api_call_stats
-from .logging_utils import log
+from app.utils.logging import log
 
 # 流式请求处理函数
 async def process_stream_request(

@@ -53,7 +53,7 @@ import pathlib
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-app = FastAPI()
+app = FastAPI(limit="50M")
 
 # --------------- 全局实例 ---------------
 

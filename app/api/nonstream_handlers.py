@@ -93,7 +93,7 @@ async def process_nonstream_request(
             response = create_response(chat_request, response_content)
             
             # 缓存响应
-            cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, api_key=current_api_key)
+            cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, endpoint=current_api_key,model=chat_request.model)
             
             # 立即删除缓存，确保只能使用一次
             if cache_key and cache_key in response_cache_manager.cache:

@@ -11,10 +11,13 @@ import logging
 import secrets
 import string
 from app.utils import format_log_message
+from app.config import settings
 from app.config.settings import (    
     RANDOM_STRING,
-    RANDOM_STRING_LENGTH
+    RANDOM_STRING_LENGTH,
+    serach
 )
+from app.utils.logging import log
 
 def generate_secure_random_string(length):
     all_characters = string.ascii_letters + string.digits
@@ -56,10 +59,11 @@ class ResponseWrapper:
 
     def _extract_text(self) -> str:
         try:
+            text=""
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
-                    return part['text']
-            return ""
+                    text+=part['text']
+            return part['text']
         except (KeyError, IndexError):
             return ""
 
@@ -124,66 +128,73 @@ class GeminiClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
+    # 将流式和非流式请求的通用部分提取为共享方法
+    def _prepare_request_data(self, request, contents, safety_settings, system_instruction):
+        api_version = "v1alpha" if "think" in request.model else "v1beta"
+        if serach["search_mode"]:
+            data = {
+                "contents": contents,
+                "tools": [{"google_search": {}}],
+                "generationConfig": self._get_generation_config(request),
+                "safetySettings": safety_settings,
+            }
+        else:
+            data = {
+                "contents": contents,
+                "generationConfig": self._get_generation_config(request),
+                "safetySettings": safety_settings,
+            }
+        if system_instruction:
+            data["system_instruction"] = system_instruction
+        return api_version, data
+    
+    def _get_generation_config(self, request):
+        config_params = {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+            "topP": request.top_p,
+            "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
+            "candidateCount": request.n
+        }
+        return {k: v for k, v in config_params.items() if v is not None}
+
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'N/A'}
-        log_msg = format_log_message('INFO', "流式请求开始", extra=extra_log)
-        logger.info(log_msg)
         
         # 检查是否启用假流式请求
         if FAKE_STREAMING:
-            log_msg = format_log_message('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
-            logger.info(log_msg)
-            
+            extra_log={'key': self.api_key[:8], 'request_type': 'fake_stream', 'model': request.model}
+            log('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
             try:
-                # 这个方法不再直接使用self.api_key，而是由main.py提供API密钥列表和管理
-                # 在这里，我们只负责持续发送换行符，直到main.py那边获取到响应
                 
-                # 持续发送换行符，直到外部取消此生成器
+                # 每隔一段时间发送换行符作为保活消息，直到外部取消此生成器
                 start_time = time.time()
                 while True:
-                    # 发送换行符作为保活消息
                     yield "\n"
-                    # 等待一段时间
                     await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                     
-                    # 如果等待时间过长（超过300秒），防止无限等待
+                    # 如果等待时间过长（超过300秒），抛出超时异常，让外部处理
                     if time.time() - start_time > 300:
-                        log_msg = format_log_message('WARNING', "假流式请求等待时间过长，强制结束", extra=extra_log)
-                        logger.warning(log_msg)
-                        # 抛出超时异常，让外部处理
-                        error_msg = "假流式请求等待时间过长，所有API密钥均已尝试"
-                        extra_log_timeout = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'TIMEOUT', 'error_message': error_msg}
-                        log_msg = format_log_message('ERROR', error_msg, extra=extra_log_timeout)
-                        logger.error(log_msg)
-                        raise TimeoutError(error_msg)
+                        log('ERROR', f"假流式请求等待时间过长",extra=extra_log)
+                        
+                        raise TimeoutError("假流式请求等待时间过长")
                 
             except Exception as e:
-                if not isinstance(e, asyncio.CancelledError):  # 忽略取消异常的日志记录
-                    error_msg = f"假流式处理期间发生错误: {str(e)}"
-                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'fake-stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                    log_msg = format_log_message('ERROR', error_msg, extra=extra_log_error)
-                    logger.error(log_msg)
+                if not isinstance(e, asyncio.CancelledError):  
+                    log('ERROR', f"假流式处理期间发生错误: {str(e)}", extra=extra_log)
                 raise e
             finally:
-                log_msg = format_log_message('INFO', "假流式请求结束", extra=extra_log)
-                logger.info(log_msg)
+                log('INFO', "假流式请求结束", extra=extra_log)
         else:
-            # 原始流式请求处理逻辑
-            api_version = "v1alpha" if "think" in request.model else "v1beta"
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
+            # 真流式请求处理逻辑
+            extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
+            log('INFO', "真流式请求开始", extra=extra_log)
+            
+            api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+            model= request.model.removesuffix("-search")
+            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {
                 "Content-Type": "application/json",
             }
-            data = {
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
-                "safetySettings": safety_settings,
-            }
-            if system_instruction:
-                data["system_instruction"] = system_instruction
             
             async with httpx.AsyncClient() as client:
                 async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
@@ -241,38 +252,26 @@ class GeminiClient:
                         logger.info(log_msg)
 
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'N/A'}
-        log_msg = format_log_message('INFO', "非流式请求开始", extra=extra_log)
-        logger.info(log_msg)
+        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
+        log('info', "非流式请求开始", extra=extra_log)
         
-        api_version = "v1alpha" if "think" in request.model else "v1beta"
-        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
+        api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+        model= request.model.removesuffix("-search")
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={self.api_key}"
         headers = {
             "Content-Type": "application/json",
         }
-        data = {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": request.temperature,
-                "maxOutputTokens": request.max_tokens,
-            },
-            "safetySettings": safety_settings,
-        }
-        if system_instruction:
-            data["system_instruction"] = system_instruction
-            
+        
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            
-            log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
-            logger.info(log_msg)
+            log('info', "非流式请求成功完成", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:
             raise
 
-    def convert_messages(self, messages, use_system_prompt=False):
+    def convert_messages(self, messages, use_system_prompt=False,model=None):
         gemini_history = []
         errors = []
         system_instruction_text = ""
@@ -341,11 +340,13 @@ class GeminiClient:
         if errors:
             return errors
         else:
+            # 只有当search_mode为真且模型名称以-search结尾时，才添加搜索提示
+            if settings.serach["search_mode"] and model and model.endswith("-search"):
+                gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.serach["search_prompt"]}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 log_msg = format_log_message('INFO', "伪装消息成功")
-                logger.info(log_msg)
             return gemini_history, {"parts": [{"text": system_instruction_text}]}
 
     @staticmethod
@@ -356,6 +357,11 @@ class GeminiClient:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
-            models = [model["name"] for model in data.get("models", [])]
+            models = []
+            for model in data.get("models", []):
+                models.append(model["name"])
+                if model["name"].startswith("models/gemini-2"):
+                    models.append(model["name"] + "-search")
             models.extend(GeminiClient.EXTRA_MODELS)
+                
             return models

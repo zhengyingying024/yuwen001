@@ -1,7 +1,7 @@
 import asyncio
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
-from .logging_utils import log
+from app.utils.logging import log
 
 # Gemini完成请求函数
 async def run_gemini_completion(
@@ -35,7 +35,8 @@ async def run_gemini_completion(
         
         # 只在第一次调用时记录完成日志
         if not hasattr(run_fn, 'logged_complete'):
-            log('info', "非流式请求成功完成", extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+            log('info', "非流式请求成功完成", 
+                extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
             run_fn.logged_complete = True
         return response_content
     except asyncio.CancelledError:
@@ -44,14 +45,15 @@ async def run_gemini_completion(
             try:
                 # 使用shield确保任务不被取消，并等待它完成
                 response_content = await asyncio.shield(response_future)
-                log('info', "API请求在客户端断开后完成", extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                log('info', "API请求在客户端断开后完成", 
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return response_content
             except Exception as e:
-                extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': f'API请求在客户端断开后失败: {str(e)}'}
-                log('info', "API调用因客户端断开而失败", extra=extra_log_gemini_cancel)
+                log('info', "API调用因客户端断开而失败", 
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': f'API请求在客户端断开后失败: {str(e)}'})
                 raise
         
         # 如果任务尚未开始或已经失败，记录日志
-        extra_log_gemini_cancel = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端断开导致API调用取消'}
-        log('info', "API调用因客户端断开而取消", extra=extra_log_gemini_cancel)
+        log('info', "API调用因客户端断开而取消", 
+            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': '客户端断开导致API调用取消'})
         raise

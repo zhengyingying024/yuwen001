@@ -30,6 +30,10 @@ const dashboardStore = useDashboardStore()
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.config.fakeStreaming ? "启用" : "禁用" }}</div>
+        <div class="stat-label">联网搜索</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ dashboardStore.config.fakeStreaming ? "启用" : "禁用" }}</div>
         <div class="stat-label">假流式响应</div>
       </div>
       <div class="stat-card">
@@ -39,6 +43,10 @@ const dashboardStore = useDashboardStore()
       <div class="stat-card">
         <div class="stat-value">{{ dashboardStore.config.randomString ? "启用" : "禁用" }}</div>
         <div class="stat-label">伪装信息</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ dashboardStore.config.fakeStreamingInterval }}字符</div>
+        <div class="stat-label">伪装信息长度</div>
       </div>
     </div>
     

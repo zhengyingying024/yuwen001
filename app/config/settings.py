@@ -40,6 +40,10 @@ REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower(
 REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
 ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
 
+serach={
+    "search_mode":os.environ.get("SERACH_MODE", "true").lower() in ["true", "1", "yes"],
+    "search_prompt":os.environ.get("SERACH_PROMPT", "（使用搜索工具联网搜索，需要在content中结合搜索内容）").strip('"')
+}
 
 version={
     "local_version":"0.0.0",

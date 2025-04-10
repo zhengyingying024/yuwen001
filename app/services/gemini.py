@@ -57,10 +57,11 @@ class ResponseWrapper:
 
     def _extract_text(self) -> str:
         try:
+            text=""
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
-                    return part['text']
-            return ""
+                    text+=part['text']
+            return part['text']
         except (KeyError, IndexError):
             return ""
 
@@ -163,6 +164,11 @@ class GeminiClient:
             }
             data = {
                 "contents": contents,
+            "tools": [
+                {
+                    "google_search": {}
+                }
+            ],
                 "generationConfig": {
                     "temperature": request.temperature,
                     "maxOutputTokens": request.max_tokens,
@@ -239,6 +245,11 @@ class GeminiClient:
         }
         data = {
             "contents": contents,
+            "tools": [
+                {
+                    "google_search": {}
+                }
+            ],
             "generationConfig": {
                 "temperature": request.temperature,
                 "maxOutputTokens": request.max_tokens,
@@ -251,7 +262,7 @@ class GeminiClient:
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            
+            logger.info(response.text)
             log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
             logger.info(log_msg)
             
@@ -328,6 +339,7 @@ class GeminiClient:
         if errors:
             return errors
         else:
+            gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':'（使用搜索工具联网搜索，需要在content中结合搜索内容）'}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})

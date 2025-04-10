@@ -131,12 +131,19 @@ class GeminiClient:
     # 将流式和非流式请求的通用部分提取为共享方法
     def _prepare_request_data(self, request, contents, safety_settings, system_instruction):
         api_version = "v1alpha" if "think" in request.model else "v1beta"
-        data = {
-            "contents": contents,
-            "tools": [{"google_search": {}}],
-            "generationConfig": self._get_generation_config(request),
-            "safetySettings": safety_settings,
-        }
+        if serach["search_mode"]:
+            data = {
+                "contents": contents,
+                "tools": [{"google_search": {}}],
+                "generationConfig": self._get_generation_config(request),
+                "safetySettings": safety_settings,
+            }
+        else:
+            data = {
+                "contents": contents,
+                "generationConfig": self._get_generation_config(request),
+                "safetySettings": safety_settings,
+            }
         if system_instruction:
             data["system_instruction"] = system_instruction
         return api_version, data

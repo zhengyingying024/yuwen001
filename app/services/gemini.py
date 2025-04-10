@@ -128,6 +128,29 @@ class GeminiClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
+    # 将流式和非流式请求的通用部分提取为共享方法
+    def _prepare_request_data(self, request, contents, safety_settings, system_instruction):
+        api_version = "v1alpha" if "think" in request.model else "v1beta"
+        data = {
+            "contents": contents,
+            "tools": [{"google_search": {}}],
+            "generationConfig": self._get_generation_config(request),
+            "safetySettings": safety_settings,
+        }
+        if system_instruction:
+            data["system_instruction"] = system_instruction
+        return api_version, data
+    
+    def _get_generation_config(self, request):
+        config_params = {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+            "topP": request.top_p,
+            "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
+            "candidateCount": request.n
+        }
+        return {k: v for k, v in config_params.items() if v is not None}
+
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         
         # 检查是否启用假流式请求
@@ -159,39 +182,12 @@ class GeminiClient:
             extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
             log('INFO', "真流式请求开始", extra=extra_log)
             
-            api_version = "v1alpha" if "think" in request.model else "v1beta"
-            model=request.model.removesuffix("-search")
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
+            api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+            
+            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {
                 "Content-Type": "application/json",
             }
-        if settings.serach["search_mode"]:
-            data = {
-                "contents": contents,
-                    "tools":[
-                        {
-                            "google_search": {}
-                        }
-                    ],
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
-                "safetySettings": safety_settings,
-            }
-        else:
-            data = {
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
-                "safetySettings": safety_settings,
-            }
-
-            
-            if system_instruction:
-                data["system_instruction"] = system_instruction
             
             async with httpx.AsyncClient() as client:
                 async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
@@ -249,47 +245,20 @@ class GeminiClient:
                         logger.info(log_msg)
 
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'N/A'}
-        log_msg = format_log_message('INFO', "非流式请求开始", extra=extra_log)
-        logger.info(log_msg)
+        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
+        log('info', "非流式请求开始", extra=extra_log)
         
-        api_version = "v1alpha" if "think" in request.model else "v1beta"
-        model=request.model.removesuffix("-search")
-        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={self.api_key}"
+        api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+        
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
         headers = {
             "Content-Type": "application/json",
         }
-        if settings.serach["search_mode"]:
-            data = {
-                "contents": contents,
-                    "tools":[
-                        {
-                            "google_search": {}
-                        }
-                    ],
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
-                "safetySettings": safety_settings,
-            }
-        else:
-            data = {
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
-                "safetySettings": safety_settings,
-            }
-        if system_instruction:
-            data["system_instruction"] = system_instruction
-            
+        
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
-            logger.info(log_msg)
+            log('info', "非流式请求成功完成", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:

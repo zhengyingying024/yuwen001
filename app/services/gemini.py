@@ -155,9 +155,12 @@ class GeminiClient:
             "temperature": request.temperature,
             "maxOutputTokens": request.max_tokens,
             "topP": request.top_p,
+            "topK": request.top_k,
             "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
             "candidateCount": request.n
         }
+        logger.info(request.top_k)
+        logger.info(request)
         return {k: v for k, v in config_params.items() if v is not None}
 
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):

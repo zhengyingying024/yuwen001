@@ -10,6 +10,7 @@ class ChatCompletionRequest(BaseModel):
     messages: List[Message]
     temperature: float = 0.7
     top_p: Optional[float] = 1.0
+    top_k: Optional[float] = 40.0
     n: int = 1
     stream: bool = False
     stop: Optional[Union[str, List[str]]] = None

@@ -42,10 +42,9 @@ async def process_request(
 
     # 重置已尝试的密钥
     key_manager.reset_tried_keys_for_request()
-    
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
-        GeminiClient, chat_request.messages)
+        GeminiClient, chat_request.messages,model=chat_request.model)
 
     # 设置重试次数（使用可用API密钥数量作为最大重试次数）
     retry_attempts = len(key_manager.api_keys) if key_manager.api_keys else 1

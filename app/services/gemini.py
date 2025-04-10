@@ -14,7 +14,8 @@ from app.utils import format_log_message
 from app.config import settings
 from app.config.settings import (    
     RANDOM_STRING,
-    RANDOM_STRING_LENGTH
+    RANDOM_STRING_LENGTH,
+    serach
 )
 from app.utils.logging import log
 
@@ -159,23 +160,36 @@ class GeminiClient:
             log('INFO', "真流式请求开始", extra=extra_log)
             
             api_version = "v1alpha" if "think" in request.model else "v1beta"
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
+            model=request.model.removesuffix("-search")
+            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {
                 "Content-Type": "application/json",
             }
+        if settings.serach["search_mode"]:
             data = {
                 "contents": contents,
-            "tools": [
-                {
-                    "google_search": {}
-                }
-            ],
+                    "tools":[
+                        {
+                            "google_search": {}
+                        }
+                    ],
                 "generationConfig": {
                     "temperature": request.temperature,
                     "maxOutputTokens": request.max_tokens,
                 },
                 "safetySettings": safety_settings,
             }
+        else:
+            data = {
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": request.temperature,
+                    "maxOutputTokens": request.max_tokens,
+                },
+                "safetySettings": safety_settings,
+            }
+
+            
             if system_instruction:
                 data["system_instruction"] = system_instruction
             
@@ -240,30 +254,40 @@ class GeminiClient:
         logger.info(log_msg)
         
         api_version = "v1alpha" if "think" in request.model else "v1beta"
-        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
+        model=request.model.removesuffix("-search")
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={self.api_key}"
         headers = {
             "Content-Type": "application/json",
         }
-        data = {
-            "contents": contents,
-            "tools": [
-                {
-                    "google_search": {}
-                }
-            ],
-            "generationConfig": {
-                "temperature": request.temperature,
-                "maxOutputTokens": request.max_tokens,
-            },
-            "safetySettings": safety_settings,
-        }
+        if settings.serach["search_mode"]:
+            data = {
+                "contents": contents,
+                    "tools":[
+                        {
+                            "google_search": {}
+                        }
+                    ],
+                "generationConfig": {
+                    "temperature": request.temperature,
+                    "maxOutputTokens": request.max_tokens,
+                },
+                "safetySettings": safety_settings,
+            }
+        else:
+            data = {
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": request.temperature,
+                    "maxOutputTokens": request.max_tokens,
+                },
+                "safetySettings": safety_settings,
+            }
         if system_instruction:
             data["system_instruction"] = system_instruction
             
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            logger.info(response.text)
             log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
             logger.info(log_msg)
             
@@ -271,7 +295,7 @@ class GeminiClient:
         except Exception as e:
             raise
 
-    def convert_messages(self, messages, use_system_prompt=False):
+    def convert_messages(self, messages, use_system_prompt=False,model=None):
         gemini_history = []
         errors = []
         system_instruction_text = ""
@@ -340,7 +364,9 @@ class GeminiClient:
         if errors:
             return errors
         else:
-            if settings.serach["search_mode"]:
+            # 只有当search_mode为真且模型名称以-search结尾时，才添加搜索提示
+            if settings.serach["search_mode"] and model and model.endswith("-search"):
+                logger.info(f"搜索模式开启")
                 gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.serach["search_prompt"]}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
@@ -356,6 +382,11 @@ class GeminiClient:
             response = await client.get(url)
             response.raise_for_status()
             data = response.json()
-            models = [model["name"] for model in data.get("models", [])]
+            models = []
+            for model in data.get("models", []):
+                models.append(model["name"])
+                if model["name"].startswith("models/gemini-2"):
+                    models.append(model["name"] + "-search")
             models.extend(GeminiClient.EXTRA_MODELS)
+                
             return models

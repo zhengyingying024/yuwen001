@@ -129,9 +129,9 @@ class GeminiClient:
         self.api_key = api_key
 
     # 将流式和非流式请求的通用部分提取为共享方法
-    def _prepare_request_data(self, request, contents, safety_settings, system_instruction):
+    def _prepare_request_data(self, request, contents, safety_settings, system_instruction,model):
         api_version = "v1alpha" if "think" in request.model else "v1beta"
-        if serach["search_mode"]:
+        if serach["search_mode"] and model.endswith("-search"):
             data = {
                 "contents": contents,
                 "tools": [{"google_search": {}}],
@@ -189,7 +189,7 @@ class GeminiClient:
             extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
             log('INFO', "真流式请求开始", extra=extra_log)
             
-            api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+            api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
             model= request.model.removesuffix("-search")
             url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {
@@ -255,7 +255,7 @@ class GeminiClient:
         extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
         log('info', "非流式请求开始", extra=extra_log)
         
-        api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
+        api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={self.api_key}"
         headers = {

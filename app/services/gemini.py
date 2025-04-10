@@ -11,6 +11,7 @@ import logging
 import secrets
 import string
 from app.utils import format_log_message
+from app.config import settings
 from app.config.settings import (    
     RANDOM_STRING,
     RANDOM_STRING_LENGTH
@@ -339,12 +340,12 @@ class GeminiClient:
         if errors:
             return errors
         else:
-            gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':'（使用搜索工具联网搜索，需要在content中结合搜索内容）'}]})
+            if settings.serach["search_mode"]:
+                gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.serach["search_prompt"]}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 log_msg = format_log_message('INFO', "伪装消息成功")
-                logger.info(log_msg)
             return gemini_history, {"parts": [{"text": system_instruction_text}]}
 
     @staticmethod

@@ -132,6 +132,8 @@ class GeminiClient:
     def _prepare_request_data(self, request, contents, safety_settings, system_instruction,model):
         api_version = "v1alpha" if "think" in request.model else "v1beta"
         if serach["search_mode"] and model.endswith("-search"):
+            extra_log={'key': self.api_key[:8], 'model':model}
+            log('INFO', "开启联网搜索模式", extra=extra_log)
             data = {
                 "contents": contents,
                 "tools": [{"google_search": {}}],

@@ -28,7 +28,18 @@ class APIKeyManager:
 
 
     def get_available_key(self):
-        """从栈顶获取密钥，栈空时重新生成 (修改后)"""
+        """从栈顶获取密钥，若栈空则重新生成"""
+        while self.key_stack:
+            key = self.key_stack.pop()
+            # if key not in self.api_key_blacklist and key not in self.tried_keys_for_request:
+            if key not in self.tried_keys_for_request:
+                self.tried_keys_for_request.add(key)
+                return key
+
+        # 栈空，重新生成密钥栈
+        self._reset_key_stack() 
+
+        # 再次尝试从新栈中获取密钥 (迭代一次)
         while self.key_stack:
             key = self.key_stack.pop()
             # if key not in self.api_key_blacklist and key not in self.tried_keys_for_request:
@@ -40,17 +51,7 @@ class APIKeyManager:
             log_msg = format_log_message('ERROR', "没有配置任何 API 密钥！")
             logger.error(log_msg)
             return None
-
-        self._reset_key_stack() # 重新生成密钥栈
-
-        # 再次尝试从新栈中获取密钥 (迭代一次)
-        while self.key_stack:
-            key = self.key_stack.pop()
-            # if key not in self.api_key_blacklist and key not in self.tried_keys_for_request:
-            if key not in self.tried_keys_for_request:
-                self.tried_keys_for_request.add(key)
-                return key
-
+        
         return None
 
 

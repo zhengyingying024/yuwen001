@@ -262,8 +262,8 @@ async def process_stream_request(
                 yield "data: [DONE]\n\n"
                 
             except asyncio.CancelledError:
-                extra_log_cancel = {'key': current_api_key[:8], 'request_type': 'stream', 'model': chat_request.model, 'error_message': '客户端已断开连接'}
-                log('info', "客户端连接已中断", extra=extra_log_cancel)
+                log('info', "客户端连接已中断", 
+                    extra={'key': current_api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
             except Exception as e:
                 error_detail = handle_gemini_error(e, current_api_key, key_manager)
                 log('error', f"流式请求失败: {error_detail}",

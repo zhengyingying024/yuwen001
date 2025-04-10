@@ -11,6 +11,7 @@ import logging
 import secrets
 import string
 from app.utils import format_log_message
+from app.config import settings
 from app.config.settings import (    
     RANDOM_STRING,
     RANDOM_STRING_LENGTH
@@ -57,10 +58,11 @@ class ResponseWrapper:
 
     def _extract_text(self) -> str:
         try:
+            text=""
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
-                    return part['text']
-            return ""
+                    text+=part['text']
+            return part['text']
         except (KeyError, IndexError):
             return ""
 
@@ -163,6 +165,11 @@ class GeminiClient:
             }
             data = {
                 "contents": contents,
+            "tools": [
+                {
+                    "google_search": {}
+                }
+            ],
                 "generationConfig": {},
                 "safetySettings": safety_settings,
             }
@@ -247,6 +254,11 @@ class GeminiClient:
         }
         data = {
             "contents": contents,
+            "tools": [
+                {
+                    "google_search": {}
+                }
+            ],
             "generationConfig": {},
             "safetySettings": safety_settings,
         }
@@ -343,11 +355,12 @@ class GeminiClient:
         if errors:
             return errors
         else:
+            if settings.serach["search_mode"]:
+                gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.serach["search_prompt"]}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})
                 log_msg = format_log_message('INFO', "伪装消息成功")
-                logger.info(log_msg)
             return gemini_history, {"parts": [{"text": system_instruction_text}]}
 
     @staticmethod

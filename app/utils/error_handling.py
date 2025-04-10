@@ -108,7 +108,7 @@ async def handle_api_error(e: Exception, api_key: str, key_manager, request_type
             return {'remove_cache': False}
         
         # 重试次数用尽，在日志中输出错误状态码
-        log('error', f"Gemini 服务器错误({status_code}), 且重试{retry_count}次后仍然失败", 
+        log('error', f"Gemini 服务器错误({status_code})", 
             extra={'key': api_key[:8], 'request_type': request_type, 'model': model, 'status_code': int(status_code)})        
         
         # 不再切换密钥，向客户端抛出HTTP异常

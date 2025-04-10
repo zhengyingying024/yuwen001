@@ -190,8 +190,8 @@ class GeminiClient:
             log('INFO', "真流式请求开始", extra=extra_log)
             
             api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
-            
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:streamGenerateContent?key={self.api_key}&alt=sse"
+            model= request.model.removesuffix("-search")
+            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
             headers = {
                 "Content-Type": "application/json",
             }
@@ -256,8 +256,8 @@ class GeminiClient:
         log('info', "非流式请求开始", extra=extra_log)
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction)
-        
-        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
+        model= request.model.removesuffix("-search")
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent?key={self.api_key}"
         headers = {
             "Content-Type": "application/json",
         }
@@ -342,7 +342,6 @@ class GeminiClient:
         else:
             # 只有当search_mode为真且模型名称以-search结尾时，才添加搜索提示
             if settings.serach["search_mode"] and model and model.endswith("-search"):
-                logger.info(f"搜索模式开启")
                 gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.serach["search_prompt"]}]})
             if RANDOM_STRING:
                 gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(RANDOM_STRING_LENGTH)}]})

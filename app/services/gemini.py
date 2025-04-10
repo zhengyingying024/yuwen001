@@ -163,14 +163,23 @@ class GeminiClient:
             }
             data = {
                 "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                },
+                "generationConfig": {},
                 "safetySettings": safety_settings,
             }
             if system_instruction:
                 data["system_instruction"] = system_instruction
+            
+            # 设置生成参数
+            config_params = {
+                "temperature": request.temperature,
+                "maxOutputTokens": request.max_tokens,
+                "topP": request.top_p,
+                "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
+                "candidateCount": request.n
+            }
+            
+            # 过滤掉None值，只添加有效参数
+            data["generationConfig"] = {k: v for k, v in config_params.items() if v is not None}
             
             async with httpx.AsyncClient() as client:
                 async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
@@ -228,9 +237,8 @@ class GeminiClient:
                         logger.info(log_msg)
 
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model, 'status_code': 'N/A'}
-        log_msg = format_log_message('INFO', "非流式请求开始", extra=extra_log)
-        logger.info(log_msg)
+        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
+        log('info', "非流式请求开始", extra=extra_log)
         
         api_version = "v1alpha" if "think" in request.model else "v1beta"
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{request.model}:generateContent?key={self.api_key}"
@@ -239,21 +247,28 @@ class GeminiClient:
         }
         data = {
             "contents": contents,
-            "generationConfig": {
-                "temperature": request.temperature,
-                "maxOutputTokens": request.max_tokens,
-            },
+            "generationConfig": {},
             "safetySettings": safety_settings,
         }
         if system_instruction:
             data["system_instruction"] = system_instruction
             
+        # 设置生成参数
+        config_params = {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+            "topP": request.top_p,
+            "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
+            "candidateCount": request.n
+        }
+        
+        # 过滤掉None值，只添加有效参数
+        data["generationConfig"] = {k: v for k, v in config_params.items() if v is not None}
+        
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            
-            log_msg = format_log_message('INFO', "非流式请求成功完成", extra=extra_log)
-            logger.info(log_msg)
+            log('info', "非流式请求成功完成", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:

@@ -71,7 +71,7 @@ async def process_stream_request(
                                     
                                     # 将完整响应分割成小块，模拟流式返回
                                     full_text = response_content.text
-                                    chunk_size = max(len(full_text) // 10, 1)  # 至少分成10块，每块至少1个字符
+                                    chunk_size = max(len(full_text) // 1, 1)  
                                     
                                     for i in range(0, len(full_text), chunk_size):
                                         chunk = full_text[i:i+chunk_size]

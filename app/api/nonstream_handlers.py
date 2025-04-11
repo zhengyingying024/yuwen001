@@ -74,6 +74,12 @@ async def process_nonstream_request(
             # 获取响应内容
             response_content = await gemini_task
             
+            # 检查响应内容是否为空
+            if not response_content or not response_content.text:
+                log('warning', f"非流式请求: API密钥 {current_api_key[:8]}... 返回空响应",
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                return None
+            
             # 检查缓存是否已经存在，如果存在则不再创建新缓存
             cached_response, cache_hit = response_cache_manager.get(cache_key)
             if cache_hit:
@@ -130,6 +136,12 @@ async def process_nonstream_request(
             # 使用shield确保任务不会被取消
             response_content = await asyncio.shield(gemini_task)
             
+            # 检查响应内容是否为空
+            if not response_content or not response_content.text:
+                log('warning', f"非流式请求(取消后): API密钥 {current_api_key[:8]}... 返回空响应",
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                return None
+            
             # 创建响应
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)
@@ -139,6 +151,12 @@ async def process_nonstream_request(
         else:
             # 任务已完成，获取结果
             response_content = gemini_task.result()
+            
+            # 检查响应内容是否为空
+            if not response_content or not response_content.text:
+                log('warning', f"非流式请求(已完成): API密钥 {current_api_key[:8]}... 返回空响应",
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                return None
             
             # 创建响应
             from app.utils.response import create_response
@@ -155,3 +173,8 @@ async def process_nonstream_request(
             raise  
         else:
             raise
+    except Exception as e:
+        # 其他异常，返回None以便并发请求可以继续尝试其他密钥
+        log('error', f"非流式请求异常: {str(e)}", 
+            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+        return None

@@ -9,6 +9,7 @@ from app.utils import protect_from_abuse, handle_gemini_error, handle_api_error
 from app.utils.logging import log
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_nonstream_request
+from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
 
 # 请求处理函数
 async def process_request(
@@ -57,42 +58,48 @@ async def process_request(
             safety_settings_g2,
             api_call_stats,
             FAKE_STREAMING,
-            FAKE_STREAMING_INTERVAL
+            FAKE_STREAMING_INTERVAL,
+            CONCURRENT_REQUESTS,
+            INCREASE_CONCURRENT_ON_FAILURE,
+            MAX_CONCURRENT_REQUESTS
         )
     else:
-        # 非流式请求处理 - 保留原有的API key遍历逻辑
+        # 非流式请求处理 - 使用并发请求
         # 重置已尝试的密钥
         key_manager.reset_tried_keys_for_request()
         
-        # 设置重试次数（使用可用API密钥数量作为最大重试次数）
-        retry_attempts = len(key_manager.api_keys) if key_manager.api_keys else 1
+        # 设置初始并发数
+        current_concurrent = CONCURRENT_REQUESTS
         
-        # 尝试使用不同API密钥
-        for attempt in range(1, retry_attempts + 1):
-            # 获取密钥
-            current_api_key = key_manager.get_available_key()
+        # 获取所有可用的API密钥
+        all_keys = key_manager.api_keys.copy()
+        
+        # 如果可用密钥数量小于并发数，则使用所有可用密钥
+        if len(all_keys) < current_concurrent:
+            current_concurrent = len(all_keys)
+        
+        # 尝试使用不同API密钥，直到所有密钥都尝试过
+        while all_keys:
+            # 获取当前批次的密钥
+            current_batch = all_keys[:current_concurrent]
+            all_keys = all_keys[current_concurrent:]
             
-            # 检查API密钥是否可用
-            if current_api_key is None:
-                log('warning', "没有可用的 API 密钥，跳过本次尝试", 
-                    extra={'request_type': request_type, 'model': chat_request.model})
-                break
-            
-            # 记录当前尝试的密钥信息
-            log('info', f"第 {attempt}/{retry_attempts} 次尝试 ... 使用密钥: {current_api_key[:8]}...", 
-                extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-
-            # 服务器错误重试逻辑
-            server_error_retries = 3
-            for server_retry in range(1, server_error_retries + 1):
-                try:
-                    return await process_nonstream_request(
+            # 创建并发任务
+            tasks = []
+            for api_key in current_batch:
+                # 记录当前尝试的密钥信息
+                log('info', f"并发请求使用密钥: {api_key[:8]}...", 
+                    extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                
+                # 创建任务
+                task = asyncio.create_task(
+                    process_nonstream_request(
                         chat_request,
                         http_request,
                         request_type,
                         contents,
                         system_instruction,
-                        current_api_key,
+                        api_key,
                         response_cache_manager,
                         active_requests_manager,
                         safety_settings,
@@ -101,35 +108,55 @@ async def process_request(
                         cache_key,
                         client_ip
                     )
-                except HTTPException as e:
-                    if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
-                        log('info', "客户端连接中断", 
-                            extra={'key': current_api_key[:8], 'request_type': request_type, 
-                                  'model': chat_request.model, 'status_code': 408})
-                        raise
-                    else:
-                        raise
-                except Exception as e:
-                    # 使用统一的API错误处理函数
-                    error_result = await handle_api_error(
-                        e, 
-                        current_api_key, 
-                        key_manager, 
-                        request_type, 
-                        chat_request.model, 
-                        server_retry - 1
-                    )
-                    
-                    # 如果需要删除缓存，清除缓存
-                    if error_result.get('remove_cache', False) and cache_key and cache_key in response_cache_manager.cache:
-                        log('info', f"因API错误，删除缓存: {cache_key[:8]}...", 
-                            extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
-                        del response_cache_manager.cache[cache_key]
-                    
-                    else:
-                        # 跳出循环
-                        break
-
+                )
+                tasks.append((api_key, task))
+            
+            # 等待第一个成功的响应
+            done, pending = await asyncio.wait(
+                [task for _, task in tasks],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # 取消所有未完成的任务
+            for _, task in tasks:
+                if not task.done():
+                    task.cancel()
+            
+            # 检查是否有成功的响应
+            success = False
+            for api_key, task in tasks:
+                if task in done:
+                    try:
+                        result = task.result()
+                        if result:  # 如果有响应内容
+                            success = True
+                            log('info', f"并发请求成功，使用密钥: {api_key[:8]}...", 
+                                extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                            return result
+                    except Exception as e:
+                        # 使用统一的API错误处理函数
+                        error_result = await handle_api_error(
+                            e, 
+                            api_key, 
+                            key_manager, 
+                            request_type, 
+                            chat_request.model, 
+                            0
+                        )
+                        
+                        # 如果需要删除缓存，清除缓存
+                        if error_result.get('remove_cache', False) and cache_key and cache_key in response_cache_manager.cache:
+                            log('info', f"因API错误，删除缓存: {cache_key[:8]}...", 
+                                extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
+                            del response_cache_manager.cache[cache_key]
+            
+            # 如果所有请求都失败，增加并发数并继续尝试
+            if not success and all_keys:
+                # 增加并发数，但不超过最大并发数
+                current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
+                log('info', f"所有并发请求失败，增加并发数至: {current_concurrent}", 
+                    extra={'request_type': request_type, 'model': chat_request.model})
+        
         # 如果所有尝试都失败
         msg = "所有API密钥均请求失败,请稍后重试"
         log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})

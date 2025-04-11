@@ -31,8 +31,7 @@ async def process_stream_request(
         
         # 获取可用的API密钥列表
         available_keys = key_manager.api_keys.copy()
-        if FAKE_STREAMING:
-            random.shuffle(available_keys)  # 假流式模式下随机打乱密钥顺序
+        random.shuffle(available_keys) 
         
         # 创建一个队列（用于假流式模式）
         queue = asyncio.Queue() if FAKE_STREAMING else None

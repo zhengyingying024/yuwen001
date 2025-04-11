@@ -58,10 +58,7 @@ async def process_request(
             safety_settings_g2,
             api_call_stats,
             FAKE_STREAMING,
-            FAKE_STREAMING_INTERVAL,
-            CONCURRENT_REQUESTS,
-            INCREASE_CONCURRENT_ON_FAILURE,
-            MAX_CONCURRENT_REQUESTS
+            FAKE_STREAMING_INTERVAL
         )
     else:
         # 非流式请求处理 - 使用并发请求

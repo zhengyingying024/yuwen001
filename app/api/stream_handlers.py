@@ -20,10 +20,7 @@ async def process_stream_request(
     safety_settings_g2,
     api_call_stats,
     FAKE_STREAMING,
-    FAKE_STREAMING_INTERVAL,
-    CONCURRENT_REQUESTS,
-    INCREASE_CONCURRENT_ON_FAILURE,
-    MAX_CONCURRENT_REQUESTS
+    FAKE_STREAMING_INTERVAL
 ) -> StreamingResponse:
     """处理流式API请求"""
     
@@ -32,107 +29,169 @@ async def process_stream_request(
         # 重置已尝试的密钥
         key_manager.reset_tried_keys_for_request()
         
-        # 获取所有可用的API密钥
-        all_keys = key_manager.api_keys.copy()
-        random.shuffle(all_keys)  # 随机打乱密钥顺序
-        
-        # 设置初始并发数
-        current_concurrent = CONCURRENT_REQUESTS
-        
-        # 如果可用密钥数量小于并发数，则使用所有可用密钥
-        if len(all_keys) < current_concurrent:
-            current_concurrent = len(all_keys)
+        # 获取可用的API密钥列表
+        available_keys = key_manager.api_keys.copy()
+        random.shuffle(available_keys) 
         
         # 创建一个队列（用于假流式模式）
         queue = asyncio.Queue() if FAKE_STREAMING else None
+        keep_alive_task = None
+        response_task = None
         
-        # 尝试使用不同API密钥，直到所有密钥都尝试过
-        while all_keys:
-            # 获取当前批次的密钥
-            current_batch = all_keys[:current_concurrent]
-            all_keys = all_keys[current_concurrent:]
-            
-            # 创建并发任务
-            tasks = []
-            for api_key in current_batch:
-                log('info', f"并发流式请求使用密钥: {api_key[:8]}...",
+        # 遍历所有API密钥尝试获取响应
+        for attempt, api_key in enumerate(available_keys, 1):
+            try:
+                log('info', f"尝试API密钥 {api_key[:8]}... ({attempt}/{len(available_keys)})",
                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                 
                 if FAKE_STREAMING:
                     # 假流式模式的处理逻辑
-                    task = asyncio.create_task(
-                        handle_fake_streaming(
-                            api_key, 
-                            queue, 
-                            chat_request, 
-                            contents, 
-                            system_instruction, 
-                            safety_settings, 
-                            safety_settings_g2,
-                            api_call_stats
-                        )
-                    )
-                else:
-                    # 原始流式模式的处理逻辑
-                    task = asyncio.create_task(
-                        handle_real_streaming(
-                            api_key, 
-                            chat_request, 
-                            contents, 
-                            system_instruction, 
-                            safety_settings, 
-                            safety_settings_g2,
-                            api_call_stats
-                        )
-                    )
-                tasks.append((api_key, task))
-            
-            # 等待第一个成功的响应
-            done, pending = await asyncio.wait(
-                [task for _, task in tasks],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            # 取消所有未完成的任务
-            for _, task in tasks:
-                if not task.done():
-                    task.cancel()
-            
-            # 检查是否有成功的响应
-            success = False
-            for api_key, task in tasks:
-                if task in done:
                     try:
-                        result = task.result()
-                        if result:  # 如果有响应内容
-                            success = True
-                            log('info', f"并发流式请求成功，使用密钥: {api_key[:8]}...", 
-                                extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                        # 启动保持连接任务
+                        keep_alive_task = asyncio.create_task(keep_alive_sender(api_key, queue, chat_request, contents, system_instruction, safety_settings, safety_settings_g2))
+                        
+                        # 创建一个任务来发送响应内容
+                        async def send_response():
+                            try:
+                                # 使用非流式方式请求内容
+                                non_stream_client = GeminiClient(api_key)
+                                response_content = await asyncio.to_thread(
+                                    non_stream_client.complete_chat,
+                                    chat_request,
+                                    contents,
+                                    safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                                    system_instruction
+                                )
+                                
+                                # 处理响应内容
+                                if response_content and response_content.text:
+                                    log('info', f"假流式模式: API密钥 {api_key[:8]}... 成功获取响应",
+                                        extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+                                    
+                                    # 将完整响应分割成小块，模拟流式返回
+                                    full_text = response_content.text
+                                    chunk_size = max(len(full_text) // 1, 1)  
+                                    
+                                    for i in range(0, len(full_text), chunk_size):
+                                        chunk = full_text[i:i+chunk_size]
+                                        formatted_chunk = {
+                                            "id": "chatcmpl-someid",
+                                            "object": "chat.completion.chunk",
+                                            "created": int(time.time()),
+                                            "model": chat_request.model,
+                                            "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]
+                                        }
+                                        # 将格式化的内容块放入队列
+                                        await queue.put(f"data: {json.dumps(formatted_chunk)}\n\n")
+                                    
+                                    # 更新API调用统计
+                                    update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
+                                    
+                                    # 添加完成标记到队列
+                                    await queue.put("data: [DONE]\n\n")
+                                    # 添加None表示队列结束
+                                    await queue.put(None)
+                                    return True
+                                else:
+                                    log('warning', f"假流式模式: API密钥 {api_key[:8]}... 返回空响应，尝试下一个密钥",
+                                        extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+                                    return False
+                            except Exception as e:
+                                error_detail = handle_gemini_error(e, api_key, key_manager)
+                                log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
+                                    extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+                                return False
+                        
+                        # 启动响应任务
+                        response_task = asyncio.create_task(send_response())
+                        
+                        # 从队列中获取数据并发送给客户端
+                        while True:
+                            # 检查响应任务是否完成
+                            if response_task and response_task.done():
+                                success = response_task.result()
+                                if success:
+                                    # 成功获取响应，退出循环
+                                    break
+                                else:
+                                    # 响应失败，继续尝试下一个API密钥
+                                    break
                             
-                            # 如果是假流式模式，从队列中获取数据
-                            if FAKE_STREAMING:
-                                while True:
-                                    chunk = await queue.get()
-                                    if chunk is None:  # None表示队列结束
-                                        break
-                                    yield chunk
-                            else:
-                                # 直接迭代生成器并发送响应块
-                                async for chunk in result:
-                                    yield chunk
-                            
-                            return  # 成功获取响应，退出循环
+                            # 从队列中获取数据
+                            try:
+                                # 设置超时，以便定期检查响应任务状态
+                                chunk = await asyncio.wait_for(queue.get(), timeout=0.1)
+                                if chunk is None:  # None表示队列结束
+                                    break
+                                yield chunk
+                            except asyncio.TimeoutError:
+                                # 超时，继续循环
+                                continue
+                        
+                        # 如果响应任务成功，退出循环
+                        if response_task and response_task.done() and response_task.result():
+                            return
                     except Exception as e:
                         error_detail = handle_gemini_error(e, api_key, key_manager)
-                        log('error', f"并发流式请求失败: {error_detail}",
+                        log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
+                            extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+                        # 继续尝试下一个API密钥
+                    finally:
+                        if keep_alive_task and not keep_alive_task.done():
+                            keep_alive_task.cancel()
+                        if response_task and not response_task.done():
+                            response_task.cancel()
+                else:
+                    # 原始流式模式的处理逻辑
+                    gemini_client = GeminiClient(api_key)
+                    success = False
+                    
+                    try:
+                        # 直接迭代生成器并发送响应块
+                        async for chunk in gemini_client.stream_chat(
+                            chat_request,
+                            contents,
+                            safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                            system_instruction
+                        ):
+                            # 空字符串跳过
+                            if not chunk:
+                                continue
+                                
+                            formatted_chunk = {
+                                "id": "chatcmpl-someid",
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": chat_request.model,
+                                "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]
+                            }
+                            success = True  # 只要有一个chunk成功，就标记为成功
+                            yield f"data: {json.dumps(formatted_chunk)}\n\n"
+                        
+                        # 如果成功获取到响应，更新API调用统计
+                        if success:
+                            update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
+                            
+                        yield "data: [DONE]\n\n"
+                        return  # 成功获取响应，退出循环
+                        
+                    except asyncio.CancelledError:
+                        log('info', "客户端连接已中断", 
                             extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                        raise
+                    except Exception as e:
+                        error_detail = handle_gemini_error(e, api_key, key_manager)
+                        log('error', f"流式请求失败: {error_detail}",
+                            extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                        # 继续尝试下一个API密钥
+                        continue
             
-            # 如果所有请求都失败，增加并发数并继续尝试
-            if not success and all_keys:
-                # 增加并发数，但不超过最大并发数
-                current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
-                log('info', f"所有并发流式请求失败，增加并发数至: {current_concurrent}", 
-                    extra={'request_type': 'stream', 'model': chat_request.model})
+            except asyncio.CancelledError:
+                # 客户端连接中断，直接抛出异常
+                raise
+            except Exception as e:
+                # 其他异常，继续尝试下一个API密钥
+                continue
         
         # 所有API密钥都尝试失败的处理
         error_msg = "所有API密钥均请求失败，请稍后重试"
@@ -150,122 +209,33 @@ async def process_stream_request(
         yield f"data: {json.dumps(error_json)}\n\n"
         yield "data: [DONE]\n\n"
     
-    # 处理假流式模式
-    async def handle_fake_streaming(api_key, queue, chat_request, contents, system_instruction, safety_settings, safety_settings_g2, api_call_stats):
-        try:
-            # 创建保持连接的任务
-            keep_alive_task = None
-            response_task = None
-            
-            try:
-                # 启动保持连接任务
-                keep_alive_task = asyncio.create_task(
-                    keep_alive_sender(
-                        api_key, 
-                        queue, 
-                        chat_request, 
-                        contents, 
-                        system_instruction, 
-                        safety_settings, 
-                        safety_settings_g2
-                    )
-                )
-                
-                # 创建一个任务来发送响应内容
-                async def send_response():
-                    try:
-                        # 使用非流式方式请求内容
-                        non_stream_client = GeminiClient(api_key)
-                        response_content = await asyncio.to_thread(
-                            non_stream_client.complete_chat,
-                            chat_request,
-                            contents,
-                            safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
-                            system_instruction
-                        )
-                        
-                        # 处理响应内容
-                        if response_content and response_content.text:
-                            log('info', f"假流式模式: API密钥 {api_key[:8]}... 成功获取响应",
-                                extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
-                            
-                            # 将完整响应分割成小块，模拟流式返回
-                            full_text = response_content.text
-                            chunk_size = max(len(full_text) // 10, 1)  # 分成10块
-                            
-                            for i in range(0, len(full_text), chunk_size):
-                                chunk = full_text[i:i+chunk_size]
-                                formatted_chunk = {
-                                    "id": "chatcmpl-someid",
-                                    "object": "chat.completion.chunk",
-                                    "created": int(time.time()),
-                                    "model": chat_request.model,
-                                    "choices": [{"delta": {"role": "assistant", "content": chunk}, "index": 0, "finish_reason": None}]
-                                }
-                                # 将格式化的内容块放入队列
-                                await queue.put(f"data: {json.dumps(formatted_chunk)}\n\n")
-                            
-                            # 更新API调用统计
-                            update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
-                            
-                            # 添加完成标记到队列
-                            await queue.put("data: [DONE]\n\n")
-                            # 添加None表示队列结束
-                            await queue.put(None)
-                            return True
-                        else:
-                            log('warning', f"假流式模式: API密钥 {api_key[:8]}... 返回空响应",
-                                extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
-                            return False
-                    except Exception as e:
-                        error_detail = handle_gemini_error(e, api_key, key_manager)
-                        log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
-                            extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
-                        return False
-                
-                # 启动响应任务
-                response_task = asyncio.create_task(send_response())
-                
-                # 等待响应任务完成
-                success = await response_task
-                return success
-                
-            except Exception as e:
-                error_detail = handle_gemini_error(e, api_key, key_manager)
-                log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
-                    extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
-                return False
-            finally:
-                # 取消保持连接任务
-                if keep_alive_task and not keep_alive_task.done():
-                    keep_alive_task.cancel()
-                # 取消响应任务
-                if response_task and not response_task.done():
-                    response_task.cancel()
-        except Exception as e:
-            error_detail = handle_gemini_error(e, api_key, key_manager)
-            log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
-                extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
-            return False
-    
     # 保持连接的任务
     async def keep_alive_sender(api_key, queue, chat_request, contents, system_instruction, safety_settings, safety_settings_g2):
         try:
-            # 使用定时器主动发送换行符，而不是依赖生成器返回的换行符
-            while True:
-                # 将换行符格式化为SSE格式
-                formatted_chunk = {
-                    "id": "chatcmpl-keepalive",
-                    "object": "chat.completion.chunk",
-                    "created": int(time.time()),
-                    "model": chat_request.model,
-                    "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}]
-                }
-                # 将格式化的换行符放入队列
-                await queue.put(f"data: {json.dumps(formatted_chunk)}\n\n")
-                
-                # 等待一段时间再发送下一个换行符
-                await asyncio.sleep(FAKE_STREAMING_INTERVAL)
+            # 创建一个Gemini客户端用于发送保持连接的换行符
+            keep_alive_client = GeminiClient(api_key)
+            
+            # 启动保持连接的生成器
+            keep_alive_generator = keep_alive_client.stream_chat(
+                chat_request,
+                contents,
+                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                system_instruction
+            )
+            
+            # 持续发送换行符直到被取消
+            async for line in keep_alive_generator:
+                if line == "\n":
+                    # 将换行符格式化为SSE格式
+                    formatted_chunk = {
+                        "id": "chatcmpl-keepalive",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": chat_request.model,
+                        "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}]
+                    }
+                    # 将格式化的换行符放入队列
+                    await queue.put(f"data: {json.dumps(formatted_chunk)}\n\n")
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -274,47 +244,5 @@ async def process_stream_request(
             # 将错误放入队列
             await queue.put(None)
             raise
-    
-    # 处理真实流式模式
-    async def handle_real_streaming(api_key, chat_request, contents, system_instruction, safety_settings, safety_settings_g2, api_call_stats):
-        try:
-            # 创建Gemini客户端
-            gemini_client = GeminiClient(api_key)
-            
-            # 获取流式响应
-            stream_generator = gemini_client.stream_chat(
-                chat_request,
-                contents,
-                safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
-                system_instruction
-            )
-            
-            # 检查是否有内容
-            has_content = False
-            async for chunk in stream_generator:
-                if chunk:
-                    has_content = True
-                    break
-            
-            if has_content:
-                # 更新API调用统计
-                update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
-                
-                # 重新创建流式生成器
-                return gemini_client.stream_chat(
-                    chat_request,
-                    contents,
-                    safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
-                    system_instruction
-                )
-            else:
-                log('warning', f"真实流式模式: API密钥 {api_key[:8]}... 返回空响应",
-                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
-                return None
-        except Exception as e:
-            error_detail = handle_gemini_error(e, api_key, key_manager)
-            log('error', f"真实流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
-                extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
-            return None
     
     return StreamingResponse(stream_response_generator(), media_type="text/event-stream")

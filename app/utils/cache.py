@@ -107,7 +107,7 @@ def generate_cache_key(chat_request) -> str:
     json_data = json.dumps(request_data, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
 
-def cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, endpoint=None,model=None):
+def cache_response(response, cache_key, client_ip, response_cache_manager, endpoint=None,model=None):
     """
     将响应存入缓存
     
@@ -116,7 +116,6 @@ def cache_response(response, cache_key, client_ip, response_cache_manager, updat
     - cache_key: 缓存键
     - client_ip: 客户端IP
     - response_cache_manager: 缓存管理器
-    - update_api_call_stats: 更新统计的函数
     - api_key: API密钥，用于更新API密钥使用统计
     """
     if not cache_key:
@@ -132,6 +131,3 @@ def cache_response(response, cache_key, client_ip, response_cache_manager, updat
         response_cache_manager.store(cache_key, response, client_ip)
         log('info', f"API响应已缓存: {cache_key[:8]}...",
             extra={'cache_operation': 'store-new', 'request_type': 'non-stream'})
-    
-    # 更新API调用统计
-    update_api_call_stats(api_call_stats,endpoint=endpoint,model=model)

@@ -65,7 +65,9 @@ async def process_nonstream_request(
                 current_api_key,
                 response_cache_manager,
                 cache_key,
-                client_ip
+                client_ip,
+                chat_request.model,
+                current_api_key
             )
         else:
             # API任务先完成，取消断开检测任务
@@ -98,8 +100,9 @@ async def process_nonstream_request(
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)
             
+            update_api_call_stats(api_call_stats, endpoint=current_api_key, model=chat_request.model)
             # 缓存响应
-            cache_response(response, cache_key, client_ip, response_cache_manager, update_api_call_stats, endpoint=current_api_key,model=chat_request.model)
+            cache_response(response, cache_key, client_ip, response_cache_manager, endpoint=current_api_key,model=chat_request.model)
             
             # 立即删除缓存，确保只能使用一次
             if cache_key and cache_key in response_cache_manager.cache:
@@ -141,7 +144,7 @@ async def process_nonstream_request(
                 log('warning', f"非流式请求(取消后): API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return None
-            
+            update_api_call_stats(api_call_stats, endpoint=current_api_key, model=chat_request.model)
             # 创建响应
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)

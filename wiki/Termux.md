@@ -64,7 +64,7 @@ git pull
 uvicorn app.main:app --reload --host 127.0.0.1 --port 7860
 ```
 
-环境变量见[抱脸部署教程](./wiki/huggingface.md)，设置格式如下（在启动脚本中添加）：
+环境变量见[抱脸部署教程](./huggingface.md)，设置格式如下（在启动脚本中添加）：
 
 ```bash
 export 变量名=变量值

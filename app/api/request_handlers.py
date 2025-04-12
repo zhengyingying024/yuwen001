@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from typing import Literal
 from fastapi import HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -67,13 +68,12 @@ async def process_request(
         # 非流式请求处理 - 使用并发请求
         # 重置已尝试的密钥
         key_manager.reset_tried_keys_for_request()
-        
         # 设置初始并发数
         current_concurrent = CONCURRENT_REQUESTS
         
         # 获取所有可用的API密钥
         all_keys = key_manager.api_keys.copy()
-        
+        random.shuffle(all_keys)
         # 如果可用密钥数量小于并发数，则使用所有可用密钥
         if len(all_keys) < current_concurrent:
             current_concurrent = len(all_keys)

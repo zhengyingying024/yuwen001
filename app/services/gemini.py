@@ -251,8 +251,7 @@ class GeminiClient:
                     except Exception as e:
                         raise e
                     finally:
-                        log_msg = format_log_message('INFO', "流式请求结束", extra=extra_log)
-                        logger.info(log_msg)
+                        log('info', "流式请求结束")
 
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}

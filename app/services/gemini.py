@@ -189,8 +189,8 @@ class GeminiClient:
                 log('INFO', "假流式请求结束", extra=extra_log)
         else:
             # 真流式请求处理逻辑
-            extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
-            log('INFO', "真流式请求开始", extra=extra_log)
+            # extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
+            # log('INFO', "真流式请求开始", extra=extra_log)
             
             api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
             model= request.model.removesuffix("-search")

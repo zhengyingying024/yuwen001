@@ -74,11 +74,11 @@ async def process_stream_request(
                     extra={'request_type': 'fake-stream'})
                 raise
         
-        # 直接创建保活生成器
+        # 创建保活生成器
         keep_alive_gen = keep_alive_sender() if FAKE_STREAMING else None
         
         try:
-            # 如果是假流式模式，先发送一些保活消息
+            # 如果是假流式模式，先发送一次保活消息,以免处理时断联
             if FAKE_STREAMING and keep_alive_gen:
                 # 发送初始保活消息
                 try:
@@ -96,11 +96,11 @@ async def process_stream_request(
                 # 创建并发任务
                 tasks = []
                 for api_key in current_batch:
-                    log('info', f"请求使用密钥: {api_key[:8]}...",
-                        extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                     
                     if FAKE_STREAMING:
                         # 假流式模式的处理逻辑
+                        log('info', f"假流式请求开始，使用密钥: {api_key[:8]}...",
+                        extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
                         task = asyncio.create_task(
                             handle_fake_streaming(
                                 api_key, 
@@ -115,6 +115,8 @@ async def process_stream_request(
                         )
                     else:
                         # 原始流式模式的处理逻辑
+                        log('info', f"真流式请求开始，使用密钥: {api_key[:8]}...",
+                        extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                        
                         task = asyncio.create_task(
                             handle_real_streaming(
                                 api_key, 
@@ -128,15 +130,11 @@ async def process_stream_request(
                         )
                     tasks.append((api_key, task))
                 
-                # 定义超时时间，超过这个时间就发送保活消息
-                timeout = 1.0  # 2秒超时
-                
                 # 等待第一个成功的响应或超时
                 while tasks and not all(t[1].done() for t in tasks):
                     # 短时间等待任务完成
                     done, pending = await asyncio.wait(
                         [task for _, task in tasks],
-                        timeout=timeout,
                         return_when=asyncio.FIRST_COMPLETED
                     )
                     
@@ -152,10 +150,10 @@ async def process_stream_request(
                     if done:
                         break
                 
-                # 取消所有未完成的任务
-                for _, task in tasks:
-                    if not task.done():
-                        task.cancel()
+                # # 取消所有未完成的任务
+                # for _, task in tasks:
+                #     if not task.done():
+                #         task.cancel()
                 
                 # 检查是否有成功的响应
                 success = False
@@ -165,11 +163,12 @@ async def process_stream_request(
                             result = task.result()
                             if result:  # 如果有响应内容
                                 success = True
-                                log('info', f"请求成功，使用密钥: {api_key[:8]}...", 
-                                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                                 
-                                # 更改标志，不再发送保活消息
+                                # 停止保活机制
                                 keep_alive_running = False
+                                # 如果保活生成器存在，需要关闭它
+                                if keep_alive_gen:
+                                    keep_alive_gen.aclose()
                                 
                                 # 如果是假流式模式，从队列中获取响应数据
                                 if FAKE_STREAMING:
@@ -188,7 +187,8 @@ async def process_stream_request(
                                     # 直接迭代生成器并发送响应块
                                     async for chunk in result:
                                         yield chunk
-                                
+                                log('info', f"假流式成功响应，使用密钥: {api_key[:8]}...", 
+                                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                                
                                 return  # 成功获取响应，退出循环
                         except Exception as e:
                             error_detail = handle_gemini_error(e, api_key, key_manager)
@@ -232,11 +232,8 @@ async def process_stream_request(
             keep_alive_running = False
             # 如果保活生成器存在，需要关闭它
             if keep_alive_gen:
-                try:
-                    keep_alive_gen.aclose()
-                except Exception:
-                    pass
-    
+                keep_alive_gen.aclose()
+
     # 处理假流式模式
     async def handle_fake_streaming(api_key, response_queue, chat_request, contents, system_instruction, safety_settings, safety_settings_g2, api_call_stats):
         try:
@@ -255,8 +252,8 @@ async def process_stream_request(
                     
                     # 处理响应内容
                     if response_content and response_content.text:
-                        log('info', f"假流式模式: API密钥 {api_key[:8]}... 成功获取响应",
-                            extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+                        # log('info', f"假流式模式: API密钥 {api_key[:8]}... 成功获取响应",
+                        #     extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
                         
                         # 将完整响应分割成小块，模拟流式返回
                         full_text = response_content.text

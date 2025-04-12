@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
 from app.services import GeminiClient
-from app.utils import generate_cache_key
+from app.utils import protect_from_abuse,generate_cache_key
+from .stream_handlers import process_stream_request
+from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
 
 from app.config.settings import (
     api_call_stats,
@@ -76,25 +78,42 @@ def list_models():
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
+    """处理API请求的主函数，根据需要处理流式或非流式请求"""
+    global current_api_key
+    
     # 获取客户端IP
     client_ip = http_request.client.host if http_request.client else "unknown"
+    # 请求前基本检查
+    protect_from_abuse(
+        http_request, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_DAY_PER_IP)
+    if request.model not in GeminiClient.AVAILABLE_MODELS:
+        log('error', "无效的模型", 
+            extra={'model': request.model, 'status_code': 400})
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
+
+    # 转换消息格式
+    contents, system_instruction = GeminiClient.convert_messages(
+        GeminiClient, request.messages,model=request.model)
+    
     # 流式请求直接处理，不使用缓存
     if request.stream:
-        return await process_request(
-            request, 
-            http_request, 
-            "stream",
+        return await process_stream_request(
+            request,
+            http_request,
+            contents,
+            system_instruction,
             key_manager,
-            response_cache_manager,
-            active_requests_manager,
             safety_settings,
             safety_settings_g2,
             api_call_stats,
             FAKE_STREAMING,
             FAKE_STREAMING_INTERVAL,
-            MAX_REQUESTS_PER_MINUTE,
-            MAX_REQUESTS_PER_DAY_PER_IP
+            CONCURRENT_REQUESTS,
+            INCREASE_CONCURRENT_ON_FAILURE,
+            MAX_CONCURRENT_REQUESTS
         )
+    
     # 生成完整缓存键 - 用于精确匹配
     cache_key = generate_cache_key(request)
     
@@ -138,7 +157,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             # 通过缓存管理器获取已完成任务的结果
             cached_response, cache_hit = response_cache_manager.get(cache_key)
             if cache_hit:
-                # 安全删除缓存
+                # 删除缓存
                 if cache_key in response_cache_manager.cache:
                     del response_cache_manager.cache[cache_key]
                     log('info', f"使用已完成任务的缓存后删除: {cache_key[:8]}...", 

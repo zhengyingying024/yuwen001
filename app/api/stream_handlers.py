@@ -96,7 +96,7 @@ async def process_stream_request(
                 # 创建并发任务
                 tasks = []
                 for api_key in current_batch:
-                    log('info', f"并发流式请求使用密钥: {api_key[:8]}...",
+                    log('info', f"请求使用密钥: {api_key[:8]}...",
                         extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                     
                     if FAKE_STREAMING:
@@ -165,7 +165,7 @@ async def process_stream_request(
                             result = task.result()
                             if result:  # 如果有响应内容
                                 success = True
-                                log('info', f"并发流式请求成功，使用密钥: {api_key[:8]}...", 
+                                log('info', f"请求成功，使用密钥: {api_key[:8]}...", 
                                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                                 
                                 # 更改标志，不再发送保活消息
@@ -192,14 +192,14 @@ async def process_stream_request(
                                 return  # 成功获取响应，退出循环
                         except Exception as e:
                             error_detail = handle_gemini_error(e, api_key, key_manager)
-                            log('error', f"并发流式请求失败: {error_detail}",
+                            log('error', f"请求失败: {error_detail}",
                                 extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                 
                 # 如果所有请求都失败，增加并发数并继续尝试
                 if not success and all_keys:
                     # 增加并发数，但不超过最大并发数
                     current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
-                    log('info', f"所有并发流式请求失败，增加并发数至: {current_concurrent}", 
+                    log('info', f"所有请求失败，增加并发数至: {current_concurrent}", 
                         extra={'request_type': 'stream', 'model': chat_request.model})
                     
                     # 如果是假流式模式，发送保活消息

@@ -43,12 +43,13 @@
 
 7.  **填写环境变量**
     点击 **Add environment variable** 添加以下三个环境变量：
+
     *   `GEMINI_API_KEYS`: 填入你的 Gemini API Key。如果**有多个 Key**，请用英文逗号 `,` 分隔，例如 `key1,key2,key3`。 **(请务必替换成你自己的有效 Key)**
     *   `PASSWORD`: 设置一个访问此反向代理的密码。**（这不是你的 Gemini Key，而是自定义的访问密码）**
     *   `TZ`: 设置时区，建议填 `Asia/Shanghai`。
 
     ```env
-    GEMINI_API_KEYS=你的GeminiKey1,你的GeminiKey2
+    GEMINI_API_KEYS=key1,key2,key3
     PASSWORD=设置一个你自己的访问密码
     TZ=Asia/Shanghai
     ```

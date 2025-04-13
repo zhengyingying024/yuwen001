@@ -4,7 +4,7 @@ from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorRespo
 from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key
 from .stream_handlers import process_stream_request
-from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
+# from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
 
 from app.config.settings import (
     api_call_stats,
@@ -92,26 +92,17 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
 
-    # 转换消息格式
-    contents, system_instruction = GeminiClient.convert_messages(
-        GeminiClient, request.messages,model=request.model)
     
     # 流式请求直接处理，不使用缓存
     if request.stream:
         return await process_stream_request(
             request,
-            http_request,
-            contents,
-            system_instruction,
             key_manager,
             safety_settings,
             safety_settings_g2,
             api_call_stats,
             FAKE_STREAMING,
-            FAKE_STREAMING_INTERVAL,
-            CONCURRENT_REQUESTS,
-            INCREASE_CONCURRENT_ON_FAILURE,
-            MAX_CONCURRENT_REQUESTS
+            FAKE_STREAMING_INTERVAL
         )
     
     # 生成完整缓存键 - 用于精确匹配
@@ -205,10 +196,6 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             safety_settings,
             safety_settings_g2,
             api_call_stats,
-            FAKE_STREAMING,
-            FAKE_STREAMING_INTERVAL,
-            MAX_REQUESTS_PER_MINUTE,
-            MAX_REQUESTS_PER_DAY_PER_IP,
             cache_key,
             client_ip
         )

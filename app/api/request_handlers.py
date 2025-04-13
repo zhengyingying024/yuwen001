@@ -3,12 +3,10 @@ import json
 import random
 from typing import Literal
 from fastapi import HTTPException, Request, status
-from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
-from app.utils import protect_from_abuse, handle_gemini_error, handle_api_error
+from app.utils import handle_api_error
 from app.utils.logging import log
-from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_nonstream_request
 from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
 
@@ -23,24 +21,11 @@ async def process_request(
     safety_settings,
     safety_settings_g2,
     api_call_stats,
-    FAKE_STREAMING,
-    FAKE_STREAMING_INTERVAL,
-    MAX_REQUESTS_PER_MINUTE,
-    MAX_REQUESTS_PER_DAY_PER_IP,
     cache_key: str = None, 
     client_ip: str = None
 ):
-    """处理API请求的主函数，根据需要处理流式或非流式请求"""
+    """处理非流式请求"""
     global current_api_key
-    
-    # 请求前基本检查
-    protect_from_abuse(
-        http_request, MAX_REQUESTS_PER_MINUTE, MAX_REQUESTS_PER_DAY_PER_IP)
-    if chat_request.model not in GeminiClient.AVAILABLE_MODELS:
-        log('error', "无效的模型", 
-            extra={'request_type': request_type, 'model': chat_request.model, 'status_code': 400})
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
 
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(

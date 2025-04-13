@@ -7,6 +7,9 @@ import { useDashboardStore } from '../stores/dashboard'
 
 const dashboardStore = useDashboardStore()
 const refreshInterval = ref(null)
+const isPageLoaded = ref(false)
+const animationStep = ref(0)
+const animationCompleted = ref(false)
 
 // 计算属性：夜间模式状态
 const isDarkMode = computed(() => dashboardStore.isDarkMode)
@@ -15,6 +18,24 @@ const isDarkMode = computed(() => dashboardStore.isDarkMode)
 onMounted(() => {
   fetchDashboardData()
   startAutoRefresh()
+  
+  // 添加开屏动画效果
+  setTimeout(() => {
+    isPageLoaded.value = true
+    
+    // 逐步触发动画
+    const animateStep = () => {
+      if (animationStep.value < 10) {
+        animationStep.value++
+        setTimeout(animateStep, 100)
+      } else {
+        // 动画完成后标记
+        animationCompleted.value = true
+      }
+    }
+    
+    setTimeout(animateStep, 50)
+  }, 50)
 })
 
 // 组件卸载时停止自动刷新
@@ -56,8 +77,8 @@ function toggleDarkMode() {
 </script>
 
 <template>
-  <div class="dashboard">
-    <div class="header-container">
+  <div class="dashboard" :class="{ 'page-loaded': isPageLoaded }">
+    <div class="header-container" :class="{ 'animate-in': animationStep >= 1 || animationCompleted }">
       <h1>🤖 Gemini API 代理服务</h1>
       <div class="theme-toggle">
         <label class="switch">
@@ -69,15 +90,15 @@ function toggleDarkMode() {
     </div>
     
     <!-- 运行状态部分 -->
-    <StatusSection />
+    <StatusSection class="section-animate" :class="{ 'animate-in': animationStep >= 2 || animationCompleted }" />
     
     <!-- 环境配置部分 -->
-    <ConfigSection />
+    <ConfigSection class="section-animate" :class="{ 'animate-in': animationStep >= 3 || animationCompleted }" />
     
     <!-- 系统日志部分 -->
-    <LogSection />
+    <LogSection class="section-animate" :class="{ 'animate-in': animationStep >= 4 || animationCompleted }" />
     
-    <button class="refresh-button" @click="handleRefresh">刷新数据</button>
+    <button class="refresh-button" :class="{ 'animate-in': animationStep >= 5 || animationCompleted }" @click="handleRefresh">刷新数据</button>
   </div>
 </template>
 
@@ -96,6 +117,14 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.dashboard.page-loaded {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .header-container {
@@ -103,6 +132,14 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.header-container.animate-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 h1 {
@@ -237,7 +274,14 @@ input:checked + .slider:before {
   border-radius: 4px;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+}
+
+.refresh-button.animate-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .refresh-button:hover {
@@ -301,5 +345,181 @@ input:checked + .slider:before {
     padding: 6px 12px;
     font-size: 13px;
   }
+}
+
+/* 开屏动画效果 */
+.section-animate {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.section-animate.animate-in {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* 子元素动画 */
+:deep(.stats-grid) {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-in :deep(.stats-grid) {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-delay: 0.1s;
+}
+
+/* 卡片动画 */
+:deep(.stat-card) {
+  opacity: 0;
+  transform: scale(0.9) translateY(10px);
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, background-color 0.3s;
+}
+
+.animate-in :deep(.stat-card) {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.animate-in :deep(.stat-card:nth-child(1)) {
+  transition-delay: 0.15s;
+}
+
+.animate-in :deep(.stat-card:nth-child(2)) {
+  transition-delay: 0.2s;
+}
+
+.animate-in :deep(.stat-card:nth-child(3)) {
+  transition-delay: 0.25s;
+}
+
+.animate-in :deep(.stat-card:nth-child(4)) {
+  transition-delay: 0.3s;
+}
+
+.animate-in :deep(.stat-card:nth-child(5)) {
+  transition-delay: 0.35s;
+}
+
+.animate-in :deep(.stat-card:nth-child(6)) {
+  transition-delay: 0.4s;
+}
+
+.animate-in :deep(.stat-card:nth-child(7)) {
+  transition-delay: 0.45s;
+}
+
+.animate-in :deep(.stat-card:nth-child(8)) {
+  transition-delay: 0.5s;
+}
+
+/* 日志条目动画 */
+:deep(.log-entry) {
+  opacity: 0;
+  transform: translateX(-10px) scale(0.98);
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animate-in :deep(.log-entry) {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.animate-in :deep(.log-entry:nth-child(1)) {
+  transition-delay: 0.15s;
+}
+
+.animate-in :deep(.log-entry:nth-child(2)) {
+  transition-delay: 0.2s;
+}
+
+.animate-in :deep(.log-entry:nth-child(3)) {
+  transition-delay: 0.25s;
+}
+
+.animate-in :deep(.log-entry:nth-child(4)) {
+  transition-delay: 0.3s;
+}
+
+.animate-in :deep(.log-entry:nth-child(5)) {
+  transition-delay: 0.35s;
+}
+
+.animate-in :deep(.log-entry:nth-child(n+6)) {
+  transition-delay: 0.4s;
+}
+
+/* 添加飞入动画效果 */
+@keyframes flyIn {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(15px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes flyInFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px) scale(0.9);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateX(-10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes flyInFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px) scale(0.9);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateX(10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* 应用飞入动画 */
+.header-container.animate-in {
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.section-animate.animate-in {
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-in :deep(.stat-card:nth-child(odd)) {
+  animation: flyInFromLeft 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-in :deep(.stat-card:nth-child(even)) {
+  animation: flyInFromRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-in :deep(.log-entry) {
+  animation: flyInFromLeft 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.refresh-button.animate-in {
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 </style>

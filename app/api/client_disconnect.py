@@ -2,9 +2,9 @@ import asyncio
 import time
 from fastapi import Request
 from app.models import ChatCompletionRequest
-from app.utils import create_error_response
+from app.utils import create_error_response, update_api_call_stats
 from app.utils.logging import log
-
+from app.config.settings import api_call_stats
 # 客户端断开检测函数
 async def check_client_disconnect(http_request: Request, current_api_key: str, request_type: str, model: str):
     """检查客户端是否断开连接"""
@@ -23,7 +23,9 @@ async def handle_client_disconnect(
     current_api_key: str,
     response_cache_manager,
     cache_key: str = None,
-    client_ip: str = None
+    client_ip: str = None,
+    model: str = None,
+    key: str = None,
 ):
     try:
         # 等待API任务完成，使用shield防止它被取消
@@ -62,7 +64,7 @@ async def handle_client_disconnect(
         # 创建新响应
         from app.utils.response import create_response
         response = create_response(chat_request, response_content)
-        
+        update_api_call_stats(api_call_stats,key,model)
         # 客户端已断开，此响应不会实际发送，可以考虑将其缓存以供后续使用
         # 如果确实需要缓存，则可以取消下面的注释
         # cache_response(response, cache_key, client_ip)

@@ -128,7 +128,7 @@ class GeminiClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    # 将流式和非流式请求的通用部分提取为共享方法
+    # 请求参数处理
     def _prepare_request_data(self, request, contents, safety_settings, system_instruction,model):
         api_version = "v1alpha" if "think" in request.model else "v1beta"
         if serach["search_mode"] and model.endswith("-search"):
@@ -161,99 +161,99 @@ class GeminiClient:
         }
         return {k: v for k, v in config_params.items() if v is not None}
 
-    async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        
-        # 检查是否启用假流式请求
-        if FAKE_STREAMING:
-            extra_log={'key': self.api_key[:8], 'request_type': 'fake_stream', 'model': request.model}
-            log('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
-            try:
+    # 假流式保活处理 (未完成，所以未使用)
+    async def keep_alive_sender(self, request: ChatCompletionRequest):
+        extra_log={'key': self.api_key[:8], 'request_type': 'fake_stream', 'model': request.model}
+        log('INFO', "使用假流式请求模式（发送换行符保持连接）", extra=extra_log)
+        try:
+            
+            # 每隔一段时间发送换行符作为保活消息，直到外部取消此生成器
+            start_time = time.time()
+            while True:
+                yield "\n"
+                await asyncio.sleep(FAKE_STREAMING_INTERVAL)
                 
-                # 每隔一段时间发送换行符作为保活消息，直到外部取消此生成器
-                start_time = time.time()
-                while True:
-                    yield "\n"
-                    await asyncio.sleep(FAKE_STREAMING_INTERVAL)
+                # 如果等待时间过长（超过300秒），抛出超时异常，让外部处理
+                if time.time() - start_time > 300:
+                    log('ERROR', f"假流式请求等待时间过长",extra=extra_log)
                     
-                    # 如果等待时间过长（超过300秒），抛出超时异常，让外部处理
-                    if time.time() - start_time > 300:
-                        log('ERROR', f"假流式请求等待时间过长",extra=extra_log)
-                        
-                        raise TimeoutError("假流式请求等待时间过长")
-                
-            except Exception as e:
-                if not isinstance(e, asyncio.CancelledError):  
-                    log('ERROR', f"假流式处理期间发生错误: {str(e)}", extra=extra_log)
-                raise e
-            finally:
-                log('INFO', "假流式请求结束", extra=extra_log)
-        else:
-            # 真流式请求处理逻辑
-            extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
-            log('INFO', "真流式请求开始", extra=extra_log)
+                    raise TimeoutError("假流式请求等待时间过长")
             
-            api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
-            model= request.model.removesuffix("-search")
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
-            headers = {
-                "Content-Type": "application/json",
-            }
-            
-            async with httpx.AsyncClient() as client:
-                async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
-                    buffer = b""
-                    try:
-                        async for line in response.aiter_lines():
-                            if not line.strip():
-                                continue
-                            if line.startswith("data: "):
-                                line = line[len("data: "):]
-                            buffer += line.encode('utf-8')
-                            try:
-                                data = json.loads(buffer.decode('utf-8'))
-                                buffer = b""
-                                if 'candidates' in data and data['candidates']:
-                                    candidate = data['candidates'][0]
-                                    if 'content' in candidate:
-                                        content = candidate['content']
-                                        if 'parts' in content and content['parts']:
-                                            parts = content['parts']
-                                            text = ""
-                                            for part in parts:
-                                                if 'text' in part:
-                                                    text += part['text']
-                                            if text:
-                                                yield text
-                                            
-                                    if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
-                                        error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
-                                        extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                        log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)
-                                        logger.warning(log_msg)
-                                        raise ValueError(error_msg)
-                                    
-                                    if 'safetyRatings' in candidate:
-                                        for rating in candidate['safetyRatings']:
-                                            if rating['probability'] == 'HIGH':
-                                                error_msg = f"模型的响应被截断: {rating['category']}"
-                                                extra_log_safety = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                                log_msg = format_log_message('WARNING', error_msg, extra=extra_log_safety)
-                                                logger.warning(log_msg)
-                                                raise ValueError(error_msg)
-                            except json.JSONDecodeError:
-                                continue
-                            except Exception as e:
-                                error_msg = f"流式处理期间发生错误: {str(e)}"
-                                extra_log_stream_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                log_msg = format_log_message('ERROR', error_msg, extra=extra_log_stream_error)
-                                logger.error(log_msg)
-                                raise e
-                    except Exception as e:
-                        raise e
-                    finally:
-                        log_msg = format_log_message('INFO', "流式请求结束", extra=extra_log)
-                        logger.info(log_msg)
+        except Exception as e:
+            if not isinstance(e, asyncio.CancelledError):  
+                log('ERROR', f"假流式处理期间发生错误: {str(e)}", extra=extra_log)
+            raise e
+        finally:
+            log('INFO', "假流式请求结束", extra=extra_log)
 
+    # 真流式处理
+    async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
+        # 真流式请求处理逻辑
+        extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
+        log('INFO', "流式请求开始", extra=extra_log)
+        
+        api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
+        model= request.model.removesuffix("-search")
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        async with httpx.AsyncClient() as client:
+            async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
+                buffer = b""
+                try:
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+                        if line.startswith("data: "):
+                            line = line[len("data: "):]
+                        buffer += line.encode('utf-8')
+                        try:
+                            data = json.loads(buffer.decode('utf-8'))
+                            buffer = b""
+                            if 'candidates' in data and data['candidates']:
+                                candidate = data['candidates'][0]
+                                if 'content' in candidate:
+                                    content = candidate['content']
+                                    if 'parts' in content and content['parts']:
+                                        parts = content['parts']
+                                        text = ""
+                                        for part in parts:
+                                            if 'text' in part:
+                                                text += part['text']
+                                        if text:
+                                            yield text
+                                        
+                                if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
+                                    error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
+                                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                                    log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)
+                                    logger.warning(log_msg)
+                                    raise ValueError(error_msg)
+                                
+                                if 'safetyRatings' in candidate:
+                                    for rating in candidate['safetyRatings']:
+                                        if rating['probability'] == 'HIGH':
+                                            error_msg = f"模型的响应被截断: {rating['category']}"
+                                            extra_log_safety = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                                            log_msg = format_log_message('WARNING', error_msg, extra=extra_log_safety)
+                                            logger.warning(log_msg)
+                                            raise ValueError(error_msg)
+                        except json.JSONDecodeError:
+                            continue
+                        except Exception as e:
+                            error_msg = f"流式处理期间发生错误: {str(e)}"
+                            extra_log_stream_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
+                            log_msg = format_log_message('ERROR', error_msg, extra=extra_log_stream_error)
+                            logger.error(log_msg)
+                            raise e
+                except Exception as e:
+                    raise e
+                finally:
+                    log('info', "流式请求结束")
+
+    # 非流式处理
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
         log('info', "非流式请求开始", extra=extra_log)
@@ -268,7 +268,7 @@ class GeminiClient:
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            log('info', "非流式请求成功完成", extra=extra_log)
+            log('info', f"非流式请求成功完成，使用密钥: {self.api_key[:8]}...", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:

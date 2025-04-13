@@ -21,7 +21,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     randomString: false,
     localVersion: '',
     remoteVersion: '',
-    hasUpdate: false
+    hasUpdate: false,
+    concurrentRequests: 0,
+    increaseConcurrentOnFailure: 0,
+    maxConcurrentRequests: 0
   })
 
   const apiKeyStats = ref([])
@@ -94,7 +97,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       randomString: data.random_string || false,
       localVersion: data.local_version || '',
       remoteVersion: data.remote_version || '',
-      hasUpdate: data.has_update || false
+      hasUpdate: data.has_update || false,
+      concurrentRequests: data.concurrent_requests || 0,
+      increaseConcurrentOnFailure: data.increase_concurrent_on_failure || 0,
+      maxConcurrentRequests: data.max_concurrent_requests || 0
     }
 
     // 更新API密钥统计

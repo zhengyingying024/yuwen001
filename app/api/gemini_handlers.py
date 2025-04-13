@@ -35,7 +35,7 @@ async def run_gemini_completion(
         
         # 只在第一次调用时记录完成日志
         if not hasattr(run_fn, 'logged_complete'):
-            log('info', "非流式请求成功完成", 
+            log('info', "非流式请求成功完成，使用密钥: {self.api_key[:8]}...", 
                 extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
             run_fn.logged_complete = True
         return response_content

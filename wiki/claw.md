@@ -12,34 +12,34 @@
 **🔑 前置条件 (满足其一即可):**
 
 *   拥有一个注册时间超过 180 天的 GitHub 账号 (每月可获得 $5 赠金)。
-*   使用 Gmail 账号登录 (可获得一个月有效期 $5 赠金)。
+*   使用 Gmail 账号登录 (可获得一个月 $5 贈金)。
 
 **🚀 部署步骤:**
 
 1.  **登录 Claw Cloud 控制台**
     访问 [https://console.run.claw.cloud/signin](https://console.run.claw.cloud/signin) 并使用您的 GitHub 或 Gmail 账号登录。
-    ![登录界面](https://i.111666.best/image/Jkwm8sYhiIPBXRSAaKoWjm.png)
+    ![登录界面](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/1.png)
 
 2.  **选择区域 (首次登录)**
     首次登录时会提示选择服务器区域。此选择后续可以更改，这里以选择 `日本 (Japan)` 为例。
-    ![选择区域](https://i.111666.best/image/XqQa4QQT3vFCrQX71E4fbY.png)
+    ![选择区域](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/2.png)
 
 3.  **进入 APP Launchpad**
     在控制台主界面，找到并点击 **APP Launchpad**。
-    ![进入 APP Launchpad](https://i.111666.best/image/iheeV6544UTWLrF4X1Eciz.png)
+    ![进入 APP Launchpad](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/3.png)
 
 4.  **创建新应用**
     点击 **Create APP** 按钮开始创建。
-    ![创建APP](https://i.111666.best/image/J6zOMjnvdiCNRLeZ8XEZ8W.png)
+    ![创建APP](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/4.png)
 
 5.  **配置应用信息**
     *   **Application Name:** 填写一个应用名称（必须是**英文**，且以**小写字母**开头）。
     *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`。
-    ![填写应用信息](https://i.111666.best/image/OspzRLDv3AjdwYbyds1sdW.png)
+    ![填写应用信息](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/5.png)
 
 6.  **找到环境变量设置**
     向下滚动页面，找到 **Environment Variables** 部分。
-    ![环境变量部分](https://i.111666.best/image/E1vwi9qaMJDEXRXbTuvkcM.png)
+    ![环境变量部分](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/6.png)
 
 7.  **填写环境变量**
     点击 **Add environment variable** 添加以下三个环境变量：
@@ -48,19 +48,19 @@
     *   `TZ`: 设置时区，建议填 `Asia/Shanghai`。
 
     ```env
-    GEMINI_API_KEYS=key1,key2,key3
+    GEMINI_API_KEYS=你的GeminiKey1,你的GeminiKey2
     PASSWORD=设置一个你自己的访问密码
     TZ=Asia/Shanghai
     ```
-    ![填写环境变量](https://i.111666.best/image/xTWRoA9mXKNLkLBhqeDq5s.png)
+    ![填写环境变量](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/7.png)
 
 8.  **部署应用**
     返回页面顶部，点击 **Deploy application** 按钮。
-    ![部署应用](https://i.111666.best/image/I07hAtm4ZvMwiP0wUxdzTi.png)
+    ![部署应用](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/8.png)
 
 9.  **等待部署完成**
     等待应用状态 (`Status`) 变为 **Running**，这表示部署已成功。
-    ![部署成功状态](https://i.111666.best/image/Wmrk5Gcx8MFs7SzZv7N7dt.png)
+    ![部署成功状态](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/9.png)
 
 10. **获取反代地址并使用**
     *   切换到 **Network** 标签页。
@@ -68,7 +68,7 @@
     *   **重要:** 在你的客户端（如 SillyTavern、OpenCat 等）使用此地址时，需要在**末尾加上 `/v1`**。
         例如，如果复制的地址是 `https://your-app-name.jp.run.claw.cloud`，那么你应该填入客户端的地址是 `https://your-app-name.jp.run.claw.cloud/v1`。同时，填入你在第 7 步设置的 `PASSWORD` 作为 API Key 或密码（具体取决于客户端设置）。
 
-    ![获取反代地址](https://i.111666.best/image/75V3DYZNqaLbA2H4iq8vwo.png)
+    ![获取反代地址](https://raw.githubusercontent.com/IDeposit/hajimi/IDeposit-patch-1/wiki/img/claw/10.png)
 
 ---
 

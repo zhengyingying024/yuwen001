@@ -58,7 +58,7 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])
     scheduler.add_job(clean_expired_stats, 'interval', minutes=5, args=[api_call_stats])
     scheduler.add_job(check_version, 'interval', hours=4)
-    scheduler.add_job(api_call_stats_clean, 'cron', hour=16,minute=0) 
+    scheduler.add_job(api_call_stats_clean, 'cron', hour=15,minute=0) 
     scheduler.start()
     return scheduler
 

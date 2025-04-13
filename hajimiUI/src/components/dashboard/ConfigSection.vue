@@ -151,6 +151,15 @@ const getFoldIconClass = (isVisible) => {
             <div class="stat-label">更新状态</div>
           </div>
         </div>
+
+        <!-- 项目地址 -->
+        <div class="project-link-container">
+          <a href="https://github.com/wyeeeee/hajimi" target="_blank" rel="noopener noreferrer" class="project-link">
+            <span class="github-icon">🌸</span>
+            <span class="project-text">项目地址：github.com/wyeeeee/hajimi</span>
+            <span class="github-icon">🌸</span>
+          </a>
+        </div>
       </div>
     </transition>
     
@@ -351,5 +360,73 @@ const getFoldIconClass = (isVisible) => {
   max-height: 0;
   opacity: 0;
   overflow: hidden;
+}
+
+/* 项目链接样式 */
+.project-link-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  margin-top: 15px;
+  transition: all 0.3s ease;
+}
+
+.project-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--button-primary);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background-color: var(--stats-item-bg);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.project-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  background-color: var(--color-background-mute);
+}
+
+.github-icon {
+  font-size: 16px;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.project-link:hover .github-icon {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.project-text {
+  font-weight: 500;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .project-link {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+  
+  .github-icon {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .project-link {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  
+  .github-icon {
+    font-size: 12px;
+  }
 }
 </style>

@@ -21,7 +21,10 @@ from app.config.settings import (
     MAX_CACHE_ENTRIES,
     REMOVE_CACHE_AFTER_USE,
     ENABLE_RECONNECT_DETECTION,
-    version
+    version,
+    CONCURRENT_REQUESTS,
+    INCREASE_CONCURRENT_ON_FAILURE,
+    MAX_CONCURRENT_REQUESTS
 )
 from app.services import GeminiClient
 
@@ -178,5 +181,9 @@ async def get_dashboard_data():
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,
-        "active_pending": active_pending
+        "active_pending": active_pending,
+        # 添加并发请求配置
+        "concurrent_requests": CONCURRENT_REQUESTS,
+        "increase_concurrent_on_failure": INCREASE_CONCURRENT_ON_FAILURE,
+        "max_concurrent_requests": MAX_CONCURRENT_REQUESTS
     }

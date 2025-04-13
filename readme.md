@@ -3,6 +3,8 @@
 基于某论坛上一位大佬[@Mrjwj34](https://github.com/Moonfanz)基于另一位大佬[@Moonfanzp](https://github.com/Moonfanz)的代码的修改修改而来，由于大佬好长时间没有维护，我自己也遇到些bug，就魔改了一下，求star求star求star
 
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
+
+感谢@[@warming-afternoon](https://github.com/warming-afternoon)在技术上的大力支持
 ###  使用文档
 - [【推荐】huggingface的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢**北极星星**编写

@@ -6,7 +6,7 @@ from app.utils import cache_response, update_api_call_stats
 from app.utils.logging import log
 from .client_disconnect import check_client_disconnect, handle_client_disconnect
 from .gemini_handlers import run_gemini_completion
-
+import app.config.settings as settings
 # 非流式请求处理函数
 async def process_nonstream_request(
     chat_request: ChatCompletionRequest, 
@@ -100,7 +100,7 @@ async def process_nonstream_request(
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)
             
-            update_api_call_stats(api_call_stats, endpoint=current_api_key, model=chat_request.model)
+            update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
             # 缓存响应
             cache_response(response, cache_key, client_ip, response_cache_manager, endpoint=current_api_key,model=chat_request.model)
             
@@ -144,7 +144,7 @@ async def process_nonstream_request(
                 log('warning', f"非流式请求(取消后): API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return None
-            update_api_call_stats(api_call_stats, endpoint=current_api_key, model=chat_request.model)
+            update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
             # 创建响应
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)

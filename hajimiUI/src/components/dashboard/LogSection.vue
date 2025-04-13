@@ -1,20 +1,67 @@
 <script setup>
 import { useDashboardStore } from '../../stores/dashboard'
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 
 const dashboardStore = useDashboardStore()
 const currentFilter = ref('ALL')
 const logContainer = ref(null)
+const isFirstLoad = ref(true)
+const userScrolled = ref(false)
 
 // 过滤日志
 function filterLogs(level) {
   currentFilter.value = level
 }
 
+// 滚动到底部
+function scrollToBottom() {
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+  }
+}
+
+// 检查用户是否在底部
+function isAtBottom() {
+  if (!logContainer.value) return false
+  
+  const container = logContainer.value
+  const threshold = 50 // 距离底部多少像素以内算作"在底部"
+  return container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+}
+
+// 监听滚动事件
+function handleScroll() {
+  userScrolled.value = true
+}
+
 // 监听日志变化，保持滚动位置
 watch(() => dashboardStore.logs, async () => {
   await nextTick()
+  
+  // 如果是第一次加载，滚动到底部
+  if (isFirstLoad.value) {
+    scrollToBottom()
+    isFirstLoad.value = false
+  } 
+  // 如果用户已经在底部，则自动滚动到底部
+  else if (isAtBottom()) {
+    scrollToBottom()
+  }
 }, { deep: true })
+
+// 组件挂载时，如果有日志数据，滚动到底部
+onMounted(() => {
+  if (dashboardStore.logs.length > 0) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+  
+  // 添加滚动事件监听
+  if (logContainer.value) {
+    logContainer.value.addEventListener('scroll', handleScroll)
+  }
+})
 </script>
 
 <template>

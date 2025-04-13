@@ -162,13 +162,17 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 if result:
                     # 使用原始结果时，我们需要创建一个新的响应对象
                     # 避免使用可能已被其他请求修改的对象
-                    new_response = ChatCompletionResponse(
-                        id=f"chatcmpl-{int(time.time()*1000)}",
-                        object="chat.completion", 
+                    try:
+                        new_response = ChatCompletionResponse(
+                            id=f"chatcmpl-{int(time.time()*1000)}",
+                            object="chat.completion", 
                         created=int(time.time()),
-                        model=result.model,
-                        choices=result.choices
-                    )
+                            model=result.model,
+                            choices=result.choices
+                        )
+                    except Exception as e:
+                        log('error', f"创建新响应对象失败: {e}", 
+                            extra={'request_type': 'non-stream', 'model': request.model})
                     
                     # 不要缓存此结果，因为它很可能是一个已存在但被使用后清除的缓存
                     return new_response

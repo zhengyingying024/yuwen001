@@ -3,7 +3,7 @@ import { useDashboardStore } from '../../stores/dashboard'
 import { ref } from 'vue'
 
 const dashboardStore = useDashboardStore()
-const isExpanded = ref(false)
+const isExpanded = ref(true)
 
 // 配置项解释
 const configExplanations = {

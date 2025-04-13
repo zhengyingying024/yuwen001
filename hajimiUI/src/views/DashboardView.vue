@@ -27,15 +27,15 @@ onMounted(() => {
     const animateStep = () => {
       if (animationStep.value < 10) {
         animationStep.value++
-        setTimeout(animateStep, 200)
+        setTimeout(animateStep, 100)
       } else {
         // 动画完成后标记
         animationCompleted.value = true
       }
     }
     
-    setTimeout(animateStep, 100)
-  }, 100)
+    setTimeout(animateStep, 50)
+  }, 50)
 })
 
 // 组件卸载时停止自动刷新
@@ -119,7 +119,7 @@ body {
   padding: 20px;
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: opacity 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .dashboard.page-loaded {
@@ -134,7 +134,7 @@ body {
   margin-bottom: 20px;
   opacity: 0;
   transform: translateY(20px) scale(0.95);
-  transition: opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .header-container.animate-in {
@@ -274,7 +274,7 @@ input:checked + .slider:before {
   border-radius: 4px;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background-color 0.2s, opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   opacity: 0;
   transform: translateY(20px) scale(0.95);
 }
@@ -351,7 +351,7 @@ input:checked + .slider:before {
 .section-animate {
   opacity: 0;
   transform: translateY(20px) scale(0.95);
-  transition: opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .section-animate.animate-in {
@@ -363,20 +363,20 @@ input:checked + .slider:before {
 :deep(.stats-grid) {
   opacity: 0;
   transform: translateY(10px) scale(0.98);
-  transition: opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .animate-in :deep(.stats-grid) {
   opacity: 1;
   transform: translateY(0) scale(1);
-  transition-delay: 0.2s;
+  transition-delay: 0.1s;
 }
 
 /* 卡片动画 */
 :deep(.stat-card) {
   opacity: 0;
   transform: scale(0.9) translateY(10px);
-  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, background-color 0.3s;
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, background-color 0.3s;
 }
 
 .animate-in :deep(.stat-card) {
@@ -385,42 +385,42 @@ input:checked + .slider:before {
 }
 
 .animate-in :deep(.stat-card:nth-child(1)) {
-  transition-delay: 0.3s;
+  transition-delay: 0.15s;
 }
 
 .animate-in :deep(.stat-card:nth-child(2)) {
-  transition-delay: 0.4s;
+  transition-delay: 0.2s;
 }
 
 .animate-in :deep(.stat-card:nth-child(3)) {
-  transition-delay: 0.5s;
+  transition-delay: 0.25s;
 }
 
 .animate-in :deep(.stat-card:nth-child(4)) {
-  transition-delay: 0.6s;
+  transition-delay: 0.3s;
 }
 
 .animate-in :deep(.stat-card:nth-child(5)) {
-  transition-delay: 0.7s;
+  transition-delay: 0.35s;
 }
 
 .animate-in :deep(.stat-card:nth-child(6)) {
-  transition-delay: 0.8s;
+  transition-delay: 0.4s;
 }
 
 .animate-in :deep(.stat-card:nth-child(7)) {
-  transition-delay: 0.9s;
+  transition-delay: 0.45s;
 }
 
 .animate-in :deep(.stat-card:nth-child(8)) {
-  transition-delay: 1.0s;
+  transition-delay: 0.5s;
 }
 
 /* 日志条目动画 */
 :deep(.log-entry) {
   opacity: 0;
   transform: translateX(-10px) scale(0.98);
-  transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .animate-in :deep(.log-entry) {
@@ -429,27 +429,27 @@ input:checked + .slider:before {
 }
 
 .animate-in :deep(.log-entry:nth-child(1)) {
-  transition-delay: 0.3s;
+  transition-delay: 0.15s;
 }
 
 .animate-in :deep(.log-entry:nth-child(2)) {
-  transition-delay: 0.4s;
+  transition-delay: 0.2s;
 }
 
 .animate-in :deep(.log-entry:nth-child(3)) {
-  transition-delay: 0.5s;
+  transition-delay: 0.25s;
 }
 
 .animate-in :deep(.log-entry:nth-child(4)) {
-  transition-delay: 0.6s;
+  transition-delay: 0.3s;
 }
 
 .animate-in :deep(.log-entry:nth-child(5)) {
-  transition-delay: 0.7s;
+  transition-delay: 0.35s;
 }
 
 .animate-in :deep(.log-entry:nth-child(n+6)) {
-  transition-delay: 0.8s;
+  transition-delay: 0.4s;
 }
 
 /* 添加飞入动画效果 */
@@ -500,26 +500,26 @@ input:checked + .slider:before {
 
 /* 应用飞入动画 */
 .header-container.animate-in {
-  animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .section-animate.animate-in {
-  animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .animate-in :deep(.stat-card:nth-child(odd)) {
-  animation: flyInFromLeft 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyInFromLeft 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .animate-in :deep(.stat-card:nth-child(even)) {
-  animation: flyInFromRight 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyInFromRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .animate-in :deep(.log-entry) {
-  animation: flyInFromLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyInFromLeft 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .refresh-button.animate-in {
-  animation: flyIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: flyIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 </style>

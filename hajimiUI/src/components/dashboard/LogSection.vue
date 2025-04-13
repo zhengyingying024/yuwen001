@@ -1,20 +1,43 @@
 <script setup>
 import { useDashboardStore } from '../../stores/dashboard'
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 
 const dashboardStore = useDashboardStore()
 const currentFilter = ref('ALL')
 const logContainer = ref(null)
+const isFirstLoad = ref(true)
 
 // 过滤日志
 function filterLogs(level) {
   currentFilter.value = level
 }
 
+// 滚动到底部
+function scrollToBottom() {
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+  }
+}
+
 // 监听日志变化，保持滚动位置
 watch(() => dashboardStore.logs, async () => {
   await nextTick()
+  
+  // 如果是第一次加载或有新日志，滚动到底部
+  if (isFirstLoad.value || dashboardStore.logs.length > 0) {
+    scrollToBottom()
+    isFirstLoad.value = false
+  }
 }, { deep: true })
+
+// 组件挂载时，如果有日志数据，滚动到底部
+onMounted(() => {
+  if (dashboardStore.logs.length > 0) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+})
 </script>
 
 <template>

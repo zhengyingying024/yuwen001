@@ -9,7 +9,7 @@ from app.services import GeminiClient
 from app.utils import handle_gemini_error, update_api_call_stats
 from app.utils.logging import log
 from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
-
+import app.config.settings as settings
 # 流式请求处理函数
 async def process_stream_request(
     chat_request: ChatCompletionRequest,
@@ -218,7 +218,7 @@ async def process_stream_request(
             finally:
                 # 更新API调用统计
                 if success:
-                    update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
+                    update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
                     return
                                                 
         # 所有API密钥都尝试失败的处理
@@ -277,7 +277,7 @@ async def process_stream_request(
                             await response_queue.put(formatted_data)
                         
                         # 更新API调用统计
-                        update_api_call_stats(api_call_stats, endpoint=api_key, model=chat_request.model)
+                        update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
                         
                         # 添加完成标记到队列
                         await response_queue.put("data: [DONE]\n\n")

@@ -94,8 +94,20 @@
       
       // 重置成功，刷新数据
       await dashboardStore.fetchDashboardData()
-      closeResetDialog()
+      
+      // 添加短暂延迟，确保后端数据已完全重置
+      setTimeout(async () => {
+        try {
+          await dashboardStore.fetchDashboardData()
+          console.log('重置后数据已刷新')
+        } catch (error) {
+          console.error('刷新数据失败:', error)
+        } finally {
+          closeResetDialog()
+        }
+      }, 1000) // 增加延迟时间到1秒
     } catch (error) {
+      console.error('重置失败:', error)
       resetError.value = error.message || '重置失败，请检查密码是否正确'
     } finally {
       isResetting.value = false
@@ -316,8 +328,9 @@
     background-color: rgba(0, 0, 0, 0.5);
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     z-index: 1000;
+    padding-top: 20px;
   }
   
   .dialog {
@@ -327,6 +340,7 @@
     width: 90%;
     max-width: 400px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-top: 20px;
   }
   
   .dialog h3 {

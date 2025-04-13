@@ -7,6 +7,8 @@ from app.config import api_call_stats
 from app.utils import check_version
 from zoneinfo import ZoneInfo
 from app.config import settings
+import copy  # 添加copy模块导入
+
 def handle_exception(exc_type, exc_value, exc_traceback):
     """
     全局异常处理函数
@@ -68,29 +70,37 @@ async def api_call_stats_clean():
     """
     from app.utils.logging import log
     
-    # 清空原字典中的数据，而不是重新赋值
-    settings.api_call_stats['last_24h']['total'].clear()
-    settings.api_call_stats['last_24h']['by_endpoint'].clear()
-    settings.api_call_stats['hourly']['total'].clear()
-    settings.api_call_stats['hourly']['by_endpoint'].clear()
-    settings.api_call_stats['minute']['total'].clear()
-    settings.api_call_stats['minute']['by_endpoint'].clear()
-    
-    # 重新初始化结构
-    settings.api_call_stats = {
-        'last_24h': {
-            'total': {},
-            'by_endpoint': {}
-        },
-        'hourly': {
-            'total': {},
-            'by_endpoint': {}
-        },
-        'minute': {
-            'total': {},
-            'by_endpoint': {}
+    try:
+        # 记录重置前的状态
+        log('info', "开始重置API调用统计数据")
+        
+        # 创建一个全新的空结构
+        new_stats = {
+            'last_24h': {
+                'total': {},
+                'by_endpoint': {}
+            },
+            'hourly': {
+                'total': {},
+                'by_endpoint': {}
+            },
+            'minute': {
+                'total': {},
+                'by_endpoint': {}
+            }
         }
-    }
-    
-    # 记录日志，确认函数被执行
-    log('info', "API调用统计数据已重置")
+        
+        # 使用深拷贝确保完全替换原结构
+        settings.api_call_stats = copy.deepcopy(new_stats)
+        
+        # 验证重置是否成功
+        if (settings.api_call_stats['last_24h']['total'] == {} and 
+            settings.api_call_stats['hourly']['total'] == {} and 
+            settings.api_call_stats['minute']['total'] == {}):
+            log('info', "API调用统计数据已成功重置")
+        else:
+            log('error', "API调用统计数据重置可能未完全成功")
+            
+    except Exception as e:
+        log('error', f"重置API调用统计数据时发生错误: {str(e)}")
+        raise

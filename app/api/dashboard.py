@@ -8,8 +8,6 @@ from app.utils import (
     clean_expired_stats
 )
 from app.config.settings import (
-    api_call_stats,
-    client_request_history,
     API_KEY_DAILY_LIMIT,
     FAKE_STREAMING,
     FAKE_STREAMING_INTERVAL,
@@ -26,6 +24,7 @@ from app.config.settings import (
     INCREASE_CONCURRENT_ON_FAILURE,
     MAX_CONCURRENT_REQUESTS
 )
+import app.config.settings as settings
 from app.services import GeminiClient
 from app.utils.auth import verify_password
 from app.utils.maintenance import api_call_stats_clean
@@ -54,7 +53,7 @@ def init_dashboard_router(
 async def get_dashboard_data():
     """获取仪表盘数据的API端点，用于动态刷新"""
     # 先清理过期数据，确保统计数据是最新的
-    clean_expired_stats(api_call_stats)
+    clean_expired_stats(settings.api_call_stats)
     response_cache_manager.clean_expired()  # 使用管理器清理缓存
     active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
     
@@ -62,12 +61,12 @@ async def get_dashboard_data():
     now = datetime.now()
     
     # 计算过去24小时的调用总数
-    last_24h_calls = sum(api_call_stats['last_24h']['total'].values())
+    last_24h_calls = sum(settings.api_call_stats['last_24h']['total'].values())
     
     # 计算过去一小时内的调用总数
     one_hour_ago = now - timedelta(hours=1)
     hourly_calls = 0
-    for hour_key, count in api_call_stats['hourly']['total'].items():
+    for hour_key, count in settings.api_call_stats['hourly']['total'].items():
         try:
             hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
             if hour_time >= one_hour_ago:
@@ -78,7 +77,7 @@ async def get_dashboard_data():
     # 计算过去一分钟内的调用总数
     one_minute_ago = now - timedelta(minutes=1)
     minute_calls = 0
-    for minute_key, count in api_call_stats['minute']['total'].items():
+    for minute_key, count in settings.api_call_stats['minute']['total'].items():
         try:
             minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
             if minute_time >= one_minute_ago:
@@ -96,9 +95,9 @@ async def get_dashboard_data():
         calls_24h = 0
         model_stats = {}
         
-        if 'by_endpoint' in api_call_stats['last_24h'] and api_key in api_call_stats['last_24h']['by_endpoint']:
+        if 'by_endpoint' in settings.api_call_stats['last_24h'] and api_key in settings.api_call_stats['last_24h']['by_endpoint']:
             # 遍历所有模型
-            for model, model_data in api_call_stats['last_24h']['by_endpoint'][api_key].items():
+            for model, model_data in settings.api_call_stats['last_24h']['by_endpoint'][api_key].items():
                 model_calls = sum(model_data.values())
                 calls_24h += model_calls
                 model_stats[model] = model_calls
@@ -139,7 +138,7 @@ async def get_dashboard_data():
                     cache_by_model[model] = 1
     
     # 获取请求历史统计
-    history_count = len(client_request_history)
+    history_count = len(settings.client_request_history)
     
     # 获取活跃请求统计
     active_count = len(active_requests_manager.active_requests)
@@ -191,20 +190,35 @@ async def get_dashboard_data():
     }
 
 @dashboard_router.post("/reset-stats")
-async def reset_stats(password: str):
+async def reset_stats(password_data: dict):
     """
     重置API调用统计数据
     
     Args:
-        password (str): 验证密码
+        password_data (dict): 包含密码的字典
         
     Returns:
         dict: 操作结果
     """
-    if not verify_password(password):
-        raise HTTPException(status_code=401, detail="密码错误")
-    
-    # 调用重置函数
-    await api_call_stats_clean()
-    
-    return {"status": "success", "message": "API调用统计数据已重置"}
+    try:
+        if not isinstance(password_data, dict):
+            raise HTTPException(status_code=422, detail="请求体格式错误：应为JSON对象")
+            
+        password = password_data.get("password")
+        if not password:
+            raise HTTPException(status_code=400, detail="缺少密码参数")
+            
+        if not isinstance(password, str):
+            raise HTTPException(status_code=422, detail="密码参数类型错误：应为字符串")
+            
+        if not verify_password(password):
+            raise HTTPException(status_code=401, detail="密码错误")
+        
+        # 调用重置函数
+        await api_call_stats_clean()
+        
+        return {"status": "success", "message": "API调用统计数据已重置"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重置失败：{str(e)}")

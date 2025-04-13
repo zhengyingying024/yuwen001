@@ -268,7 +268,7 @@ class GeminiClient:
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            log('info', "非流式请求成功完成", extra=extra_log)
+            log('info', f"非流式请求成功完成，使用密钥: {self.api_key[:8]}...", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:

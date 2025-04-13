@@ -70,6 +70,7 @@ async def process_stream_request(
             
             # 创建并发任务
             tasks = []
+            tasks_map = {}
             for api_key in current_batch:
                 # 假流式模式的处理逻辑
                 log('info', f"假流式请求开始，使用密钥: {api_key[:8]}...",
@@ -88,6 +89,7 @@ async def process_stream_request(
                 )
 
                 tasks.append((api_key, task))
+                tasks_map[task] = api_key
             
             # 等待第一个成功的响应或超时
             while tasks and not all(t[1].done() for t in tasks):
@@ -98,49 +100,77 @@ async def process_stream_request(
                     return_when=asyncio.FIRST_COMPLETED
                 )
                 # 如果没有任务完成，发送保活消息
-                if not done and FAKE_STREAMING :
+                if not done and FAKE_STREAMING:
                     yield keep_alive_message
+                    continue
                 
-                # 如果有任务完成，跳出循环
-                if done:
-                    break
-            
-            # # 取消所有未完成的任务
-            # for _, task in tasks:
-            #     if not task.done():
-            #         task.cancel()
-            
-            # 检查是否有成功的响应
-            success = False
-            for api_key, task in tasks:
-                if task.done() and not task.cancelled():
-                    try:
-                        result = task.result()
-                        if result:  # 如果有响应内容
-                            success = True
-                            
-                            # 从队列中获取响应数据
-                            while True:
-                                chunk = await response_queue.get()
-                                if chunk is None:  # None表示队列结束
-                                    break
-                                if chunk == "data: [DONE]\n\n":  # 完成标记
+                # 检查已完成的任务是否成功
+                found_success = False
+                for task in done:
+                    api_key = tasks_map[task]
+                    if not task.cancelled():
+                        try:
+                            result = task.result()
+                            if result:  # 如果任务成功获取响应
+                                # 从队列中获取响应数据
+                                while True:
+                                    chunk = await response_queue.get()
+                                    if chunk is None:  # None表示队列结束
+                                        break
+                                    if chunk == "data: [DONE]\n\n":  # 完成标记
+                                        yield chunk
+                                        break
+                                    # 确保chunk符合SSE格式
+                                    if not chunk.endswith("\n\n"):
+                                        chunk = chunk.rstrip() + "\n\n"
                                     yield chunk
-                                    break
-                                # 确保chunk符合SSE格式
-                                if not chunk.endswith("\n\n"):
-                                    chunk = chunk.rstrip() + "\n\n"
-                                yield chunk
-                            log('info', f"假流式成功响应，使用密钥: {api_key[:8]}...", 
-                                extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                                
-                            return  # 成功获取响应，退出循环
-                    except Exception as e:
-                        error_detail = handle_gemini_error(e, api_key, key_manager)
-                        log('error', f"请求失败: {error_detail}",
-                            extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                        
+                                log('info', f"假流式成功响应，使用密钥: {api_key[:8]}...", 
+                                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                                found_success = True
+                                break
+                        except Exception as e:
+                            error_detail = handle_gemini_error(e, api_key, key_manager)
+                            log('error', f"请求失败: {error_detail}",
+                                extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                
+                # 如果找到成功的响应，跳出循环
+                if found_success:
+                    return
+                
+                # 更新任务列表，移除已完成的任务
+                tasks = [(k, t) for k, t in tasks if not t.done()]
+
+            # # 检查是否有成功的响应
+            # success = False
+            # for api_key, task in tasks:
+            #     if task.done() and not task.cancelled():
+            #         try:
+            #             result = task.result()
+            #             if result:  # 如果有响应内容
+            #                 success = True
+                            
+            #                 # 从队列中获取响应数据
+            #                 while True:
+            #                     chunk = await response_queue.get()
+            #                     if chunk is None:  # None表示队列结束
+            #                         break
+            #                     if chunk == "data: [DONE]\n\n":  # 完成标记
+            #                         yield chunk
+            #                         break
+            #                     # 确保chunk符合SSE格式
+            #                     if not chunk.endswith("\n\n"):
+            #                         chunk = chunk.rstrip() + "\n\n"
+            #                     yield chunk
+            #                 log('info', f"假流式成功响应，使用密钥: {api_key[:8]}...", 
+            #                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                                
+            #                 return  # 成功获取响应，退出循环
+            #         except Exception as e:
+            #             error_detail = handle_gemini_error(e, api_key, key_manager)
+            #             log('error', f"请求失败: {error_detail}",
+            #                 extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
             
             # 如果所有请求都失败，增加并发数并继续尝试
-            if not success and all_keys:
+            if all_keys:
                 # 增加并发数，但不超过最大并发数
                 current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
                 log('info', f"所有请求失败，增加并发数至: {current_concurrent}", 

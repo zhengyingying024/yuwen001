@@ -45,31 +45,22 @@ async def process_stream_request(
         # 创建一个队列（用于假流式模式的响应内容）
         response_queue = asyncio.Queue() if FAKE_STREAMING else None
         
-        # 用于跟踪保活是否应该继续的标志
-        keep_alive_running = True
-        
-        # 定义保活发送函数
-        async def keep_alive_sender():
-            try:
-                while keep_alive_running:
-                    yield "\n"
-                    # 等待一段时间再发送下一个保活消息
-                    await asyncio.sleep(FAKE_STREAMING_INTERVAL)
-            except asyncio.CancelledError:
-                log('info', "假流式模式: 保活任务被取消",
-                    extra={'request_type': 'fake-stream', 'model': chat_request.model})
-                raise
-            except Exception as e:
-                log('error', f"保活任务出错: {str(e)}",
-                    extra={'request_type': 'fake-stream'})
-                raise
-        
-        # 创建保活生成器
-        keep_alive_gen = keep_alive_sender() if FAKE_STREAMING else None
+        # 将保活消息格式化为SSE格式
+        formatted_chunk = {
+            "id": "chatcmpl-keepalive",
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": chat_request.model,
+            "choices": [{"delta": {"content": "\n"}, "index": 0, "finish_reason": None}]
+        }
+        keep_alive_message=f"data: {json.dumps(formatted_chunk)}\n\n"
         
         # 如果是假流式模式，先发送一次保活消息,以免处理时断联
         if FAKE_STREAMING :
-            yield "\n"
+            try:
+                yield keep_alive_message
+            except StopAsyncIteration:
+                pass
         
         # (假流式) 尝试使用不同API密钥，直到所有密钥都尝试过
         while (all_keys and FAKE_STREAMING):
@@ -103,16 +94,12 @@ async def process_stream_request(
                 # 短时间等待任务完成
                 done, pending = await asyncio.wait(
                     [task for _, task in tasks],
+                    timeout=FAKE_STREAMING_INTERVAL,
                     return_when=asyncio.FIRST_COMPLETED
                 )
-                
-                # 如果没有任务完成且是假流式模式，发送保活消息
-                if not done and FAKE_STREAMING and keep_alive_gen:
-                    try:
-                        keepalive = await anext(keep_alive_gen)
-                        yield keepalive
-                    except StopAsyncIteration:
-                        break
+                # 如果没有任务完成，发送保活消息
+                if not done and FAKE_STREAMING :
+                    yield keep_alive_message
                 
                 # 如果有任务完成，跳出循环
                 if done:
@@ -131,12 +118,6 @@ async def process_stream_request(
                         result = task.result()
                         if result:  # 如果有响应内容
                             success = True
-                            
-                            # 停止保活机制
-                            keep_alive_running = False
-                            # 如果保活生成器存在，需要关闭它
-                            if keep_alive_gen:
-                                keep_alive_gen.aclose()
                             
                             # 从队列中获取响应数据
                             while True:

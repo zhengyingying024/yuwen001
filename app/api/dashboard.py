@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
 import time
 from app.utils import (
@@ -27,6 +27,8 @@ from app.config.settings import (
     MAX_CONCURRENT_REQUESTS
 )
 from app.services import GeminiClient
+from app.utils.auth import verify_password
+from app.utils.maintenance import api_call_stats_clean
 
 # 创建路由器
 dashboard_router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -187,3 +189,22 @@ async def get_dashboard_data():
         "increase_concurrent_on_failure": INCREASE_CONCURRENT_ON_FAILURE,
         "max_concurrent_requests": MAX_CONCURRENT_REQUESTS
     }
+
+@dashboard_router.post("/reset-stats")
+async def reset_stats(password: str):
+    """
+    重置API调用统计数据
+    
+    Args:
+        password (str): 验证密码
+        
+    Returns:
+        dict: 操作结果
+    """
+    if not verify_password(password):
+        raise HTTPException(status_code=401, detail="密码错误")
+    
+    # 调用重置函数
+    await api_call_stats_clean()
+    
+    return {"status": "success", "message": "API调用统计数据已重置"}

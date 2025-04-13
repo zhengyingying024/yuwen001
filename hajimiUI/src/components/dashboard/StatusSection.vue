@@ -7,6 +7,12 @@
   // 存储每个API密钥的模型折叠状态
   const modelFoldState = ref({})
   
+  // 重置对话框状态
+  const showResetDialog = ref(false)
+  const resetPassword = ref('')
+  const resetError = ref('')
+  const isResetting = ref(false)
+  
   // 切换API密钥统计显示/隐藏
   function toggleApiKeyStats() {
     apiKeyStatsVisible.value = !apiKeyStatsVisible.value
@@ -46,11 +52,69 @@
   const shouldFoldModels = (modelStats) => {
     return modelStats && Object.keys(modelStats).length > 3
   }
+  
+  // 打开重置对话框
+  function openResetDialog() {
+    showResetDialog.value = true
+    resetPassword.value = ''
+    resetError.value = ''
+  }
+  
+  // 关闭重置对话框
+  function closeResetDialog() {
+    showResetDialog.value = false
+    resetPassword.value = ''
+    resetError.value = ''
+  }
+  
+  // 重置统计数据
+  async function resetStats() {
+    if (!resetPassword.value) {
+      resetError.value = '请输入密码'
+      return
+    }
+    
+    isResetting.value = true
+    resetError.value = ''
+    
+    try {
+      const response = await fetch('/api/reset-stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: resetPassword.value })
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.detail || '重置失败')
+      }
+      
+      // 重置成功，刷新数据
+      await dashboardStore.fetchDashboardData()
+      closeResetDialog()
+    } catch (error) {
+      resetError.value = error.message || '重置失败，请检查密码是否正确'
+    } finally {
+      isResetting.value = false
+    }
+  }
 </script>
   
   <template>
     <div class="info-box">
-      <h2 class="section-title">🟢 运行状态</h2>
+      <div class="section-header">
+        <h2 class="section-title">🟢 运行状态</h2>
+        <button class="reset-button" @click="openResetDialog">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+          </svg>
+          重置次数
+        </button>
+      </div>
       <p class="status">服务运行中</p>
       
       <div class="stats-grid">
@@ -81,6 +145,31 @@
         <div class="stat-card">
           <div class="stat-value">{{ dashboardStore.status.minuteCalls }}</div>
           <div class="stat-label">分钟调用次数</div>
+        </div>
+      </div>
+      
+      <!-- 重置对话框 -->
+      <div v-if="showResetDialog" class="dialog-overlay">
+        <div class="dialog">
+          <h3>重置API调用统计</h3>
+          <p>请输入密码以确认重置操作：</p>
+          <input 
+            type="password" 
+            v-model="resetPassword" 
+            placeholder="请输入密码"
+            @keyup.enter="resetStats"
+          />
+          <div v-if="resetError" class="error-message">{{ resetError }}</div>
+          <div class="dialog-buttons">
+            <button class="cancel-button" @click="closeResetDialog">取消</button>
+            <button 
+              class="confirm-button" 
+              @click="resetStats" 
+              :disabled="isResetting"
+            >
+              {{ isResetting ? '重置中...' : '确认重置' }}
+            </button>
+          </div>
         </div>
       </div>
       
@@ -179,6 +268,136 @@
     .info-box {
       margin-bottom: 8px;
     }
+  }
+  
+  /* 添加section-header样式 */
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  /* 重置按钮样式 */
+  .reset-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: var(--button-secondary);
+    color: var(--button-secondary-text);
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+  }
+  
+  .reset-button:hover {
+    background-color: var(--button-secondary-hover);
+    transform: translateY(-1px);
+  }
+  
+  .reset-button svg {
+    transition: transform 0.3s;
+  }
+  
+  .reset-button:hover svg {
+    transform: rotate(180deg);
+  }
+  
+  /* 对话框样式 */
+  .dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .dialog {
+    background-color: var(--card-background);
+    border-radius: 8px;
+    padding: 20px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .dialog h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: var(--color-heading);
+  }
+  
+  .dialog p {
+    margin-bottom: 15px;
+    color: var(--color-text);
+  }
+  
+  .dialog input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    margin-bottom: 15px;
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+  
+  .dialog input:focus {
+    outline: none;
+    border-color: var(--button-primary);
+  }
+  
+  .error-message {
+    color: #dc3545;
+    margin-bottom: 15px;
+    font-size: 14px;
+  }
+  
+  .dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  
+  .cancel-button {
+    background-color: var(--button-secondary);
+    color: var(--button-secondary-text);
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .cancel-button:hover {
+    background-color: var(--button-secondary-hover);
+  }
+  
+  .confirm-button {
+    background-color: var(--button-primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .confirm-button:hover:not(:disabled) {
+    background-color: var(--button-primary-hover);
+  }
+  
+  .confirm-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
   }
   
   .status {

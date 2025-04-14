@@ -1,4 +1,4 @@
-## 使用 Claw Cloud 免费部署 Gemini 反向代理教程 由@[@IDeposit](https://github.com/IDeposit)编写
+## 使用 Claw Cloud 免费部署 Gemini 反向代理教程 由[@IDeposit](https://github.com/IDeposit)编写
 
 本教程将指导您如何利用 Claw Cloud 的免费额度部署一个 Gemini API 的反向代理服务。
 

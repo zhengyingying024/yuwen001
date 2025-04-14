@@ -4,12 +4,12 @@
 
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
 
-感谢@[@warming-afternoon](https://github.com/warming-afternoon)在技术上的大力支持
+感谢[@warming-afternoon](https://github.com/warming-afternoon)在技术上的大力支持
 ###  使用文档
 - [【推荐】huggingface的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢**北极星星**编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
-- [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢@[@IDeposit](https://github.com/IDeposit)编写
+- [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
 ###  更新日志
 
 * v0.1.2beta

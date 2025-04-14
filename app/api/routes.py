@@ -5,6 +5,7 @@ from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key
 from .stream_handlers import process_stream_request
 # from app.config.settings import CONCURRENT_REQUESTS, INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS
+from app.models.schemas import ChatCompletionResponse, Choice, Message 
 
 from app.config.settings import (
     api_call_stats,
@@ -163,16 +164,44 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                     # 使用原始结果时，我们需要创建一个新的响应对象
                     # 避免使用可能已被其他请求修改的对象
                     try:
+                        # 检查是否是字典
+                        if isinstance(result, dict):
+                            resp_object = result.get('object', 'chat.completion') 
+                            resp_model = result.get('model')
+                            resp_choices = result.get('choices', []) 
+                        elif hasattr(result, 'object') and hasattr(result, 'model') and hasattr(result, 'choices'):
+                            resp_object = result.object
+                            resp_model = result.model
+                            resp_choices = result.choices
+                        
+                        pydantic_choices = []
+                        for choice_data in resp_choices:
+                             if isinstance(choice_data, dict):
+                                 pydantic_choices.append(Choice(
+                                     index=choice_data.get("index", 0),
+                                     message=Message(
+                                         role=choice_data.get("message", {}).get("role", "assistant"),
+                                         content=choice_data.get("message", {}).get("content", "")
+                                     ),
+                                     finish_reason=choice_data.get("finish_reason")
+                                 ))
+                             elif isinstance(choice_data, Choice): # If already a Choice object
+                                 pydantic_choices.append(choice_data)
+                             # else: handle unexpected choice format?
+
                         new_response = ChatCompletionResponse(
-                            id=f"chatcmpl-{int(time.time()*1000)}",
-                            object="chat.completion", 
-                        created=int(time.time()),
-                            model=result.model,
-                            choices=result.choices
+                            id=f"chatcmpl-{int(time.time()*1000)}", 
+                            object=resp_object, 
+                            created=int(time.time()), 
+                            model=resp_model,
+                            choices=pydantic_choices 
+                            
                         )
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, Exception) as e: # Catch potential errors
                         log('error', f"创建新响应对象失败: {e}", 
-                            extra={'request_type': 'non-stream', 'model': request.model})
+                            extra={'request_type': 'non-stream', 'model': request.model, 'result_type': type(result).__name__})
+                        # Consider raising HTTPException for clarity
+                        raise HTTPException(status_code=500, detail="Internal error processing response.")
                     
                     # 不要缓存此结果，因为它很可能是一个已存在但被使用后清除的缓存
                     return new_response

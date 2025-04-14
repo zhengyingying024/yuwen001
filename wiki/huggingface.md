@@ -35,22 +35,37 @@
 - 如图所示，在settings界面中找到Variables and secrets，点击new secrets<br> 注意：为了api信息不被泄露，请一定要使用new secrets<br>![secrets](./img/secrets.png)
 - 此时你正在进行的活动就叫做添加环境变量，即添加配置信息，在2.1中，我们将添加两个环境变量，分别是`GEMINI_API_KEYS`与`PASSWORD`，如果您不知道其他环境变量的用途，只需要添加这两个环境变量项目即可正常运行，如果您需要添加其他环境变量，请参考2.2中的环境变量说明，自行配置
 - 如图所示为添加GEMINI_API_KEYS环境变量，可以看到，在name一栏中为该环境变量的名称，此时我们添加的是apikey，确保其环境变量名称即name为GEMINI_API_KEYS，而在value栏中，我们需要填入具体的apikey<br>如图所示，每个apikey之间用英文逗号分割，不需要换行，不需要填入其他信息。全部填入后点击save<br>![KEYS](./img/KEYS.png)
-- 接着我们需要再次点击new secrets，添加PASSWORD环境变量，和上一步一样，我们需要在name一栏中填入PASSWORD，在value一栏中填入密码，然后点击save
+- 接着我们需要再次点击new secrets，添加PASSWORD环境变量，和上一步一样，我们需要在name一栏中填入PASSWORD，在value栏中填入密码，然后点击save
 - 等待项目部署完成，app界面显示如图界面，即完成<br>![app](./img/app.png)
 - 如果您不需要配置其他环境变量，那么到此为止，您已经完成了环境变量的配置，可直接进行使用环节，如果需要配置其他环境变量，请参考2.2中的环境变量说明，自行配置
 
 ### 2.2 环境变量说明
+
 #### 重要环境变量
-- `GEMINI_API_KEYS`：从google ai studio 获取的API密钥，支持多个API密钥，以英文逗号分隔（例:apikey1,apikey2,apikey3）。
-- `PASSWORD`：用户访问所需的password，如不填写默认为123。
-#### 其他环境变量（这些环境变量都拥有默认值，如果您不理解这些环境变量，完全不需要设置）
--   `MAX_REQUESTS_PER_MINUTE`：（可选）每分钟最大请求数。
--   `MAX_REQUESTS_PER_DAY_PER_IP`：（可选）每天每个 IP 最大请求数。
--   `FAKE_STREAMING`：（可选）是否启用假流式传输，默认为true。
--   `API_KEY_DAILY_LIMIT`:（可选） 单api 24小时最大使用次数，默认值为25
--   `BLOCKED_MODELS`，（可选）需要屏蔽的模型名称，多个模型用英文逗号分隔
--   `RANDOM_STRING`，（可选）是否启用伪装信息，默认值为true
--   `RANDOM_STRING_LENGTH`，（可选）伪装信息长度，默认为20
+
+| 环境变量 | 说明 | 默认值 | 必需 |
+|---------|------|--------|------|
+| `GEMINI_API_KEYS` | 从google ai studio 获取的API密钥，支持多个API密钥，以英文逗号分隔 | 无 | 是 |
+| `PASSWORD` | 用户访问所需的password | 123 | 否 |
+
+#### 其他环境变量
+
+| 环境变量 | 说明 | 默认值 | 必需 |
+|---------|------|--------|------|
+| `MAX_REQUESTS_PER_MINUTE` | 每分钟最大请求数 | 30 | 否 |
+| `MAX_REQUESTS_PER_DAY_PER_IP` | 每天每个 IP 最大请求数 | 600 | 否 |
+| `FAKE_STREAMING` | 是否启用假流式传输 | true | 否 |
+| `API_KEY_DAILY_LIMIT` | 单api 24小时最大使用次数 | 25 | 否 |
+| `BLOCKED_MODELS` | 需要屏蔽的模型名称，多个模型用英文逗号分隔 | 无 | 否 |
+| `RANDOM_STRING` | 是否启用伪装信息 | true | 否 |
+| `RANDOM_STRING_LENGTH` | 伪装信息长度 | 20 | 否 |
+| `CONCURRENT_REQUESTS` | 默认的并发请求数 | 1 | 否 |
+| `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 1 | 否 |
+| `MAX_CONCURRENT_REQUESTS` | 允许的最大并发请求数 | 3 | 否 |
+| `SERACH_MODE` | 是否启用联网模式 | true | 否 |
+| `SERACH_PROMPT` | 联网模式提示词 | （使用搜索工具联网搜索，需要在content中结合搜索内容） | 否 |
+
+> **移动设备提示**：如果表格在您的设备上显示不完整，可以尝试横向滚动查看完整内容。
 
 ## 3. 使用
 ### 3.1 在酒馆中使用

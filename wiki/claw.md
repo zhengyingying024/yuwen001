@@ -1,4 +1,4 @@
-## 使用 Claw Cloud 免费部署 Gemini 反向代理教程 由@[@IDeposit](https://github.com/IDeposit)编写
+## 使用 Claw Cloud 免费部署 Gemini 反向代理教程 由[@IDeposit](https://github.com/IDeposit)编写
 
 本教程将指导您如何利用 Claw Cloud 的免费额度部署一个 Gemini API 的反向代理服务。
 
@@ -11,8 +11,8 @@
 
 **🔑 前置条件 (满足其一即可):**
 
-*   拥有一个注册时间超过 180 天的 GitHub 账号 (每月可获得 $5 赠金)。
-*   使用 Gmail 账号登录 (可获得一个月 $5 赠金)。
+*   拥有一个注册时间超过 180 天的 GitHub 账号 (每月可获得 $5 赠金，理论永久)。
+*   使用 Gmail 账号登录 (只能获得一个月 $5 赠金)。
 
 **🚀 部署步骤:**
 
@@ -22,7 +22,7 @@
 
 2.  **选择区域 (首次登录)**
     首次登录时会提示选择服务器区域。此选择后续可以更改，这里以选择 `日本 (Japan)` 为例。
-    ![选择区域](.img/claw/2.png)
+    ![选择区域](./img/claw/2.png)
 
 3.  **进入 APP Launchpad**
     在控制台主界面，找到并点击 **APP Launchpad**。

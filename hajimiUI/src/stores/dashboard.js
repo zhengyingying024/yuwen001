@@ -95,6 +95,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       fakeStreaming: data.fake_streaming || false,
       fakeStreamingInterval: data.fake_streaming_interval || 0,
       randomString: data.random_string || false,
+      randomStringLength: data.random_string_length || 0,
+      searchMode: data.search_mode || false,
       localVersion: data.local_version || '',
       remoteVersion: data.remote_version || '',
       hasUpdate: data.has_update || false,

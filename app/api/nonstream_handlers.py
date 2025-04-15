@@ -58,7 +58,7 @@ async def process_nonstream_request(
 
         if disconnect_task in done:
             # 客户端已断开连接，但我们仍继续完成API请求以便缓存结果
-            return await handle_client_disconnect(
+            result = await handle_client_disconnect(
                 gemini_task,
                 chat_request,
                 request_type,
@@ -69,6 +69,8 @@ async def process_nonstream_request(
                 chat_request.model,
                 current_api_key
             )
+            return (result, "success" if result else "empty")
+
         else:
             # API任务先完成，取消断开检测任务
             disconnect_task.cancel()
@@ -80,7 +82,7 @@ async def process_nonstream_request(
             if not response_content or not response_content.text:
                 log('warning', f"非流式请求: API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                return None
+                return (None, "empty")
             
             # 检查缓存是否已经存在，如果存在则不再创建新缓存
             cached_response, cache_hit = response_cache_manager.get(cache_key)
@@ -94,7 +96,7 @@ async def process_nonstream_request(
                     log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
                         extra={'cache_operation': 'used-and-removed', 'request_type': request_type})
                 
-                return cached_response
+                return (cached_response, "success")
             
             # 创建响应
             from app.utils.response import create_response
@@ -111,7 +113,7 @@ async def process_nonstream_request(
                     extra={'cache_operation': 'store-and-remove', 'request_type': request_type})
             
             # 返回响应
-            return response
+            return (response, "success")
 
     except asyncio.CancelledError:
         extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message':"请求被取消"}
@@ -129,7 +131,7 @@ async def process_nonstream_request(
                 log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
                     extra={'cache_operation': 'used-and-removed', 'request_type': request_type})
             
-            return cached_response
+            return (cached_response, "success")
             
         # 尝试完成正在进行的API请求
         if not gemini_task.done():
@@ -143,14 +145,14 @@ async def process_nonstream_request(
             if not response_content or not response_content.text:
                 log('warning', f"非流式请求(取消后): API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                return None
+                return (None, "empty")
             update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
             # 创建响应
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)
             
             # 不缓存这个响应，直接返回
-            return response
+            return (response, "success")
         else:
             # 任务已完成，获取结果
             response_content = gemini_task.result()
@@ -159,14 +161,14 @@ async def process_nonstream_request(
             if not response_content or not response_content.text:
                 log('warning', f"非流式请求(已完成): API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                return None
+                return (None, "empty")
             
             # 创建响应
             from app.utils.response import create_response
             response = create_response(chat_request, response_content)
             
             # 不缓存这个响应，直接返回
-            return response
+            return (response, "success")
 
     except HTTPException as e:
         if e.status_code == status.HTTP_408_REQUEST_TIMEOUT:
@@ -180,4 +182,4 @@ async def process_nonstream_request(
         # 其他异常，返回None以便并发请求可以继续尝试其他密钥
         log('error', f"非流式请求异常: {str(e)}", 
             extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-        return None
+        return (None, "error")

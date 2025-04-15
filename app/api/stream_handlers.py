@@ -91,21 +91,22 @@ async def process_stream_request(
                 tasks.append((api_key, task))
                 tasks_map[task] = api_key
             
-            # 等待第一个成功的响应或超时
-            while tasks and not all(t[1].done() for t in tasks):
+            # 等待所有任务完成或找到成功响应
+            found_success = False
+            while tasks and not found_success:
                 # 短时间等待任务完成
                 done, pending = await asyncio.wait(
                     [task for _, task in tasks],
                     timeout=FAKE_STREAMING_INTERVAL,
                     return_when=asyncio.FIRST_COMPLETED
                 )
+                
                 # 如果没有任务完成，发送保活消息
                 if not done and FAKE_STREAMING:
                     yield keep_alive_message
                     continue
                 
                 # 检查已完成的任务是否成功
-                found_success = False
                 for task in done:
                     api_key = tasks_map[task]
                     if not task.cancelled():
@@ -139,41 +140,12 @@ async def process_stream_request(
                 
                 # 更新任务列表，移除已完成的任务
                 tasks = [(k, t) for k, t in tasks if not t.done()]
-
-            # # 检查是否有成功的响应
-            # success = False
-            # for api_key, task in tasks:
-            #     if task.done() and not task.cancelled():
-            #         try:
-            #             result = task.result()
-            #             if result:  # 如果有响应内容
-            #                 success = True
-                            
-            #                 # 从队列中获取响应数据
-            #                 while True:
-            #                     chunk = await response_queue.get()
-            #                     if chunk is None:  # None表示队列结束
-            #                         break
-            #                     if chunk == "data: [DONE]\n\n":  # 完成标记
-            #                         yield chunk
-            #                         break
-            #                     # 确保chunk符合SSE格式
-            #                     if not chunk.endswith("\n\n"):
-            #                         chunk = chunk.rstrip() + "\n\n"
-            #                     yield chunk
-            #                 log('info', f"假流式成功响应，使用密钥: {api_key[:8]}...", 
-            #                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})                                
-            #                 return  # 成功获取响应，退出循环
-            #         except Exception as e:
-            #             error_detail = handle_gemini_error(e, api_key, key_manager)
-            #             log('error', f"请求失败: {error_detail}",
-            #                 extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
             
-            # 如果所有请求都失败，增加并发数并继续尝试
-            if all_keys:
+            # 如果所有请求都失败或返回空响应，增加并发数并继续尝试
+            if not found_success and all_keys:
                 # 增加并发数，但不超过最大并发数
                 current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
-                log('info', f"所有请求失败，增加并发数至: {current_concurrent}", 
+                log('info', f"所有假流式请求失败或返回空响应，增加并发数至: {current_concurrent}", 
                     extra={'request_type': 'stream', 'model': chat_request.model})
 
         # (真流式) 尝试使用不同API密钥，直到所有密钥都尝试过

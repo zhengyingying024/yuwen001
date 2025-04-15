@@ -20,6 +20,7 @@ from app.config.settings import (
     REMOVE_CACHE_AFTER_USE,
     ENABLE_RECONNECT_DETECTION,
     version,
+    search,
     CONCURRENT_REQUESTS,
     INCREASE_CONCURRENT_ON_FAILURE,
     MAX_CONCURRENT_REQUESTS
@@ -169,6 +170,9 @@ async def get_dashboard_data():
         # 添加随机字符串配置
         "random_string": RANDOM_STRING,
         "random_string_length": RANDOM_STRING_LENGTH,
+        # 添加联网搜索配置
+        "search_mode": search["search_mode"],
+        "search_prompt": search["search_prompt"],
         # 添加缓存信息
         "cache_entries": total_cache,
         "valid_cache": valid_cache,

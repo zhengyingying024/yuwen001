@@ -77,24 +77,19 @@ async def process_request(
             )
             tasks.append((api_key, task))
         
-        # 等待第一个成功的响应
+        # 等待所有任务完成
         done, pending = await asyncio.wait(
             [task for _, task in tasks],
-            return_when=asyncio.FIRST_COMPLETED
+            return_when=asyncio.ALL_COMPLETED
         )
-        
-        # 取消所有未完成的任务
-        for _, task in tasks:
-            if not task.done():
-                task.cancel()
         
         # 检查是否有成功的响应
         success = False
         for api_key, task in tasks:
             if task in done:
                 try:
-                    result = task.result()
-                    if result:  # 如果有响应内容
+                    result, status = task.result()
+                    if status == "success" and result:  # 如果有成功响应内容
                         success = True
                         log('info', f"并发请求成功，使用密钥: {api_key[:8]}...", 
                             extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
@@ -116,11 +111,11 @@ async def process_request(
                             extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
                         del response_cache_manager.cache[cache_key]
         
-        # 如果所有请求都失败，增加并发数并继续尝试
+        # 如果所有请求都失败或返回空响应，增加并发数并继续尝试
         if not success and all_keys:
             # 增加并发数，但不超过最大并发数
             current_concurrent = min(current_concurrent + INCREASE_CONCURRENT_ON_FAILURE, MAX_CONCURRENT_REQUESTS)
-            log('info', f"所有并发请求失败，增加并发数至: {current_concurrent}", 
+            log('info', f"所有并发请求失败或返回空响应，增加并发数至: {current_concurrent}", 
                 extra={'request_type': request_type, 'model': chat_request.model})
     
     # 如果所有尝试都失败

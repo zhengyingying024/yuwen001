@@ -62,8 +62,8 @@
 | `CONCURRENT_REQUESTS` | 默认的并发请求数 | 1 | 否 |
 | `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 1 | 否 |
 | `MAX_CONCURRENT_REQUESTS` | 允许的最大并发请求数 | 3 | 否 |
-| `SERACH_MODE` | 是否启用联网模式 | true | 否 |
-| `SERACH_PROMPT` | 联网模式提示词 | （使用搜索工具联网搜索，需要在content中结合搜索内容） | 否 |
+| `SEARCH_MODE` | 是否启用联网模式 | true | 否 |
+| `SEARCH_PROMPT` | 联网模式提示词 | （使用搜索工具联网搜索，需要在content中结合搜索内容） | 否 |
 
 > **移动设备提示**：如果表格在您的设备上显示不完整，可以尝试横向滚动查看完整内容。
 

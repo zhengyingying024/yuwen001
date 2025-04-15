@@ -97,7 +97,7 @@ const getFoldIconClass = (isVisible) => {
         <h3 class="section-title">功能配置</h3>
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.fakeStreaming ? "启用" : "禁用" }}</div>
+            <div class="stat-value">{{ dashboardStore.config.searchMode ? "启用" : "禁用" }}</div>
             <div class="stat-label">联网搜索</div>
           </div>
           <div class="stat-card">

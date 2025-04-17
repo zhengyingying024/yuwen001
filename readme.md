@@ -10,6 +10,7 @@
 - [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
 - [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
 - [HuggingFace单文件部署的使用文档](./wiki/hf-oneclick.md) 感谢[@任梓樂](https://github.com/rzline)编写
+- [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
 * v0.1.4beta

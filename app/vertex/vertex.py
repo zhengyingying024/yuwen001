@@ -1162,7 +1162,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         async def generator():
                             try:
                                 log('info', f"向 Gemini API 发送请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__}), Fake streaming ({settings.FAKE_STREAMING_INTERVAL})")
-                                response = client.models.generate_content(
+                                response = await client.aio.models.generate_content(
                                     model=model_name,
                                     contents=prompt,
                                     config=current_gen_config,
@@ -1182,8 +1182,9 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         try:
                             is_done = False
                             while not is_done:
-                                keep_alive = asyncio.create_task(asyncio.sleep(settings.FAKE_STREAMING_INTERVAL), name="keep_alive")
-                                done_tasks, _ = await asyncio.wait({ generate, timeout, keep_alive }, return_when=asyncio.FIRST_COMPLETED)
+                                done_tasks, _ = await asyncio.wait({ generate, timeout }, return_when=asyncio.FIRST_COMPLETED, timeout=settings.FAKE_STREAMING_INTERVAL)
+                                if not done_tasks:
+                                    yield convert_chunk_to_openai({}, request.model, response_id, 0)
                                 for done in done_tasks:
                                     if is_done:
                                         break
@@ -1191,8 +1192,6 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                                         case "timeout":
                                             generate.cancel()
                                             raise TimeoutError("Stream timed out")
-                                        case "keep_alive":
-                                            yield convert_chunk_to_openai({}, request.model, response_id, 0)
                                         case "generate_content":
                                             for choice in done.result()["choices"]:
                                                 class Chunk:
@@ -1219,14 +1218,14 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         try:
                             for candidate_index in range(candidate_count):
                                 log('info', f"向 Gemini API 发送流式请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
-                                responses = client.models.generate_content_stream(
+                                responses = await client.aio.models.generate_content_stream(
                                     model=model_name,
                                     contents=prompt,
                                     config=current_gen_config,
                                 )
                                 
                                 # Use regular for loop, not async for
-                                for chunk in responses:
+                                async for chunk in await responses:
                                     first_chunk_received = True
                                     if hasattr(chunk, 'text') and chunk.text:
                                         all_chunks_empty = False
@@ -1258,7 +1257,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                 # Non-streaming call
                 try:
                     log('info', f"向 Gemini API 发送请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
-                    response = client.models.generate_content(
+                    response = await client.aio.models.generate_content(
                         model=model_name,
                         contents=prompt,
                         config=current_gen_config,

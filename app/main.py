@@ -1,41 +1,38 @@
-import asyncio
-import json
-import logging
-import os
-import pathlib
-import sys
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
-
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
-import app.config.settings as settings
-from app.api import dashboard_router, init_dashboard_router, init_router, router
-from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 from app.models import ErrorResponse
 from app.services import GeminiClient
 from app.utils import (
-    ActiveRequestsManager,
-    APIKeyManager,
-    ResponseCacheManager,
-    check_version,
-    clean_expired_stats,
-    format_log_message,
-    handle_exception,
-    log,
+    APIKeyManager, 
+    test_api_key, 
+    format_log_message, 
     log_manager,
-    schedule_cache_cleanup,
-    test_api_key,
+    ResponseCacheManager,
+    ActiveRequestsManager,
+    clean_expired_stats,
     update_api_call_stats,
+    check_version,
+    schedule_cache_cleanup,
+    handle_exception,
+    log
 )
-from app.vertex.vertex import init_vertex_ai
+from app.api import router, init_router, dashboard_router, init_dashboard_router
 from app.vertex.vertex import router as vertex_router
-
+from app.vertex.vertex import init_vertex_ai
+import app.config.settings as settings
+from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
+import os
+import json
+import asyncio
+import time
+import logging
+from datetime import datetime, timedelta
+import sys
+import pathlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 # 设置模板目录
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))

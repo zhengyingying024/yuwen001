@@ -122,6 +122,4 @@ async def process_request(
     msg = "所有API密钥均请求失败,请稍后重试"
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
     
-    # 非流式请求使用标准HTTP异常
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
+    raise

@@ -4,6 +4,7 @@ from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorRespo
 from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key
 from .stream_handlers import process_stream_request
+from .nonstream_handlers import process_request
 from app.models.schemas import ChatCompletionResponse, Choice, Message 
 
 import app.config.settings as settings
@@ -13,7 +14,6 @@ from app.utils.logging import log
 
 # 导入拆分后的模块
 from .auth import verify_password
-from .request_handlers import process_request
 
 # 创建路由器
 router = APIRouter()
@@ -109,14 +109,14 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     
     # 记录请求缓存键信息
     log('info', f"请求缓存键: {cache_key[:8]}...", 
-        extra={'cache_key': cache_key[:8], 'request_type': 'non-stream'})
+        extra={'request_type': 'non-stream', 'model': request.model})
     
     # 检查精确缓存是否存在且未过期
     cached_response, cache_hit = response_cache_manager.get(cache_key)
     if cache_hit:
         # 精确缓存命中
-        log('info', f"精确缓存命中: {cache_key[:8]}...", 
-            extra={'cache_operation': 'hit', 'request_type': 'non-stream'})
+        log('info', f"缓存命中: {cache_key[:8]}...", 
+            extra={'request_type': 'non-stream', 'model': request.model})
         
         # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
         active_requests_manager.remove_by_prefix(f"cache:{cache_key}")
@@ -125,7 +125,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         if cache_key in response_cache_manager.cache:
             del response_cache_manager.cache[cache_key]
             log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
-                extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
+                extra={'request_type': 'non-stream', 'model': request.model})
         
         # 返回缓存响应
         return cached_response

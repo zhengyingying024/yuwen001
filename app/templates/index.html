@@ -12,4 +12,16 @@
   <body>
     <div id="app"></div>
   </body>
+  <script>
+    let apiUrlContainer = document.createElement("div")
+    apiUrlContainer.innerHTML = "{{api_url}}"
+    apiUrlContainer.style.color = "#28a745"
+    apiUrlContainer.style.fontWeight = "bold"
+    apiUrlContainer.style.textAlign = "center"
+
+    document.addEventListener("DOMContentLoaded", function () {
+      let beforeContainer = document.querySelector(".section-title")
+      beforeContainer.after(apiUrlContainer)
+    })
+  </script>
 </html>

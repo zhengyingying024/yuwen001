@@ -1224,8 +1224,8 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                                     config=current_gen_config,
                                 )
                                 
-                                # Use regular for loop, not async for
-                                async for chunk in await responses:
+                                # typing hint 写错了，只有1层coro
+                                async for chunk in responses:
                                     first_chunk_received = True
                                     if hasattr(chunk, 'text') and chunk.text:
                                         all_chunks_empty = False

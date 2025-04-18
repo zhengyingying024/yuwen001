@@ -1182,24 +1182,27 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         try:
                             is_done = False
                             while not is_done:
-                                done_tasks, _ = await asyncio.wait([generate, timeout], return_when=asyncio.FIRST_COMPLETED, timeout=settings.FAKE_STREAMING_INTERVAL)
+                                keep_alive = asyncio.create_task(asyncio.sleep(settings.FAKE_STREAMING_INTERVAL), name="keep_alive")
+                                done_tasks, _ = await asyncio.wait({ generate, timeout, keep_alive }, return_when=asyncio.FIRST_COMPLETED)
                                 for done in done_tasks:
                                     if is_done:
                                         break
-
                                     match done.get_name():
                                         case "timeout":
                                             generate.cancel()
-                                            raise TimeoutError("Stream timed out") # Trigger retry
+                                            raise TimeoutError("Stream timed out")
+                                        case "keep_alive":
+                                            yield convert_chunk_to_openai({}, request.model, response_id, 0)
                                         case "generate_content":
                                             for choice in done.result()["choices"]:
                                                 class Chunk:
                                                     text = choice["message"]["content"]
                                                     logprobs = choice.get("logprobs", None)
                                                 yield convert_chunk_to_openai(Chunk(), request.model, response_id, choice["index"])
-                                            yield "data: [DONE]\n" # 下面还有个 \n
+                                            yield "data: [DONE]\n\n"
                                             is_done = True
-                                yield "\n"
+                                        case _:
+                                            raise ValueError("Unknown task type received")
                         except Exception as stream_error:
                             error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
                             print(error_msg)

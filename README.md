@@ -2,10 +2,17 @@
 
 这是一个基于 FastAPI 构建的 Gemini API 代理，旨在提供一个简单、安全且可配置的方式来访问 Google 的 Gemini 模型。适用于在 Hugging Face Spaces 上部署，并支持openai api格式的工具集成。
 
-感谢[@warming-afternoon](https://github.com/warming-afternoon)，[@任梓樂](https://github.com/rzline)在技术上的大力支持
+# 本项目基于CC BY-NC 4.0许可开源，需遵守以下规则
+- 您必须给出适当的署名，提供指向本协议的链接，并指明是否（对原作）作了修改。您可以以任何合理方式进行，但不得以任何方式暗示许可方认可您或您的使用。
+- 您不得将本作品用于商业目的，包括但不限于任何形式的商业倒卖、SaaS、API 付费接口、二次销售、打包出售、收费分发或其他直接或间接盈利行为。
+
+### 如需商业授权，请联系原作者获得书面许可。违者将承担相应法律责任。
+
+### 感谢[@warming-afternoon](https://github.com/warming-afternoon)，[@任梓樂](https://github.com/rzline)在技术上的大力支持
+
 ###  使用文档
 - [【推荐,现已全面切换到单文件版本】huggingface的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
-- [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢**北极星星**编写
+- [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 - [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
 - [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写

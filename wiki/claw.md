@@ -48,6 +48,7 @@
     *   `PASSWORD`: 设置一个访问此反向代理的密码。**（这不是你的 Gemini Key，而是自定义的访问密码）**
     *   `TZ`: 设置时区，建议填 `Asia/Shanghai`。
 
+
     ```env
     GEMINI_API_KEYS=key1,key2,key3
     PASSWORD=设置一个你自己的访问密码

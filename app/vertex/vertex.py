@@ -1181,12 +1181,9 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         timeout = asyncio.create_task(asyncio.sleep(300), name="timeout")
                         try:
                             while True:
-                                keep_alive = asyncio.create_task(asyncio.sleep(settings.FAKE_STREAMING_INTERVAL), name="keep_alive")
-                                done_tasks, _ = await asyncio.wait([generate, keep_alive, timeout], return_when=asyncio.FIRST_COMPLETED)
+                                done_tasks, _ = await asyncio.wait([generate, timeout], return_when=asyncio.FIRST_COMPLETED, timeout=settings.FAKE_STREAMING_INTERVAL)
                                 for done in done_tasks:
                                     match done.get_name():
-                                        case "keep_alive":
-                                            yield "\n"
                                         case "timeout":
                                             raise TimeoutError("Stream timed out") # Trigger retry
                                         case "generate_content":
@@ -1196,6 +1193,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                                                     chunk["logprobs"] = logprobs
                                                 yield convert_chunk_to_openai(chunk, request.model, response_id, choice["index"])
                                             return "data: [DONE]\n\n"
+                                yield "\n"
                         except Exception as stream_error:
                             error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
                             print(error_msg)

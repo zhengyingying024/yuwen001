@@ -1192,11 +1192,11 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                                             generate.cancel()
                                             raise TimeoutError("Stream timed out") # Trigger retry
                                         case "generate_content":
-                                            for choice in done.result().get("choices", []):
-                                                chunk = { "text": choice["message"]["content"] }
-                                                if logprobs := choice.get("logprobs", None):
-                                                    chunk["logprobs"] = logprobs
-                                                yield convert_chunk_to_openai(chunk, request.model, response_id, choice["index"])
+                                            for choice in done.result()["choices"]:
+                                                class Chunk:
+                                                    text = choice["message"]["content"]
+                                                    logprobs = choice.get("logprobs", None)
+                                                yield convert_chunk_to_openai(Chunk(), request.model, response_id, choice["index"])
                                             yield "data: [DONE]\n" # 下面还有个 \n
                                             is_done = True
                                 yield "\n"

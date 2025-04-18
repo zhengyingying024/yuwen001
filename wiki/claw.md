@@ -34,7 +34,7 @@
 
 5.  **配置应用信息**
     *   **Application Name:** 填写一个应用名称（必须是**英文**，且以**小写字母**开头）。
-    *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`。
+    *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`
     ![填写应用信息](./img/claw/5.png)
 
 6.  **找到环境变量设置**

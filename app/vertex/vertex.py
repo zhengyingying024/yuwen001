@@ -1161,7 +1161,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                     async def stream_generator_inner():
                         async def generator():
                             try:
-                                log('info', f"向 Gemini API 发送请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
+                                log('info', f"向 Gemini API 发送请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__}), Fake streaming ({settings.FAKE_STREAMING_INTERVAL})")
                                 response = client.models.generate_content(
                                     model=model_name,
                                     contents=prompt,
@@ -1186,9 +1186,10 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                                 for done in done_tasks:
                                     if is_done:
                                         break
-                                    
+
                                     match done.get_name():
                                         case "timeout":
+                                            generate.cancel()
                                             raise TimeoutError("Stream timed out") # Trigger retry
                                         case "generate_content":
                                             for choice in done.result().get("choices", []):

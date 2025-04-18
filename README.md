@@ -8,10 +8,11 @@
 
 ### 如需商业授权，请联系原作者获得书面许可。违者将承担相应法律责任。
 
-感谢[@warming-afternoon](https://github.com/warming-afternoon)，[@任梓樂](https://github.com/rzline)在技术上的大力支持
+### 感谢[@warming-afternoon](https://github.com/warming-afternoon)，[@任梓樂](https://github.com/rzline)在技术上的大力支持
+
 ###  使用文档
 - [【推荐,现已全面切换到单文件版本】huggingface的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
-- [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢**北极星星**编写
+- [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 - [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
 - [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写

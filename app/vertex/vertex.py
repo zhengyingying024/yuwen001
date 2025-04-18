@@ -19,6 +19,7 @@ from fastapi import APIRouter
 from google.genai import types
 from app.utils.logging import log
 from google import genai
+import app.config.settings as settings
 
 client = None
 router = APIRouter()
@@ -1155,46 +1156,94 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             if request.stream:
                 # Streaming call
                 response_id = f"chatcmpl-{int(time.time())}"
-                candidate_count = request.n or 1
                 
-                async def stream_generator_inner():
-                    all_chunks_empty = True # Track if we receive any content
-                    first_chunk_received = False
-                    try:
-                        for candidate_index in range(candidate_count):
-                            log('info', f"向 Gemini API 发送流式请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
-                            responses = client.models.generate_content_stream(
-                                model=model_name,
-                                contents=prompt,
-                                config=current_gen_config,
-                            )
+                if settings.FAKE_STREAMING:
+                    async def stream_generator_inner():
+                        async def generator():
+                            try:
+                                log('info', f"向 Gemini API 发送请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
+                                response = client.models.generate_content(
+                                    model=model_name,
+                                    contents=prompt,
+                                    config=current_gen_config,
+                                )
+                                if not is_response_valid(response):
+                                    raise ValueError("Invalid or empty response received") # Trigger retry
+                                
+                                return convert_to_openai_format(response, request.model)
+                            except Exception as generate_error:
+                                error_msg = f"生成内容时发生错误 (Model: {model_name}, Format: {prompt_func.__name__}): {str(generate_error)}"
+                                log('error', error_msg)
+                                # 引发错误以信号失败以进行重试逻辑
+                                raise generate_error
+                        
+                        job = asyncio.create_task(generator(), name="generate_content")
+                        timeout = asyncio.create_task(asyncio.sleep(300), name="timeout")
+                        try:
+                            while True:
+                                keep_alive = asyncio.create_task(asyncio.sleep(settings.FAKE_STREAMING_INTERVAL), name="keep_alive")
+                                done_tasks, _ = await asyncio.wait([keep_alive, job, timeout], return_when=asyncio.FIRST_COMPLETED)
+                                for done in done_tasks:
+                                    match done.get_name():
+                                        case "keep_alive":
+                                            yield "\n"
+                                        case "timeout":
+                                            raise TimeoutError("Stream timed out") # Trigger retry
+                                        case "generate_content":
+                                            for choice in done.result().get("choices", []):
+                                                chunk = { "text": choice["message"]["content"] }
+                                                if logprobs := choice.get("logprobs", None):
+                                                    chunk["logprobs"] = logprobs
+                                                yield convert_chunk_to_openai(chunk, request.model, response_id, choice["index"])
+                                            return "data: [DONE]\n\n"
+                        except Exception as stream_error:
+                            error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
+                            print(error_msg)
+                            # Yield error in SSE format but also raise to signal failure
+                            error_response_content = create_openai_error_response(500, error_msg, "server_error")
+                            yield f"data: {json.dumps(error_response_content)}\n\n"
+                            yield "data: [DONE]\n\n"
+                            raise stream_error # Propagate error for retry logic
+                else:
+                    candidate_count = request.n or 1
+                    async def stream_generator_inner():
+                        all_chunks_empty = True # Track if we receive any content
+                        first_chunk_received = False
+                        try:
+                            for candidate_index in range(candidate_count):
+                                log('info', f"向 Gemini API 发送流式请求 (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
+                                responses = client.models.generate_content_stream(
+                                    model=model_name,
+                                    contents=prompt,
+                                    config=current_gen_config,
+                                )
+                                
+                                # Use regular for loop, not async for
+                                for chunk in responses:
+                                    first_chunk_received = True
+                                    if hasattr(chunk, 'text') and chunk.text:
+                                        all_chunks_empty = False
+                                    yield convert_chunk_to_openai(chunk, request.model, response_id, candidate_index)
                             
-                            # Use regular for loop, not async for
-                            for chunk in responses:
-                                first_chunk_received = True
-                                if hasattr(chunk, 'text') and chunk.text:
-                                    all_chunks_empty = False
-                                yield convert_chunk_to_openai(chunk, request.model, response_id, candidate_index)
-                        
-                        # Check if any chunk was received at all
-                        if not first_chunk_received:
-                             raise ValueError("Stream connection established but no chunks received")
+                            # Check if any chunk was received at all
+                            if not first_chunk_received:
+                                raise ValueError("Stream connection established but no chunks received")
 
-                        yield create_final_chunk(request.model, response_id, candidate_count)
-                        yield "data: [DONE]\n\n"
-                        
-                        # Return status based on content received
-                        if all_chunks_empty and first_chunk_received: # Check if we got chunks but they were all empty
-                            raise ValueError("Streamed response contained only empty chunks") # Treat empty stream as failure for retry
+                            yield create_final_chunk(request.model, response_id, candidate_count)
+                            yield "data: [DONE]\n\n"
+                            
+                            # Return status based on content received
+                            if all_chunks_empty and first_chunk_received: # Check if we got chunks but they were all empty
+                                raise ValueError("Streamed response contained only empty chunks") # Treat empty stream as failure for retry
 
-                    except Exception as stream_error:
-                        error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
-                        print(error_msg)
-                        # Yield error in SSE format but also raise to signal failure
-                        error_response_content = create_openai_error_response(500, error_msg, "server_error")
-                        yield f"data: {json.dumps(error_response_content)}\n\n"
-                        yield "data: [DONE]\n\n"
-                        raise stream_error # Propagate error for retry logic
+                        except Exception as stream_error:
+                            error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
+                            print(error_msg)
+                            # Yield error in SSE format but also raise to signal failure
+                            error_response_content = create_openai_error_response(500, error_msg, "server_error")
+                            yield f"data: {json.dumps(error_response_content)}\n\n"
+                            yield "data: [DONE]\n\n"
+                            raise stream_error # Propagate error for retry logic
                 
                 return StreamingResponse(stream_generator_inner(), media_type="text/event-stream")
 

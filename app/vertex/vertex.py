@@ -1182,7 +1182,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                         try:
                             while True:
                                 keep_alive = asyncio.create_task(asyncio.sleep(settings.FAKE_STREAMING_INTERVAL), name="keep_alive")
-                                done_tasks, _ = await asyncio.wait([keep_alive, generate, timeout], return_when=asyncio.FIRST_COMPLETED)
+                                done_tasks, _ = await asyncio.wait([generate, keep_alive, timeout], return_when=asyncio.FIRST_COMPLETED)
                                 for done in done_tasks:
                                     match done.get_name():
                                         case "keep_alive":

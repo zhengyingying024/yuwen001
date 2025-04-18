@@ -34,7 +34,7 @@
 
 5.  **配置应用信息**
     *   **Application Name:** 填写一个应用名称（必须是**英文**，且以**小写字母**开头）。
-    *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`。
+    *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`
     ![填写应用信息](./img/claw/5.png)
 
 6.  **找到环境变量设置**
@@ -47,7 +47,7 @@
     *   `GEMINI_API_KEYS`: 填入你的 Gemini API Key。如果**有多个 Key**，请用英文逗号 `,` 分隔，例如 `key1,key2,key3`。 **(请务必替换成你自己的有效 Key)**
     *   `PASSWORD`: 设置一个访问此反向代理的密码。**（这不是你的 Gemini Key，而是自定义的访问密码）**
     *   `TZ`: 设置时区，建议填 `Asia/Shanghai`。
-
+                
     ```env
     GEMINI_API_KEYS=key1,key2,key3
     PASSWORD=设置一个你自己的访问密码
@@ -55,15 +55,15 @@
     ```
     ![填写环境变量](./img/claw/7.png)
 
-8.  **部署应用**
+7.  **部署应用**
     返回页面顶部，点击 **Deploy application** 按钮。
     ![部署应用](./img/claw/8.png)
 
-9.  **等待部署完成**
+8.  **等待部署完成**
     等待应用状态 (`Status`) 变为 **Running**，这表示部署已成功。
     ![部署成功状态](./img/claw/9.png)
 
-10. **获取反代地址并使用**
+9. **获取反代地址并使用**
     *   切换到 **Network** 标签页。
     *   在右侧会看到一个 URL 地址，这就是你的反向代理地址。点击 **Copy** 复制它。
     *   **重要:** 在你的客户端（如 SillyTavern、OpenCat 等）使用此地址时，需要在**末尾加上 `/v1`**。

@@ -34,7 +34,7 @@
 
 5.  **配置应用信息**
     *   **Application Name:** 填写一个应用名称（必须是**英文**，且以**小写字母**开头）。
-    *   **Image Name:** 输入镜像地址 `beijixingxing/hajimi:latest`
+    *   **Image Name:** 输入镜像地址 `ghcr.io/wyeeeee/hajimi:latest`
     ![填写应用信息](./img/claw/5.png)
 
 6.  **找到环境变量设置**
@@ -42,18 +42,14 @@
     ![环境变量部分](./img/claw/6.png)
 
 7.  **填写环境变量**
-    点击 **Add environment variable** 添加以下三个环境变量：
+    从https://github.com/wyeeeee/hajimi/releases/tag/settings 下载settings.txt
+    按照注释配置相应内容，您可以保留这个txt作为本地备份
+    注意：大部分设置都拥有默认值，您只需要填写拥有的gemini key到对应位置即可
+    ![配置文件](./img/claw/settings.png)
+    
+    点击claw的 **Add environment variable**将txt文件内容复制并粘贴进去
 
-    *   `GEMINI_API_KEYS`: 填入你的 Gemini API Key。如果**有多个 Key**，请用英文逗号 `,` 分隔，例如 `key1,key2,key3`。 **(请务必替换成你自己的有效 Key)**
-    *   `PASSWORD`: 设置一个访问此反向代理的密码。**（这不是你的 Gemini Key，而是自定义的访问密码）**
-    *   `TZ`: 设置时区，建议填 `Asia/Shanghai`。
-                
-    ```env
-    GEMINI_API_KEYS=key1,key2,key3
-    PASSWORD=设置一个你自己的访问密码
-    TZ=Asia/Shanghai
-    ```
-    ![填写环境变量](./img/claw/7.png)
+    ![填写环境变量](./img/claw/env.png)
 
 7.  **部署应用**
     返回页面顶部，点击 **Deploy application** 按钮。

@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import Request
+from fastapi import Request, HTTPException
 from app.models import ChatCompletionRequest
 from app.utils import create_error_response, update_api_call_stats
 from app.utils.cache import cache_response
@@ -35,33 +35,21 @@ async def handle_client_disconnect(
         # 检查响应文本是否为空
         if response_content is None or response_content.text == "":
             extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model}
-            log('info', "客户端断开后 Gemini API 返回空响应", extra=extra_log)
-            
-            # 删除现有缓存，因为响应为空
-            if cache_key and cache_key in response_cache_manager.cache:
-                log('info', f"因空响应，删除缓存: {cache_key[:8]}...", 
-                    extra={'request_type': request_type})
-                del response_cache_manager.cache[cache_key]
-                
-            return None
+            log('info', "客户端断开后 Gemini API 返回空响应，不进行缓存", extra=extra_log)
+            # 不删除任何可能存在的旧缓存项
+            return None # 返回 None 表示此特定调用失败
         
-        # 首先检查是否有现有缓存
-        cached_response, cache_hit = response_cache_manager.get(cache_key)
-        if cache_hit:
-            log('info', f"客户端断开但找到已存在缓存，将删除: {cache_key[:8]}...", 
-                extra={'cache_operation': 'disconnect-found-cache', 'request_type': request_type})
-            
-            # 安全删除缓存
-            if cache_key in response_cache_manager.cache:
-                del response_cache_manager.cache[cache_key]
-        
-        # 创建新响应并进行缓存
+        # 响应有效，创建响应对象
         response = create_response(chat_request, response_content)
-        cache_response(response, cache_key, response_cache_manager)
         
+        # 将有效响应存入缓存 (追加到deque)
+        cache_response(response, cache_key, response_cache_manager) 
+        log('info', f"客户端断开后，成功缓存响应: {cache_key[:8]}...", 
+            extra={'request_type': request_type, 'model': chat_request.model})
+
         # 更新API调用统计
-        update_api_call_stats(settings.api_call_stats,key,model)
-        
+        await update_api_call_stats(settings.api_call_stats,key,model) # <--- 添加 await
+
         return response
     # except asyncio.CancelledError:
     #     # 对于取消异常，仍然尝试继续完成任务
@@ -108,12 +96,6 @@ async def handle_client_disconnect(
         error_msg = str(e)
         extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model, 'error_message': error_msg}
         log('error', f"客户端断开后处理API响应时出错: {error_msg}", extra=extra_log)
-        
-        # 删除缓存，因为出现错误
-        if cache_key and cache_key in response_cache_manager.cache:
-            log('info', f"因API响应错误，删除缓存: {cache_key[:8]}...", 
-                extra={'request_type': request_type, 'model': chat_request.model})
-            del response_cache_manager.cache[cache_key]
             
-        # 创建错误响应
-        return create_error_response(chat_request.model, f"请求处理错误: {error_msg}")
+        # 向客户端抛出异常
+        raise HTTPException(status_code=500, detail="服务器内部处理时发生错误")

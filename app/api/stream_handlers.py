@@ -186,12 +186,13 @@ async def process_stream_request(
                 log('error', f"流式响应: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                 return
-            finally:
+            finally: 
                 # 更新API调用统计
                 if success:
-                    update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
+                    await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
                     return
-                                                
+
+
         # 所有API密钥都尝试失败的处理
         error_msg = "所有API密钥均请求失败，请稍后重试"
         log('error', error_msg,
@@ -246,10 +247,10 @@ async def process_stream_request(
                             # 将格式化的内容块放入响应队列
                             formatted_data = f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
                             await response_queue.put(formatted_data)
-                        
+
                         # 更新API调用统计
-                        update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
-                        
+                        await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model) 
+
                         # 添加完成标记到队列
                         await response_queue.put("data: [DONE]\n\n")
                         # 添加None表示队列结束

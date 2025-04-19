@@ -2,6 +2,7 @@ import os
 import pathlib
 import logging
 from datetime import datetime, timedelta
+import asyncio 
 
 # 基础目录设置
 BASE_DIR = pathlib.Path(__file__).parent.parent
@@ -39,7 +40,6 @@ API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "100"))
 # 缓存配置
 CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
 MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
-REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
 
 # 请求历史配置
 REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
@@ -71,6 +71,9 @@ api_call_stats = {
         'by_endpoint': {}  # 按API端点分类的分钟统计（也用于API密钥统计）
     }
 }
+
+# 用于保护 api_call_stats 并发访问的锁
+stats_lock = asyncio.Lock() 
 
 # 客户端IP到最近请求的映射，用于识别重连请求
 client_request_history = {}

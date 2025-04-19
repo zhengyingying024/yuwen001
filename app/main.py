@@ -52,7 +52,6 @@ response_cache = {}
 response_cache_manager = ResponseCacheManager(
     expiry_time=settings.CACHE_EXPIRY_TIME,
     max_entries=settings.MAX_CACHE_ENTRIES,
-    remove_after_use=settings.REMOVE_CACHE_AFTER_USE,
     cache_dict=response_cache
 )
 

@@ -114,45 +114,29 @@ async def process_nonstream_request(
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return (None, "empty")
             
-            # 检查缓存是否已经存在，如果存在则不再创建新缓存
-            cached_response, cache_hit = response_cache_manager.get(cache_key)
-            if cache_hit:
-                log('info', f"缓存已存在，直接返回: {cache_key[:8]}...", 
-                    extra={'request_type': request_type})
-                
-                # 安全删除缓存
-                if cache_key in response_cache_manager.cache:
-                    del response_cache_manager.cache[cache_key]
-                    log('info', f"缓存使用后删除: {cache_key[:8]}...", 
-                        extra={'request_type': request_type})
-                
-                return (cached_response, "success")
-            
             # 创建响应
             response = create_response(chat_request, response_content)
             
-            update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
-            
-            log('info', f"非流式请求返回响应", 
-                    extra={'request_type': request_type, 'model': chat_request.model})
+            # 缓存有效响应 
+            cache_response(response, cache_key, response_cache_manager)
+            log('info', f"非流式请求成功，缓存响应: {cache_key[:8]}...",
+                extra={'request_type': request_type, 'model': chat_request.model})
+
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) # <--- 添加 await
+
             # 返回响应
             return (response, "success")
 
     except asyncio.CancelledError:
         # 在请求被取消时，先检查缓存中是否已有结果
-        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
         if cache_hit:
             log('info', f"请求取消但找到有效缓存，使用缓存响应: {cache_key[:8]}...", 
                 extra={'request_type': request_type, 'model': chat_request.model})
             
-            # 安全删除缓存
-            if cache_key in response_cache_manager.cache:
-                del response_cache_manager.cache[cache_key]
-                log('info', f"缓存使用后删除: {cache_key[:8]}...", 
-                    extra={'request_type': request_type, 'model': chat_request.model})
             
             return (cached_response, "success")
-            
+                    
         # 尝试完成正在进行的API请求
         if not gemini_task.done():
             log('info', "请求取消但API请求尚未完成，继续等待...", 
@@ -166,8 +150,8 @@ async def process_nonstream_request(
                 log('warning', f"非流式请求(取消后):返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return (None, "empty")
-            update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
-            
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) # <--- 添加 await
+
             # 创建响应
             response = create_response(chat_request, response_content)
             
@@ -179,13 +163,12 @@ async def process_nonstream_request(
             
             # 检查响应内容是否为空
             if not response_content or not response_content.text:
-                log('warning', f"非流式请求(已完成): API密钥 {current_api_key[:8]}... 返回空响应",
+                log('warning', f"非流式请求(已完成): 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return (None, "empty")
             
             # 创建响应
             response = create_response(chat_request, response_content)
-            
             # 不缓存这个响应，直接返回
             return (response, "success")
 
@@ -214,7 +197,16 @@ async def process_request(
 
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
-        GeminiClient, chat_request.messages,model=chat_request.model)    
+        GeminiClient, chat_request.messages,model=chat_request.model)
+        
+    # --- 在开始处理前检查缓存 ---
+    if cache_key:
+        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+        if cache_hit:
+            log('info', f"非流式请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
+                extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
+            return cached_response # 直接返回缓存内容
+                 
     # 非流式请求处理 - 使用并发请求
     
     # 重置已尝试的密钥
@@ -265,6 +257,8 @@ async def process_request(
             [task for _, task in tasks],
             return_when=asyncio.ALL_COMPLETED
         )
+        log('info', f"并发请求的所有任务完成", 
+                extra={'request_type': request_type, 'model': chat_request.model})
         
         # 检查是否有成功的响应
         success = False
@@ -288,13 +282,14 @@ async def process_request(
                         0
                     )
                     
-                    # 如果需要，则删除缓存
-                    if error_result.get('remove_cache', False) and cache_key and cache_key in response_cache_manager.cache:
-                        log('info', f"因API错误，删除缓存: {cache_key[:8]}...", 
-                            extra={'request_type': request_type, 'model': chat_request.model})
-                        del response_cache_manager.cache[cache_key]
+                    # --- 不再因API错误删除缓存 ---
+                    # if error_result.get('remove_cache', False) and cache_key:
+                    #     # 考虑是否真的要删除整个deque？可能不需要
+                    #     log('warning', f"API错误发生，但不再自动删除缓存键: {cache_key[:8]}...", 
+                    #         extra={'request_type': request_type, 'model': chat_request.model})
+                    pass # 错误处理函数可能已经禁用了key，让缓存自然过期或被后续成功请求覆盖/清理
         
-        # 如果所有请求都失败或返回空响应，增加并发数并继续尝试
+        # 如果当前批次没有成功响应，并且还有密钥可用，则继续尝试
         if not success and all_keys:
             # 增加并发数，但不超过最大并发数
             current_concurrent = min(current_concurrent + settings.INCREASE_CONCURRENT_ON_FAILURE, settings.MAX_CONCURRENT_REQUESTS)

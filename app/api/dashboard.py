@@ -169,7 +169,6 @@ async def get_dashboard_data():
         "cache_by_model": cache_by_model,
         "request_history_count": history_count,
         "enable_reconnect_detection": settings.ENABLE_RECONNECT_DETECTION,
-        "remove_cache_after_use": settings.REMOVE_CACHE_AFTER_USE,
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,

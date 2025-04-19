@@ -78,8 +78,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     """处理API请求的主函数，根据需要处理流式或非流式请求"""
     global current_api_key
     
-    # 获取客户端IP
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    
     # 请求前基本检查
     protect_from_abuse(
         http_request, 
@@ -112,20 +111,11 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         extra={'request_type': 'non-stream', 'model': request.model})
     
     # 检查精确缓存是否存在且未过期
-    cached_response, cache_hit = response_cache_manager.get(cache_key)
+    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
         # 精确缓存命中
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        
-        # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
-        active_requests_manager.remove_by_prefix(f"cache:{cache_key}")
-        
-        # 安全删除缓存
-        if cache_key in response_cache_manager.cache:
-            del response_cache_manager.cache[cache_key]
-            log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
-                extra={'request_type': 'non-stream', 'model': request.model})
         
         # 返回缓存响应
         return cached_response
@@ -145,13 +135,10 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             await asyncio.wait_for(active_task, timeout=180)
             
             # 通过缓存管理器获取已完成任务的结果
-            cached_response, cache_hit = response_cache_manager.get(cache_key)
+            cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
             if cache_hit:
-                # 删除缓存
-                if cache_key in response_cache_manager.cache:
-                    del response_cache_manager.cache[cache_key]
-                    log('info', f"使用已完成任务的缓存后删除: {cache_key[:8]}...", 
-                        extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
+                log('info', f"使用已完成任务的缓存: {cache_key[:8]}...", 
+                        extra={'request_type': 'non-stream'})
                 
                 return cached_response
                 
@@ -242,7 +229,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         active_requests_manager.remove(pool_key)
         
         # 检查是否已有缓存的结果（可能是由另一个任务创建的）
-        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
         if cache_hit:
             log('info', f"任务失败但找到缓存，使用缓存结果: {cache_key[:8]}...", 
                 extra={'request_type': 'non-stream', 'model': request.model})

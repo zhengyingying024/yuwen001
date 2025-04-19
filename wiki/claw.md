@@ -43,8 +43,8 @@
 
 7.  **填写环境变量**
     从https://github.com/wyeeeee/hajimi/releases/tag/settings 下载settings.txt
-    按照注释配置相应内容，您可以保留这个txt作为本地备份
-    注意：大部分设置都拥有默认值，您只需要填写拥有的gemini key到对应位置即可
+    按照注释配置相应内容，您可以保留这个txt作为本地备份<br>
+    注意：大部分设置都拥有默认值，如果您不理解设置内容，只需要填写拥有的gemini key到对应位置即可
     ![配置文件](./img/claw/settings.png)
     
     点击claw的 **Add environment variable**将txt文件内容复制并粘贴进去

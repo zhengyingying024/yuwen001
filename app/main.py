@@ -261,5 +261,9 @@ async def root(request: Request):
     """
     根路由 - 返回静态 HTML 文件
     """
+    base_url = str(request.base_url).replace("http", "https")
+    api_url = f"{base_url}v1/" if base_url.endswith("/") else f"{base_url}/v1/"
     # 直接返回 index.html 文件
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "api_url": api_url}
+    )

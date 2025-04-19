@@ -35,7 +35,8 @@
 5.  **配置应用信息**
     *   **Application Name:** 填写一个应用名称（必须是**英文**，且以**小写字母**开头）。
     *   **Image Name:** 输入镜像地址 `ghcr.io/wyeeeee/hajimi:latest`
-    ![填写应用信息](./img/claw/5.png)
+    * 配置端口为7860并打开
+    ![填写应用信息](./img/claw/image.png)
 
 6.  **找到环境变量设置**
     向下滚动页面，找到 **Environment Variables** 部分。

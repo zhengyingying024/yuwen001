@@ -39,8 +39,8 @@ class ResponseCacheManager:
             'created_at': now,
         }
         
-        log('info', f"响应已缓存: {cache_key[:8]}...", 
-            extra={'request_type': 'non-stream'})
+        # log('info', f"响应已缓存: {cache_key[:8]}...", 
+        #     extra={'request_type': 'non-stream'})
         
         # 如果缓存超过限制，清理最旧的
         self.clean_if_needed()
@@ -103,7 +103,7 @@ def generate_cache_key(chat_request) -> str:
     json_data = json.dumps(request_data, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
 
-def cache_response(response, cache_key, client_ip, response_cache_manager, endpoint=None,model=None):
+def cache_response(response, cache_key, response_cache_manager, endpoint=None,model=None):
     """
     将响应存入缓存
     

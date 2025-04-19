@@ -226,9 +226,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             active_requests_manager,
             safety_settings,
             safety_settings_g2,
-            settings.api_call_stats,
-            cache_key,
-            client_ip
+            cache_key
         )
     )
     

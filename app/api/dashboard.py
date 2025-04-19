@@ -113,12 +113,17 @@ async def get_dashboard_data():
     for _, cache_data in response_cache_manager.cache.items():
         if time.time() < cache_data.get('expiry_time', 0):
             # 按模型统计缓存
-            model = cache_data.get('response', {}).model
+            response_obj = cache_data.get('response')
+            # 如果 response_obj 是 None，或者它是一个没有 'model' 属性的对象（比如空字典 {}），
+            # getattr 会返回第三个参数指定的默认值 None
+            model = getattr(response_obj, 'model', None)
             if model:
                 if model in cache_by_model:
                     cache_by_model[model] += 1
                 else:
                     cache_by_model[model] = 1
+
+
     
     # 获取请求历史统计
     history_count = len(settings.client_request_history)

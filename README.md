@@ -15,6 +15,7 @@
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 - [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
 - [Claw Cloud部署的使用文档](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
+- [huggingface部署的使用文档](./wiki/huggingface.md)
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志

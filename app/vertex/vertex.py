@@ -179,7 +179,7 @@ def init_vertex_ai():
     global client # Ensure we modify the global client variable
     try:
         # Priority 1: Check for credentials JSON content in environment variable (Hugging Face)
-        credentials_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+        credentials_json_str = settings.GOOGLE_CREDENTIALS_JSON
         if credentials_json_str:
             try:
                 # Try to parse the JSON
@@ -196,7 +196,7 @@ def init_vertex_ai():
                         # print(f"ERROR: Missing required fields in credentials JSON: {missing_fields}") # Removed
                         raise ValueError(f"Credentials JSON 缺少必需字段: {missing_fields}")
                 except json.JSONDecodeError as json_err:
-                    log('error', f"ERROR: 无法将 GOOGLE_CREDENTIALS_JSON 解析为 JSON: {json_err}")
+                    log('error', f"vertex: 无法将 GOOGLE_CREDENTIALS_JSON 解析为 JSON: {json_err}")
                     raise
 
                 # Create credentials from the parsed JSON info (json.loads should handle \n)
@@ -209,7 +209,7 @@ def init_vertex_ai():
                     project_id = credentials.project_id
                     log('info', f"成功创建凭证对象用于项目: {project_id}")
                 except Exception as cred_err:
-                    log('error', f"ERROR: 无法从服务账户信息创建凭证: {cred_err}")
+                    log('error', f"vertex: 无法从服务账户信息创建凭证: {cred_err}")
                     raise
                 
                 # Initialize the client with the credentials
@@ -217,11 +217,11 @@ def init_vertex_ai():
                     client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
                     log('info', f"使用 GOOGLE_CREDENTIALS_JSON 环境变量初始化 Vertex AI 用于项目: {project_id}")
                 except Exception as client_err:
-                    log('error', f"ERROR: 无法初始化 genai.Client: {client_err}")
+                    log('error', f"vertex: 无法初始化 genai.Client: {client_err}")
                     raise
                 return True
             except Exception as e:
-                log('error', f"从 GOOGLE_CREDENTIALS_JSON 加载凭证时发生错误: {e}")
+                log('error', f"vertex：从 GOOGLE_CREDENTIALS_JSON 加载凭证时发生错误: {e}")
                 # 如果这里失败，继续尝试其他方法
 
         # Priority 2: Try to use the credential manager to get credentials from files
@@ -234,7 +234,7 @@ def init_vertex_ai():
                 log('info', f"使用凭证管理器初始化 Vertex AI 用于项目: {project_id}")
                 return True
             except Exception as e:
-                log('error', f"ERROR: 无法从凭证管理器初始化 client: {e}")
+                log('error', f"vertex: 无法从凭证管理器初始化 client: {e}")
         
         # Priority 3: Fall back to GOOGLE_APPLICATION_CREDENTIALS environment variable (file path)
         file_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -255,17 +255,17 @@ def init_vertex_ai():
                         log('info', f"Initialized Vertex AI using GOOGLE_APPLICATION_CREDENTIALS file path for project: {project_id}")
                         return True
                     except Exception as client_err:
-                        log('error', f"ERROR: 无法从文件初始化 client: {client_err}")
+                        log('error', f"vertex: 无法从文件初始化 client: {client_err}")
                 except Exception as e:
-                    log('error', f"ERROR: 从 GOOGLE_APPLICATION_CREDENTIALS 路径 {file_path} 加载凭证时发生错误: {e}")
+                    log('error', f"vertex: 从 GOOGLE_APPLICATION_CREDENTIALS 路径 {file_path} 加载凭证时发生错误: {e}")
             else:
-                log('error', f"ERROR: GOOGLE_APPLICATION_CREDENTIALS 文件不存在于路径: {file_path}")
+                log('error', f"vertex: GOOGLE_APPLICATION_CREDENTIALS 文件不存在于路径: {file_path}")
         
         # 如果没有任何方法成功
-        log('error', f"ERROR: 没有找到有效的凭证。尝试了 GOOGLE_CREDENTIALS_JSON, 凭证管理器 ({credential_manager.credentials_dir}), 和 GOOGLE_APPLICATION_CREDENTIALS.")
+        log('error', f"vertex: 没有找到有效的凭证。尝试了 GOOGLE_CREDENTIALS_JSON, 凭证管理器 ({credential_manager.credentials_dir}), 和 GOOGLE_APPLICATION_CREDENTIALS.")
         return False
     except Exception as e:
-        log('error', f"初始化认证时发生错误: {e}")
+        log('error', f"vertex: 初始化认证时发生错误，如果您不使用Vertex，请忽略这些错误: {e}")
         return False
 
 
@@ -786,9 +786,9 @@ def create_final_chunk(model: str, response_id: str, candidate_count: int = 1) -
     
     return f"data: {json.dumps(final_chunk)}\n\n"
 
-# /v1/models endpoint
-@router.get("/v1/models")
-async def list_models(api_key: str = Depends(get_api_key)):
+
+async def list_models(api_key: Optional[str] = None):
+        
     # Based on current information for Vertex AI models
     models = [
         {
@@ -1014,9 +1014,20 @@ def create_openai_error_response(status_code: int, message: str, error_type: str
         }
     }
 
-@router.post("/v1/chat/completions")
-async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_api_key)):
+
+async def chat_completions(request: OpenAIRequest, api_key: Optional[str] = None):
     try:
+        # 如果提供了api_key，验证它
+        if api_key is not None:
+            if not config.validate_api_key(api_key):
+                error_response = create_openai_error_response(
+                    401, "Invalid API key", "invalid_request_error"
+                )
+                return JSONResponse(status_code=401, content=error_response)
+        else:
+            # 如果没有提供api_key，使用依赖项
+            api_key = await get_api_key()
+            
         # Validate model availability
         models_response = await list_models()
         available_models = [model["id"] for model in models_response.get("data", [])]

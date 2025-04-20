@@ -201,7 +201,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 active_requests_manager.remove(pool_key)
                 log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
                     extra={'request_type': 'non-stream'})
-     
+                
     # 创建非流式请求处理任务
     process_task = asyncio.create_task(
         process_request(

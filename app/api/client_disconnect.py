@@ -2,7 +2,7 @@ import asyncio
 from fastapi import Request, HTTPException
 from app.models import ChatCompletionRequest
 from app.utils import create_error_response, update_api_call_stats
-from app.utils.cache import cache_response
+
 from app.utils.logging import log
 import app.config.settings as settings
 from app.utils.response import create_response
@@ -24,9 +24,9 @@ async def handle_client_disconnect(
     request_type: str, 
     current_api_key: str,
     response_cache_manager,
-    cache_key: str = None,
-    model: str = None,
-    key: str = None,
+    cache_key: str,
+    model: str,
+    key: str,
 ):
     try:
         # 等待API任务完成，使用shield防止它被取消
@@ -43,7 +43,7 @@ async def handle_client_disconnect(
         response = create_response(chat_request, response_content)
         
         # 将有效响应存入缓存 (追加到deque)
-        cache_response(response, cache_key, response_cache_manager) 
+        response_cache_manager.store(cache_key, response)
         log('info', f"客户端断开后，成功缓存响应: {cache_key[:8]}...", 
             extra={'request_type': request_type, 'model': chat_request.model})
 
@@ -51,46 +51,46 @@ async def handle_client_disconnect(
         await update_api_call_stats(settings.api_call_stats,key,model) # <--- 添加 await
 
         return response
-    # except asyncio.CancelledError:
-    #     # 对于取消异常，仍然尝试继续完成任务
-    #     log('info', "客户端断开后任务被取消，但我们仍会尝试完成", 
-    #         extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+    except asyncio.CancelledError:
+        # 对于取消异常，仍然尝试继续完成任务
+        log('info', "客户端断开后任务被取消，但我们仍会尝试完成", 
+            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
         
-    #     # 检查任务是否已经完成
-    #     if gemini_task.done() and not gemini_task.cancelled():
-    #         try:
-    #             response_content = gemini_task.result()
+        # 检查任务是否已经完成
+        if gemini_task.done() and not gemini_task.cancelled():
+            try:
+                response_content = gemini_task.result()
                 
-    #             # 首先检查是否有现有缓存
-    #             cached_response, cache_hit = response_cache_manager.get(cache_key)
-    #             if cache_hit:
-    #                 log('info', f"任务被取消但找到已存在缓存，将删除: {cache_key[:8]}...", 
-    #                     extra={'cache_operation': 'cancel-found-cache', 'request_type': request_type})
+                # # 首先检查是否有现有缓存
+                # cached_response, cache_hit = response_cache_manager.get(cache_key)
+                # if cache_hit:
+                #     log('info', f"任务被取消但找到已存在缓存，将删除: {cache_key[:8]}...", 
+                #         extra={'cache_operation': 'cancel-found-cache', 'request_type': request_type})
                     
-    #                 # 安全删除缓存
-    #                 if cache_key in response_cache_manager.cache:
-    #                     del response_cache_manager.cache[cache_key]
+                #     # 安全删除缓存
+                #     if cache_key in response_cache_manager.cache:
+                #         del response_cache_manager.cache[cache_key]
                 
-    #             # 创建新响应并进行缓存
-    #             response = create_response(chat_request, response_content)
-    #             cache_response(response, cache_key, response_cache_manager)
+                # 创建新响应并进行缓存
+                response = create_response(chat_request, response_content)
+                # response_cache_manager.store(cache_key, response)
                 
-    #             # 更新API调用统计
-    #             update_api_call_stats(settings.api_call_stats,key,model)
+                # 更新API调用统计
+                # update_api_call_stats(settings.api_call_stats,key,model)
                 
-    #             return response
-    #         except Exception as inner_e:
-    #             log('error', f"客户端断开后从已完成任务获取结果失败: {str(inner_e)}", 
-    #                 extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                return response
+            except Exception as inner_e:
+                log('error', f"客户端断开后从已完成任务获取结果失败: {str(inner_e)}", 
+                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 
-    #             # 删除缓存，因为出现错误
-    #             if cache_key and cache_key in response_cache_manager.cache:
-    #                 log('info', f"因任务获取结果失败，删除缓存: {cache_key[:8]}...", 
-    #                     extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
-    #                 del response_cache_manager.cache[cache_key]
+                # # 删除缓存，因为出现错误
+                # if cache_key and cache_key in response_cache_manager.cache:
+                #     log('info', f"因任务获取结果失败，删除缓存: {cache_key[:8]}...", 
+                #         extra={'cache_operation': 'remove-on-error', 'request_type': request_type})
+                #     del response_cache_manager.cache[cache_key]
         
-    #     # 创建错误响应而不是返回None
-    #     return create_error_response(chat_request.model, "请求处理过程中发生错误，请重试")
+        # 返回None
+        return None
     except Exception as e:
         # 处理API任务异常
         error_msg = str(e)

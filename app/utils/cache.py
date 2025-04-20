@@ -26,6 +26,7 @@ class ResponseCacheManager:
         self.cache: Dict[str, deque[CacheItem]] = cache_dict if cache_dict is not None else {}
         self.expiry_time = expiry_time
         self.max_entries = max_entries # 总条目数限制
+        self.cur_cache_num = 0 # 当前条目数
     
     def get(self, cache_key: str) -> Tuple[Optional[Any], bool]:
         """获取指定键的第一个有效缓存项（不删除）"""
@@ -59,6 +60,7 @@ class ResponseCacheManager:
                 try:
                     cache_deque.remove(item_to_remove) # 从deque中删除
                     log('info', f"从缓存获取并删除项: {cache_key[:8]}...")
+                    self.cur_cache_num -= 1
                     if not cache_deque: # 如果deque变空，则删除该键
                         del self.cache[cache_key]
                     return response, True
@@ -69,7 +71,7 @@ class ResponseCacheManager:
 
         return None, False
 
-    def store(self, cache_key: str, response: Any, client_ip: Optional[str] = None):
+    def store(self, cache_key: str, response: Any):
         """存储响应到缓存（追加到键对应的deque）。"""
         now = time.time()
         new_item: CacheItem = {
@@ -80,11 +82,12 @@ class ResponseCacheManager:
         
         if cache_key not in self.cache:
             self.cache[cache_key] = deque()
+        # log('info', f"开始存储响应到deque末尾，当前cache：{self.cache}")
         
         self.cache[cache_key].append(new_item) # 追加到deque末尾
         
-        log('info', f"响应已缓存: {cache_key[:8]}... (当前键下共 {len(self.cache[cache_key])} 项)")
-        
+        log('info', f"响应已缓存: {cache_key[:8]}...")
+        self.cur_cache_num += 1 
         # 如果缓存总条目数超过限制，清理最旧的
         self.clean_if_needed()
     
@@ -97,7 +100,9 @@ class ResponseCacheManager:
             valid_items = deque(item for item in cache_deque if now < item.get('expiry_time', 0))
             
             if len(valid_items) < len(cache_deque):
-                 log('info', f"清理键 {key[:8]}... 的过期缓存项 {len(cache_deque) - len(valid_items)} 个。")
+                clean_num =len(cache_deque) - len(valid_items)
+                log('info', f"清理键 {key[:8]}... 的过期缓存项 {clean_num} 个。")
+                self.cur_cache_num -= clean_num
 
             if not valid_items:
                 keys_to_remove.append(key) # 标记此键以便稍后删除
@@ -111,13 +116,11 @@ class ResponseCacheManager:
 
     def clean_if_needed(self):
         """如果缓存总条目数超过限制，清理全局最旧的项目。"""
-        total_items = sum(len(d) for d in self.cache.values())
-        
-        if total_items <= self.max_entries:
+        if self.cur_cache_num <= self.max_entries:
             return
 
-        items_to_remove_count = total_items - self.max_entries
-        log('info', f"缓存总数 {total_items} 超过限制 {self.max_entries}，需要清理 {items_to_remove_count} 个最旧项。")
+        items_to_remove_count = self.cur_cache_num - self.max_entries
+        log('info', f"缓存总数 {self.cur_cache_num} 超过限制 {self.max_entries}，需要清理 {items_to_remove_count} 个最旧项。")
 
         # 收集所有缓存项及其元数据（键、创建时间、项本身）
         all_items_meta = []
@@ -140,6 +143,7 @@ class ResponseCacheManager:
                 try:
                     self.cache[key_to_clean].remove(item_to_clean)
                     items_actually_removed += 1
+                    self.cur_cache_num -= 1
                     log('debug', f"因容量限制，删除键 {key_to_clean[:8]}... 的旧缓存项 (创建于 {item_meta['created_at']})。")
                     keys_potentially_empty.add(key_to_clean)
                 except ValueError:
@@ -189,17 +193,3 @@ def generate_cache_key(chat_request) -> str:
     json_data = json.dumps(request_data, sort_keys=True)
     return hashlib.md5(json_data.encode()).hexdigest()
 
-def cache_response(response, cache_key, response_cache_manager, endpoint=None,model=None):
-    """
-    将响应存入缓存
-    
-    参数:
-    - response: 响应对象
-    - cache_key: 缓存键
-    - response_cache_manager: 缓存管理器
-    - api_key: API密钥，用于更新API密钥使用统计
-    """
-    if not cache_key:
-        return
-    # 注意：此函数现在只存储，不检查是否存在。
-    response_cache_manager.store(cache_key, response)

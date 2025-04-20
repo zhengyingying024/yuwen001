@@ -2,7 +2,7 @@ import asyncio
 from fastapi import HTTPException, status, Request
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
-from app.utils import cache_response, update_api_call_stats,handle_api_error
+from app.utils import update_api_call_stats,handle_api_error
 from app.utils.logging import log
 from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
@@ -53,7 +53,7 @@ async def process_nonstream_request(
     active_requests_manager,
     safety_settings,
     safety_settings_g2,
-    cache_key: str = None
+    cache_key: str
 ):
     """处理非流式API请求"""
     gemini_client = GeminiClient(current_api_key)
@@ -81,6 +81,7 @@ async def process_nonstream_request(
     )
 
     try:
+        
         # 先等待看是否API任务先完成，或者客户端先断开连接
         done, pending = await asyncio.wait(
             [gemini_task, disconnect_task],
@@ -104,7 +105,6 @@ async def process_nonstream_request(
         else:
             # API任务先完成，取消断开检测任务
             disconnect_task.cancel()
-            
             # 获取响应内容
             response_content = await gemini_task
             
@@ -113,21 +113,22 @@ async def process_nonstream_request(
                 log('warning', f"非流式请求: API密钥 {current_api_key[:8]}... 返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return (None, "empty")
-            
             # 创建响应
             response = create_response(chat_request, response_content)
             
             # 缓存有效响应 
-            cache_response(response, cache_key, response_cache_manager)
+            response_cache_manager.store(cache_key, response)
             log('info', f"非流式请求成功，缓存响应: {cache_key[:8]}...",
                 extra={'request_type': request_type, 'model': chat_request.model})
 
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) # <--- 添加 await
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) 
 
+            
             # 返回响应
             return (response, "success")
 
     except asyncio.CancelledError:
+        log('info', "在请求被取消时，先检查缓存中是否已有结果")
         # 在请求被取消时，先检查缓存中是否已有结果
         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
         if cache_hit:
@@ -150,7 +151,8 @@ async def process_nonstream_request(
                 log('warning', f"非流式请求(取消后):返回空响应",
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return (None, "empty")
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) # <--- 添加 await
+            log('info', "响应内容非空，更新状态")
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) 
 
             # 创建响应
             response = create_response(chat_request, response_content)
@@ -159,6 +161,7 @@ async def process_nonstream_request(
             return (response, "success")
         else:
             # 任务已完成，获取结果
+            log('info', "任务已完成，获取结果")
             response_content = gemini_task.result()
             
             # 检查响应内容是否为空
@@ -174,7 +177,7 @@ async def process_nonstream_request(
 
     except Exception as e:
         # 其他异常，返回 None 以便并发请求可以继续尝试其他密钥
-        log('error', f"非流式请求异常: {str(e)[:8]}", 
+        log('error', f"非流式请求异常: {str(e)}", 
             extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
         return (None, "error")
     
@@ -189,8 +192,7 @@ async def process_request(
     active_requests_manager,
     safety_settings,
     safety_settings_g2,
-    api_call_stats,
-    cache_key: str = None
+    cache_key: str,
 ):
     """处理非流式请求"""
     global current_api_key
@@ -198,7 +200,7 @@ async def process_request(
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
         GeminiClient, chat_request.messages,model=chat_request.model)
-        
+    
     # --- 在开始处理前检查缓存 ---
     if cache_key:
         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
@@ -227,12 +229,14 @@ async def process_request(
         current_batch = all_keys[:current_concurrent]
         all_keys = all_keys[current_concurrent:]
         
+        
         # 创建并发任务
         tasks = []
         for api_key in current_batch:
             # 记录当前尝试的密钥信息
             log('info', f"并发请求使用密钥: {api_key[:8]}...", 
                 extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+            
             
             # 创建任务
             task = asyncio.create_task(
@@ -252,6 +256,7 @@ async def process_request(
             )
             tasks.append((api_key, task))
         
+        log('info', "等待并发请求的所有任务完成")
         # 等待所有任务完成
         done, pending = await asyncio.wait(
             [task for _, task in tasks],

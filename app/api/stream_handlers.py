@@ -16,8 +16,6 @@ async def process_stream_request(
     safety_settings,
     safety_settings_g2,
     api_call_stats,
-    FAKE_STREAMING,
-    FAKE_STREAMING_INTERVAL
 ) -> StreamingResponse:
     """处理流式API请求"""
     
@@ -36,10 +34,7 @@ async def process_stream_request(
         
         # 设置初始并发数
         current_concurrent = settings.CONCURRENT_REQUESTS
-        
-        # 如果可用密钥数量小于并发数，则使用所有可用密钥
-        if len(all_keys) < current_concurrent:
-            current_concurrent = len(all_keys)
+
         
         # 创建一个队列（用于假流式模式的响应内容）
         response_queue = asyncio.Queue() if settings.FAKE_STREAMING else None
@@ -61,11 +56,21 @@ async def process_stream_request(
             except StopAsyncIteration:
                 pass
         
+        # 如果可用密钥数量小于并发数，则使用所有可用密钥
+        if len(all_keys) < current_concurrent:
+            current_concurrent = len(all_keys)        
+        
+        # 当前请求次数
+        current_try_num =0
+        
         # (假流式) 尝试使用不同API密钥，直到所有密钥都尝试过
-        while (all_keys and settings.FAKE_STREAMING):
+        while (all_keys and settings.FAKE_STREAMING and (current_try_num < settings.MAX_RETRY_NUM)):
             # 获取当前批次的密钥
-            current_batch = all_keys[:current_concurrent]
-            all_keys = all_keys[current_concurrent:]
+            
+            batch_num= min(settings.MAX_RETRY_NUM - current_try_num, current_concurrent)
+            
+            current_batch = all_keys[:batch_num]
+            all_keys = all_keys[batch_num:]
             
             # 创建并发任务
             tasks = []
@@ -161,7 +166,7 @@ async def process_stream_request(
                 stream_generator = gemini_client.stream_chat(
                     chat_request,
                     contents,
-                    safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                    safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
                     system_instruction
                 )
                 
@@ -222,7 +227,7 @@ async def process_stream_request(
                         non_stream_client.complete_chat,
                         chat_request,
                         contents,
-                        safety_settings_g2 if 'gemini-2.0-flash-exp' in chat_request.model else safety_settings,
+                        safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
                         system_instruction
                     )
                     

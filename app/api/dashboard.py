@@ -121,10 +121,6 @@ async def get_dashboard_data():
     #             else:
     #                 cache_by_model[model] = 1
 
-
-    
-    # 获取请求历史统计
-    history_count = len(settings.client_request_history)
     
     # 获取活跃请求统计
     active_count = len(active_requests_manager.active_requests)
@@ -163,7 +159,6 @@ async def get_dashboard_data():
         "cache_expiry_time": settings.CACHE_EXPIRY_TIME,
         "max_cache_entries": settings.MAX_CACHE_ENTRIES,
         # "cache_by_model": cache_by_model,
-        "request_history_count": history_count,
         "enable_reconnect_detection": settings.ENABLE_RECONNECT_DETECTION,
         # 添加活跃请求池信息
         "active_count": active_count,

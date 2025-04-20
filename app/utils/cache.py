@@ -86,7 +86,7 @@ class ResponseCacheManager:
         
         self.cache[cache_key].append(new_item) # 追加到deque末尾
         
-        log('info', f"响应已缓存: {cache_key[:8]}...")
+        # log('info', f"响应已缓存: {cache_key[:8]}...")
         self.cur_cache_num += 1 
         # 如果缓存总条目数超过限制，清理最旧的
         self.clean_if_needed()

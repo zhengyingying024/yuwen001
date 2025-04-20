@@ -247,7 +247,7 @@ class GeminiClient:
     # 非流式处理
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
-        log('info', "非流式请求开始", extra=extra_log)
+        # log('info', "非流式请求开始", extra=extra_log)
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")

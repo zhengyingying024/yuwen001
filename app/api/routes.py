@@ -78,6 +78,8 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     """处理API请求的主函数，根据需要处理流式或非流式请求"""
     global current_api_key
     
+    # 生成缓存键 - 用于匹配请求内容对应缓存
+    cache_key = generate_cache_key(request)
     
     # 请求前基本检查
     protect_from_abuse(
@@ -99,21 +101,17 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             safety_settings,
             safety_settings_g2,
             settings.api_call_stats,
-            settings.FAKE_STREAMING,
-            settings.FAKE_STREAMING_INTERVAL
         )
     
-    # 生成完整缓存键 - 用于精确匹配
-    cache_key = generate_cache_key(request)
     
     # 记录请求缓存键信息
     log('info', f"请求缓存键: {cache_key[:8]}...", 
         extra={'request_type': 'non-stream', 'model': request.model})
     
-    # 检查精确缓存是否存在且未过期
+    # 检查缓存是否存在且未过期
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
-        # 精确缓存命中
+        # 缓存命中
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
         
@@ -205,17 +203,18 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     # 创建非流式请求处理任务
     process_task = asyncio.create_task(
         process_request(
-            request, 
-            http_request, 
-            "non-stream",
-            key_manager,
-            response_cache_manager,
-            active_requests_manager,
-            safety_settings,
-            safety_settings_g2,
-            cache_key
+            chat_request = request, 
+            http_request = http_request, 
+            request_type = "non-stream", 
+            key_manager = key_manager,
+            response_cache_manager = response_cache_manager,
+            active_requests_manager = active_requests_manager,
+            safety_settings = safety_settings,
+            safety_settings_g2 = safety_settings_g2,
+            cache_key = cache_key
         )
     )
+
     
     # 将任务添加到活跃请求池
     active_requests_manager.add(pool_key, process_task)
@@ -235,5 +234,5 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 extra={'request_type': 'non-stream', 'model': request.model})
             return cached_response
         
-        # 重新抛出异常
+        # 抛出异常
         raise

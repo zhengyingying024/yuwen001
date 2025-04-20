@@ -98,14 +98,21 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     log('info', f"请求缓存键: {cache_key[:8]}...", 
         extra={'request_type': 'non-stream', 'model': request.model})
     
-    # 检查缓存是否存在
+    # 检查缓存是否存在，如果存在，返回缓存
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-    if cache_hit:
+    if cache_hit and not request.stream:
+        log('info', f"缓存命中: {cache_key[:8]}...", 
+            extra={'request_type': 'non-stream', 'model': request.model})
+        return cached_response
+
+    if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
         
-        # 返回缓存响应
-        return f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n" if request.stream else cached_response
+        return StreamingResponse(f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n", media_type="text/event-stream")
+    
+    
+    
     
     # 构建包含缓存键的活跃请求池键
     pool_key = f"cache:{cache_key}"

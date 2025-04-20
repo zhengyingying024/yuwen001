@@ -229,8 +229,8 @@ async def process_stream_request(
             # 获取响应内容
             response_content = await gemini_task
                 
-            # log('info', f"假流式模式: API密钥 {api_key[:8]}... 成功获取响应",
-            #     extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
+            log('info', f"假流式成功获取响应，进行缓存",
+                extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
 
             # 更新API调用统计
             await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model) 

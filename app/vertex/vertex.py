@@ -1017,16 +1017,6 @@ def create_openai_error_response(status_code: int, message: str, error_type: str
 
 async def chat_completions(request: OpenAIRequest, api_key: Optional[str] = None):
     try:
-        # 如果提供了api_key，验证它
-        if api_key is not None:
-            if not config.validate_api_key(api_key):
-                error_response = create_openai_error_response(
-                    401, "Invalid API key", "invalid_request_error"
-                )
-                return JSONResponse(status_code=401, content=error_response)
-        else:
-            # 如果没有提供api_key，使用依赖项
-            api_key = await get_api_key()
             
         # Validate model availability
         models_response = await list_models()

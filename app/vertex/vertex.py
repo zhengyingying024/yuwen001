@@ -1158,7 +1158,7 @@ async def chat_completions(request: OpenAIRequest, api_key: Optional[str] = None
                 # Streaming call
                 response_id = f"chatcmpl-{int(time.time())}"
                 
-                if settings.FAKE_STREAMING=="true":
+                if settings.FAKE_STREAMING:
                     async def stream_generator_inner():
                         async def generator():
                             try:

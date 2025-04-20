@@ -32,7 +32,7 @@ def create_error_response(model: str, error_message: str):
     )
 
 def create_response(chat_request, response_content):
-    """创建标准响应对象但不缓存"""
+    """创建标准响应对象"""
     # 创建响应对象
     return create_chat_response(
         model=chat_request.model,

@@ -27,7 +27,7 @@ MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
 MAX_REQUESTS_PER_DAY_PER_IP = int(os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
 RETRY_DELAY = 1
 MAX_RETRY_DELAY = 16 # 网络错误 5xx 重试时的最大等待时间
-MAX_RETRY_NUM = int(os.environ.get("MAX_RETRY_NUM", "30")) # 请求时的最大总轮询 key 数
+MAX_RETRY_NUM = int(os.environ.get("MAX_RETRY_NUM", "15")) # 请求时的最大总轮询 key 数
 
 # 并发请求配置
 CONCURRENT_REQUESTS = int(os.environ.get("CONCURRENT_REQUESTS", "1"))  # 默认并发请求数
@@ -41,10 +41,6 @@ API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "100"))
 # 缓存配置
 CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "3600"))  # 默认60分钟
 MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
-
-# 请求历史配置
-REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
-ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
 
 search={
     "search_mode":os.environ.get("SEARCH_MODE", "false").lower() in ["true", "1", "yes"],

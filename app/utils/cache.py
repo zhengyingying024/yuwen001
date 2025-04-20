@@ -59,7 +59,7 @@ class ResponseCacheManager:
             if item_to_remove:
                 try:
                     cache_deque.remove(item_to_remove) # 从deque中删除
-                    log('info', f"从缓存获取并删除项: {cache_key[:8]}...")
+                    # log('info', f"从缓存获取并删除项: {cache_key[:8]}...")
                     self.cur_cache_num -= 1
                     if not cache_deque: # 如果deque变空，则删除该键
                         del self.cache[cache_key]
@@ -179,7 +179,7 @@ def generate_cache_key(chat_request) -> str:
             for item in msg.content:
                 if item.get('type') == 'text':
                     content_list.append({'type': 'text', 'text': item.get('text')})
-                # 对于图像数据，我们只使用标识符而不是全部数据
+                # 对于图像数据，只使用标识符而不是全部数据
                 elif item.get('type') == 'image_url':
                     image_data = item.get('image_url', {}).get('url', '')
                     if image_data.startswith('data:image/'):

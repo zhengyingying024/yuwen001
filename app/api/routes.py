@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
@@ -91,32 +92,20 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             extra={'model': request.model, 'status_code': 400})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
-
-    
-    # 流式请求直接处理，不使用缓存
-    if request.stream:
-        return await process_stream_request(
-            request,
-            key_manager,
-            safety_settings,
-            safety_settings_g2,
-            settings.api_call_stats,
-        )
     
     
     # 记录请求缓存键信息
     log('info', f"请求缓存键: {cache_key[:8]}...", 
         extra={'request_type': 'non-stream', 'model': request.model})
     
-    # 检查缓存是否存在且未过期
+    # 检查缓存是否存在
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
-        # 缓存命中
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
         
         # 返回缓存响应
-        return cached_response
+        return f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n" if request.stream else cached_response
     
     # 构建包含缓存键的活跃请求池键
     pool_key = f"cache:{cache_key}"
@@ -199,21 +188,36 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 active_requests_manager.remove(pool_key)
                 log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
                     extra={'request_type': 'non-stream'})
-                
-    # 创建非流式请求处理任务
-    process_task = asyncio.create_task(
-        process_request(
-            chat_request = request, 
-            http_request = http_request, 
-            request_type = "non-stream", 
-            key_manager = key_manager,
-            response_cache_manager = response_cache_manager,
-            active_requests_manager = active_requests_manager,
-            safety_settings = safety_settings,
-            safety_settings_g2 = safety_settings_g2,
-            cache_key = cache_key
+    
+        
+    if request.stream:
+        # 流式请求处理任务
+        process_task = asyncio.create_task(
+                process_stream_request(
+                chat_request = request, 
+                key_manager=key_manager,
+                response_cache_manager = response_cache_manager,
+                safety_settings = safety_settings,
+                safety_settings_g2 = safety_settings_g2,
+                cache_key = cache_key
+            )
         )
-    )
+    
+    else:
+        # 创建非流式请求处理任务
+        process_task = asyncio.create_task(
+            process_request(
+                chat_request = request, 
+                http_request = http_request, 
+                request_type = "non-stream", 
+                key_manager = key_manager,
+                response_cache_manager = response_cache_manager,
+                active_requests_manager = active_requests_manager,
+                safety_settings = safety_settings,
+                safety_settings_g2 = safety_settings_g2,
+                cache_key = cache_key
+            )
+        )
 
     
     # 将任务添加到活跃请求池
@@ -234,5 +238,5 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 extra={'request_type': 'non-stream', 'model': request.model})
             return cached_response
         
-        # 抛出异常
-        raise
+        # 发送错误信息给客户端
+        raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {e}")

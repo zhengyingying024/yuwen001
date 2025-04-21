@@ -36,7 +36,7 @@ docker build -t hajimi-app .
 镜像构建完成后，执行命令启动 Docker 容器，如端口被占用需修改左侧端口号：
 
 ```bash
-docker run -d -p 7860:7860 --env-file .env hajimi-app
+docker run -d -p 7860:7860 --env-file .env --name hajimi-app hajimi-app
 ```
 
 ## 三、验证部署

@@ -77,6 +77,8 @@
     此时酒馆应如图所示
      ![sillytavern](./img/claw/sillytavern.png)
     * 如果您在填写完以上信息后，下方没有模型供您选择，请您点击连接按钮，此时您应该可以看到模型，选择模型即可使用
+13. **更新**
+![sillytavern](./img/claw/update.png)
 
 ---
 

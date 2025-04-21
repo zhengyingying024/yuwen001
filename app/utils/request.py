@@ -61,12 +61,3 @@ class ActiveRequestsManager:
         
         if long_running_keys:
             log('warning', f"取消长时间运行的任务: {len(long_running_keys)}个", cleanup='long_running_tasks')
-
-async def check_client_disconnect(http_request, current_api_key: str, request_type: str, model: str):
-    """检查客户端是否断开连接"""
-    while True:
-        if await http_request.is_disconnected():
-            extra_log = {'key': current_api_key[:8], 'request_type': request_type, 'model': model, 'error_message': '检测到客户端断开连接'}
-            log('info', "客户端连接已中断，等待API请求完成", extra=extra_log)
-            return True
-        await asyncio.sleep(0.5)

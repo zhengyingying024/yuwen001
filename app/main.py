@@ -23,11 +23,7 @@ from app.vertex.vertex import router as vertex_router
 from app.vertex.vertex import init_vertex_ai
 import app.config.settings as settings
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
-import os
-import json
 import asyncio
-import time
-import logging
 from datetime import datetime, timedelta
 import sys
 import pathlib
@@ -52,7 +48,6 @@ response_cache = {}
 response_cache_manager = ResponseCacheManager(
     expiry_time=settings.CACHE_EXPIRY_TIME,
     max_entries=settings.MAX_CACHE_ENTRIES,
-    remove_after_use=settings.REMOVE_CACHE_AFTER_USE,
     cache_dict=response_cache
 )
 

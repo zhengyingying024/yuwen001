@@ -187,3 +187,41 @@ async def update_api_call_stats(api_call_stats, endpoint=None, model=None):
         log_message += " | 端点 '%s' 模型 '%s': 统计数据不完整"
 
     log('info', log_message) 
+
+async def get_api_key_usage(api_call_stats, api_key, model=None):
+    """
+    获取API密钥的调用次数
+    
+    参数:
+    - api_call_stats: 统计数据字典
+    - api_key: API密钥
+    - model: 模型名称，如果为None则统计所有模型的调用次数
+    
+    返回:
+    - 24小时内的调用次数
+    """
+    # 使用异步锁保护并发访问
+    async with stats_lock:
+        # 检查并清理过期统计
+        clean_expired_stats(api_call_stats)
+        
+        # 如果提供了模型，则只统计该模型的调用次数
+        if model:
+            try:
+                # 获取24小时内的调用次数
+                usage = sum(api_call_stats['last_24h']['by_endpoint'][api_key][model].values())
+                return usage
+            except (KeyError, TypeError):
+                # 如果统计数据结构中缺少某些键，返回0
+                return 0
+        else:
+            # 统计所有模型的调用次数
+            total_usage = 0
+            try:
+                if api_key in api_call_stats['last_24h']['by_endpoint']:
+                    for model_key in api_call_stats['last_24h']['by_endpoint'][api_key]:
+                        total_usage += sum(api_call_stats['last_24h']['by_endpoint'][api_key][model_key].values())
+                return total_usage
+            except (KeyError, TypeError):
+                # 如果统计数据结构中缺少某些键，返回0
+                return 0

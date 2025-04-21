@@ -9,6 +9,7 @@ import app.config.settings as settings
 import random
 from typing import Literal
 from app.utils.response import create_response
+from app.utils.stats import get_api_key_usage
 
 
 # 非流式请求处理函数
@@ -158,20 +159,39 @@ async def process_request(
     # 获取所有可用的API密钥
     all_keys = key_manager.api_keys.copy()
     random.shuffle(all_keys)
+    
+    # 检查每个API密钥的调用次数，过滤掉超过限制的密钥
+    valid_keys = []
+    for api_key in all_keys:
+        # 获取API密钥的调用次数
+        usage = await get_api_key_usage(settings.api_call_stats, api_key, chat_request.model)
+        # 如果调用次数小于限制，则添加到有效密钥列表
+        if usage < settings.API_KEY_DAILY_LIMIT:
+            valid_keys.append(api_key)
+        else:
+            log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
+                extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+    
+    # 如果没有有效密钥，则随机使用一个密钥
+    if not valid_keys:
+        log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
+            extra={'request_type': request_type, 'model': chat_request.model})
+        valid_keys = [random.choice(all_keys)]
+    
     # 如果可用密钥数量小于并发数，则使用所有可用密钥
-    if len(all_keys) < current_concurrent:
-        current_concurrent = len(all_keys)
+    if len(valid_keys) < current_concurrent:
+        current_concurrent = len(valid_keys)
 
     # 当前请求次数
     current_try_num = 0
     
     # 尝试使用不同API密钥，直到所有密钥都尝试过
-    while all_keys and (current_try_num <  max_retry_num):
+    while valid_keys and (current_try_num < max_retry_num):
         # 获取当前批次的密钥
-        batch_num= min( max_retry_num - current_try_num, current_concurrent)
+        batch_num = min(max_retry_num - current_try_num, current_concurrent)
         
-        current_batch = all_keys[:batch_num]
-        all_keys = all_keys[batch_num:]
+        current_batch = valid_keys[:batch_num]
+        valid_keys = valid_keys[batch_num:]
         
         # 创建并发任务
         tasks = []
@@ -236,7 +256,7 @@ async def process_request(
                 tasks = [(k, t) for k, t in tasks if not t.done()]
                 
         # 如果当前批次没有成功响应，并且还有密钥可用，则继续尝试
-        if not success and all_keys:
+        if not success and valid_keys:
             # 增加并发数，但不超过最大并发数
             current_concurrent = min(current_concurrent + settings.INCREASE_CONCURRENT_ON_FAILURE, settings.MAX_CONCURRENT_REQUESTS)
             log('info', f"所有并发请求失败或返回空响应，增加并发数至: {current_concurrent}", 

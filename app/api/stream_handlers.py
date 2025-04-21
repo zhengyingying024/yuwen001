@@ -41,7 +41,7 @@ async def process_stream_request(
         valid_keys = []
         for api_key in all_keys:
             # 获取API密钥的调用次数
-            usage = await get_api_key_usage(settings.api_call_stats, api_key, chat_request.model)
+            usage = await get_api_key_usage(settings.api_call_stats, api_key)
             # 如果调用次数小于限制，则添加到有效密钥列表
             if usage < settings.API_KEY_DAILY_LIMIT:
                 valid_keys.append(api_key)

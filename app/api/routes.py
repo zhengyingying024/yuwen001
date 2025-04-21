@@ -159,8 +159,6 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         return StreamingResponse(f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n", media_type="text/event-stream")
     
     
-    
-    
     # 构建包含缓存键的活跃请求池键
     pool_key = f"cache:{cache_key}"
     

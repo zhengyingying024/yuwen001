@@ -153,12 +153,13 @@ async def process_stream_request(
                 log('info', f"所有假流式请求失败或返回空响应，增加并发数至: {current_concurrent}", 
                     extra={'request_type': 'stream', 'model': chat_request.model})
 
-        # (真流式) 尝试使用不同API密钥，直到所有密钥都尝试过
-        while (all_keys and not settings.FAKE_STREAMING):
+        # (真流式) 尝试使用不同API密钥，直到所有密钥都尝试过或达到尝试上限
+        while (all_keys and not settings.FAKE_STREAMING and (current_try_num < max_retry_num)):
             # 获取密钥
             api_key = all_keys[0]
-            all_keys = all_keys[1:]                                  
-
+            all_keys = all_keys[1:]
+            current_try_num += 1
+            
             success = False
             try:            
                 gemini_client = GeminiClient(api_key)
@@ -205,7 +206,7 @@ async def process_stream_request(
             extra={'key': 'ALL', 'request_type': 'stream', 'model': chat_request.model})
         
         # 发送错误信息给客户端
-        raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {error_msg}")
+        raise HTTPException(status_code=500, detail = f" hajimi 服务器内部处理时发生错误\n错误原因 : {error_msg}")
             
 
     # 处理假流式模式

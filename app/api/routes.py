@@ -127,7 +127,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     
     # 使用原有的Gemini实现
     # 生成缓存键 - 用于匹配请求内容对应缓存
-    cache_key = generate_cache_key(request)
+    cache_key = generate_cache_key(request,4)
     
     # 请求前基本检查
     protect_from_abuse(

@@ -38,6 +38,7 @@ class ResponseWrapper:
         self._total_token_count = self._extract_total_token_count()
         self._thoughts = self._extract_thoughts()
         self._json_dumps = json.dumps(self._data, indent=4, ensure_ascii=False)
+        self._model = "gemini"
 
     def _extract_thoughts(self) -> Optional[str]:
         try:
@@ -82,6 +83,9 @@ class ResponseWrapper:
         except (KeyError):
             return None
 
+    def set_model(self,model) -> Optional[str]:
+        self._model = model
+
     @property
     def text(self) -> str:
         return self._text
@@ -109,6 +113,10 @@ class ResponseWrapper:
     @property
     def json_dumps(self) -> str:
         return self._json_dumps
+
+    @property
+    def model(self) -> str:
+        return self._model
 
 
 class GeminiClient:

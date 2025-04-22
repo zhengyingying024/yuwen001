@@ -43,18 +43,22 @@
 
 | 环境变量 | 说明 | 默认值 | 必需 |
 |---------|------|--------|------|
+| `TZ` | 配置时区 | Asia/Shanghai | 否 |
 | `MAX_REQUESTS_PER_MINUTE` | 每分钟最大请求数 | 30 | 否 |
 | `MAX_REQUESTS_PER_DAY_PER_IP` | 每天每个 IP 最大请求数 | 600 | 否 |
 | `FAKE_STREAMING` | 是否启用假流式传输 | true | 否 |
-| `API_KEY_DAILY_LIMIT` | 单api 24小时最大使用次数 | 25 | 否 |
+| `API_KEY_DAILY_LIMIT` | 单api 24小时最大使用次数 | 100 | 否 |
+| `MAX_EMPTY_RESPONSES` | 空响应重试次数 | 5 | 否 |
 | `BLOCKED_MODELS` | 需要屏蔽的模型名称，多个模型用英文逗号分隔 | 无 | 否 |
 | `RANDOM_STRING` | 是否启用伪装信息 | true | 否 |
-| `RANDOM_STRING_LENGTH` | 伪装信息长度 | 20 | 否 |
+| `RANDOM_STRING_LENGTH` | 伪装信息长度 | 5 | 否 |
 | `CONCURRENT_REQUESTS` | 默认的并发请求数 | 1 | 否 |
-| `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 1 | 否 |
+| `INCREASE_CONCURRENT_ON_FAILURE` | 当请求失败时增加的并发请求数 | 0 | 否 |
 | `MAX_CONCURRENT_REQUESTS` | 允许的最大并发请求数 | 3 | 否 |
-| `SEARCH_MODE` | 是否启用联网模式 | true | 否 |
+| `SEARCH_MODE` | 是否启用联网模式 | false | 否 |
 | `SEARCH_PROMPT` | 联网模式提示词 | （使用搜索工具联网搜索，需要在content中结合搜索内容） | 否 |
+| `ENABLE_VERTEX` | 是否启用vertex | false | 否 |
+| `GOOGLE_CREDENTIALS_JSON` | vertex ai 凭证 | 无 | 否 |
 
 > **移动设备提示**：如果表格在您的设备上显示不完整，可以尝试横向滚动查看完整内容。
 

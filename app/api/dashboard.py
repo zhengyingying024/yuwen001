@@ -104,24 +104,23 @@ async def get_dashboard_data():
     recent_logs = log_manager.get_recent_logs(500)  # 获取最近500条日志
     
     # 获取缓存统计
-    total_cache = len(response_cache_manager.cache)
-    valid_cache = sum(1 for _, data in response_cache_manager.cache.items()
-                     if time.time() < data.get('expiry_time', 0))
-    cache_by_model = {}
+    total_cache = response_cache_manager.cur_cache_num
+    # cache_by_model = {}
     
-    # 分析缓存数据
-    for _, cache_data in response_cache_manager.cache.items():
-        if time.time() < cache_data.get('expiry_time', 0):
-            # 按模型统计缓存
-            model = cache_data.get('response', {}).model
-            if model:
-                if model in cache_by_model:
-                    cache_by_model[model] += 1
-                else:
-                    cache_by_model[model] = 1
-    
-    # 获取请求历史统计
-    history_count = len(settings.client_request_history)
+    # # 分析缓存数据
+    # for _, cache_data in response_cache_manager.cache.items():
+    #     if time.time() < cache_data.get('expiry_time', 0):
+    #         # 按模型统计缓存
+    #         response_obj = cache_data.get('response')
+    #         # 如果 response_obj 是 None，或者它是一个没有 'model' 属性的对象（比如空字典 {}），
+    #         # getattr 会返回第三个参数指定的默认值 None
+    #         model = getattr(response_obj, 'model', None)
+    #         if model:
+    #             if model in cache_by_model:
+    #                 cache_by_model[model] += 1
+    #             else:
+    #                 cache_by_model[model] = 1
+
     
     # 获取活跃请求统计
     active_count = len(active_requests_manager.active_requests)
@@ -132,7 +131,7 @@ async def get_dashboard_data():
     return {
         "key_count": len(key_manager.api_keys),
         "model_count": len(GeminiClient.AVAILABLE_MODELS),
-        "retry_count": len(key_manager.api_keys),
+        "retry_count": settings.MAX_RETRY_NUM,
         "last_24h_calls": last_24h_calls,
         "hourly_calls": hourly_calls,
         "minute_calls": minute_calls,
@@ -157,14 +156,9 @@ async def get_dashboard_data():
         "search_prompt": settings.search["search_prompt"],
         # 添加缓存信息
         "cache_entries": total_cache,
-        "valid_cache": valid_cache,
-        "expired_cache": total_cache - valid_cache,
         "cache_expiry_time": settings.CACHE_EXPIRY_TIME,
         "max_cache_entries": settings.MAX_CACHE_ENTRIES,
-        "cache_by_model": cache_by_model,
-        "request_history_count": history_count,
-        "enable_reconnect_detection": settings.ENABLE_RECONNECT_DETECTION,
-        "remove_cache_after_use": settings.REMOVE_CACHE_AFTER_USE,
+        # "cache_by_model": cache_by_model,
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,

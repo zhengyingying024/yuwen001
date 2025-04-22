@@ -54,7 +54,7 @@ class ResponseWrapper:
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
                     text+=part['text']
-            return part['text']
+            return text
         except (KeyError, IndexError):
             return ""
 
@@ -246,8 +246,6 @@ class GeminiClient:
 
     # 非流式处理
     def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
-        extra_log = {'key': self.api_key[:8], 'request_type': 'non-stream', 'model': request.model}
-        log('info', "非流式请求开始", extra=extra_log)
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")
@@ -259,7 +257,6 @@ class GeminiClient:
         try:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            log('info', f"非流式请求成功完成，使用密钥: {self.api_key[:8]}...", extra=extra_log)
             
             return ResponseWrapper(response.json())
         except Exception as e:
@@ -354,7 +351,7 @@ class GeminiClient:
             models = []
             for model in data.get("models", []):
                 models.append(model["name"])
-                if model["name"].startswith("models/gemini-2"):
+                if model["name"].startswith("models/gemini-2") and settings.search["search_mode"]:
                     models.append(model["name"] + "-search")
             models.extend(GeminiClient.EXTRA_MODELS)
                 

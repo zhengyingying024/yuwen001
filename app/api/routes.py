@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
@@ -125,8 +126,9 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         return await vertex_chat_completions(vertex_request, api_key=current_api_key)
     
     # 使用原有的Gemini实现
-    # 获取客户端IP
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    # 生成缓存键 - 用于匹配请求内容对应缓存
+    cache_key = generate_cache_key(request,4)
+    
     # 请求前基本检查
     protect_from_abuse(
         http_request, 
@@ -137,45 +139,25 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             extra={'model': request.model, 'status_code': 400})
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="无效的模型")
-
     
-    # 流式请求直接处理，不使用缓存
-    if request.stream:
-        return await process_stream_request(
-            request,
-            key_manager,
-            safety_settings,
-            safety_settings_g2,
-            settings.api_call_stats,
-            settings.FAKE_STREAMING,
-            settings.FAKE_STREAMING_INTERVAL
-        )
-    
-    # 生成完整缓存键 - 用于精确匹配
-    cache_key = generate_cache_key(request)
     
     # 记录请求缓存键信息
     log('info', f"请求缓存键: {cache_key[:8]}...", 
         extra={'request_type': 'non-stream', 'model': request.model})
     
-    # 检查精确缓存是否存在且未过期
-    cached_response, cache_hit = response_cache_manager.get(cache_key)
-    if cache_hit:
-        # 精确缓存命中
+    # 检查缓存是否存在，如果存在，返回缓存
+    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+    if cache_hit and not request.stream:
+        log('info', f"缓存命中: {cache_key[:8]}...", 
+            extra={'request_type': 'non-stream', 'model': request.model})
+        return cached_response
+
+    if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
         
-        # 同时清理相关的活跃任务，避免后续请求等待已经不需要的任务
-        active_requests_manager.remove_by_prefix(f"cache:{cache_key}")
-        
-        # 安全删除缓存
-        if cache_key in response_cache_manager.cache:
-            del response_cache_manager.cache[cache_key]
-            log('info', f"缓存使用后已删除: {cache_key[:8]}...", 
-                extra={'request_type': 'non-stream', 'model': request.model})
-        
-        # 返回缓存响应
-        return cached_response
+        return StreamingResponse(f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n", media_type="text/event-stream")
+    
     
     # 构建包含缓存键的活跃请求池键
     pool_key = f"cache:{cache_key}"
@@ -192,13 +174,10 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             await asyncio.wait_for(active_task, timeout=180)
             
             # 通过缓存管理器获取已完成任务的结果
-            cached_response, cache_hit = response_cache_manager.get(cache_key)
+            cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
             if cache_hit:
-                # 删除缓存
-                if cache_key in response_cache_manager.cache:
-                    del response_cache_manager.cache[cache_key]
-                    log('info', f"使用已完成任务的缓存后删除: {cache_key[:8]}...", 
-                        extra={'cache_operation': 'used-and-removed', 'request_type': 'non-stream'})
+                log('info', f"使用已完成任务的缓存: {cache_key[:8]}...", 
+                        extra={'request_type': 'non-stream'})
                 
                 return cached_response
                 
@@ -261,23 +240,37 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 active_requests_manager.remove(pool_key)
                 log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
                     extra={'request_type': 'non-stream'})
-     
-    # 创建非流式请求处理任务
-    process_task = asyncio.create_task(
-        process_request(
-            request, 
-            http_request, 
-            "non-stream",
-            key_manager,
-            response_cache_manager,
-            active_requests_manager,
-            safety_settings,
-            safety_settings_g2,
-            settings.api_call_stats,
-            cache_key,
-            client_ip
+    
+        
+    if request.stream:
+        # 流式请求处理任务
+        process_task = asyncio.create_task(
+                process_stream_request(
+                chat_request = request, 
+                key_manager=key_manager,
+                response_cache_manager = response_cache_manager,
+                safety_settings = safety_settings,
+                safety_settings_g2 = safety_settings_g2,
+                cache_key = cache_key
+            )
         )
-    )
+    
+    else:
+        # 创建非流式请求处理任务
+        process_task = asyncio.create_task(
+            process_request(
+                chat_request = request, 
+                http_request = http_request, 
+                request_type = "non-stream", 
+                key_manager = key_manager,
+                response_cache_manager = response_cache_manager,
+                active_requests_manager = active_requests_manager,
+                safety_settings = safety_settings,
+                safety_settings_g2 = safety_settings_g2,
+                cache_key = cache_key
+            )
+        )
+
     
     # 将任务添加到活跃请求池
     active_requests_manager.add(pool_key, process_task)
@@ -291,11 +284,11 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         active_requests_manager.remove(pool_key)
         
         # 检查是否已有缓存的结果（可能是由另一个任务创建的）
-        cached_response, cache_hit = response_cache_manager.get(cache_key)
+        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
         if cache_hit:
             log('info', f"任务失败但找到缓存，使用缓存结果: {cache_key[:8]}...", 
                 extra={'request_type': 'non-stream', 'model': request.model})
             return cached_response
         
-        # 重新抛出异常
-        raise
+        # 发送错误信息给客户端
+        raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {e}")

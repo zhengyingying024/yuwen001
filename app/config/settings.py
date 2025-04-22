@@ -2,6 +2,7 @@ import os
 import pathlib
 import logging
 from datetime import datetime, timedelta
+import asyncio 
 
 # 基础目录设置
 BASE_DIR = pathlib.Path(__file__).parent.parent
@@ -10,6 +11,9 @@ BASE_DIR = pathlib.Path(__file__).parent.parent
 FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1", "yes"]
 # 假流式请求的空内容返回间隔（秒）
 FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1"))
+
+# 空响应重试次数限制
+MAX_EMPTY_RESPONSES = int(os.environ.get("MAX_EMPTY_RESPONSES", "5"))  # 默认最多允许5次空响应
 
 #随机字符串
 RANDOM_STRING = os.environ.get("RANDOM_STRING", "true").lower() in ["true", "1", "yes"]
@@ -27,7 +31,8 @@ PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
 MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
 MAX_REQUESTS_PER_DAY_PER_IP = int(os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
 RETRY_DELAY = 1
-MAX_RETRY_DELAY = 16
+MAX_RETRY_DELAY = 16 # 网络错误 5xx 重试时的最大等待时间
+MAX_RETRY_NUM = int(os.environ.get("MAX_RETRY_NUM", "15")) # 请求时的最大总轮询 key 数
 
 # 并发请求配置
 CONCURRENT_REQUESTS = int(os.environ.get("CONCURRENT_REQUESTS", "1"))  # 默认并发请求数
@@ -39,13 +44,8 @@ MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", "2"))  #
 API_KEY_DAILY_LIMIT = int(os.environ.get("API_KEY_DAILY_LIMIT", "100"))
 
 # 缓存配置
-CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "1200"))  # 默认20分钟
+CACHE_EXPIRY_TIME = int(os.environ.get("CACHE_EXPIRY_TIME", "3600"))  # 默认60分钟
 MAX_CACHE_ENTRIES = int(os.environ.get("MAX_CACHE_ENTRIES", "500"))  # 默认最多缓存500条响应
-REMOVE_CACHE_AFTER_USE = os.environ.get("REMOVE_CACHE_AFTER_USE", "true").lower() in ["true", "1", "yes"]
-
-# 请求历史配置
-REQUEST_HISTORY_EXPIRY_TIME = int(os.environ.get("REQUEST_HISTORY_EXPIRY_TIME", "600"))  # 默认10分钟
-ENABLE_RECONNECT_DETECTION = os.environ.get("ENABLE_RECONNECT_DETECTION", "true").lower() in ["true", "1", "yes"]
 
 search={
     "search_mode":os.environ.get("SEARCH_MODE", "false").lower() in ["true", "1", "yes"],
@@ -74,8 +74,8 @@ api_call_stats = {
     }
 }
 
-# 客户端IP到最近请求的映射，用于识别重连请求
-client_request_history = {}
+# 用于保护 api_call_stats 并发访问的锁
+stats_lock = asyncio.Lock() 
 
 # 模型屏蔽列表配置
 # 默认屏蔽的模型列表

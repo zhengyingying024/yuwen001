@@ -40,10 +40,10 @@ def format_log_message(level, message, extra=None):
     log_values = {
         'asctime': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'levelname': level,
-        'key': extra.get('key', 'N/A'),
-        'request_type': extra.get('request_type', 'N/A'),
-        'model': extra.get('model', 'N/A'),
-        'status_code': extra.get('status_code', 'N/A'),
+        'key': extra.get('key', ''),
+        'request_type': extra.get('request_type', ''),
+        'model': extra.get('model', ''),
+        'status_code': extra.get('status_code', ''),
         'error_message': extra.get('error_message', ''),
         'message': message
     }
@@ -54,10 +54,10 @@ def format_log_message(level, message, extra=None):
     log_entry = {
         'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'level': level,
-        'key': extra.get('key', 'N/A'),
-        'request_type': extra.get('request_type', 'N/A'),
-        'model': extra.get('model', 'N/A'),
-        'status_code': extra.get('status_code', 'N/A'),
+        'key': extra.get('key', ''),
+        'request_type': extra.get('request_type', ''),
+        'model': extra.get('model', ''),
+        'status_code': extra.get('status_code', ''),
         'message': message,
         'error_message': extra.get('error_message', ''),
         'formatted': formatted_log

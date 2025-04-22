@@ -23,11 +23,7 @@ from app.vertex.vertex import router as vertex_router
 from app.vertex.vertex import init_vertex_ai
 import app.config.settings as settings
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
-import os
-import json
 import asyncio
-import time
-import logging
 from datetime import datetime, timedelta
 import sys
 import pathlib
@@ -52,7 +48,6 @@ response_cache = {}
 response_cache_manager = ResponseCacheManager(
     expiry_time=settings.CACHE_EXPIRY_TIME,
     max_entries=settings.MAX_CACHE_ENTRIES,
-    remove_after_use=settings.REMOVE_CACHE_AFTER_USE,
     cache_dict=response_cache
 )
 
@@ -150,6 +145,7 @@ async def startup_event():
             key_manager.api_keys.append(key)
             key_manager._reset_key_stack()
             log('info', f"初始检查: API Key {key[:8]}... 有效，已添加到可用列表")
+            settings.MAX_RETRY_NUM = 1
             valid_key_found = True
             
             # 使用这个有效密钥加载可用模型
@@ -183,6 +179,7 @@ async def startup_event():
                             log('error', f"检查密钥时发生错误: {exc}")
             finally:
                 loop.close()
+                settings.MAX_RETRY_NUM = len(key_manager.api_keys)
                 log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
         
         # 启动后台线程检查剩余密钥

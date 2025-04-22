@@ -26,7 +26,7 @@
 >  HTTP_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
 >  HTTPS_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
 > ```
-> 4. **启用vertex**：
+> 4. **启用vertex**：打开.env文件按需修改。
 >     - ENABLE_VERTEX=true 
 > 5. **填入完整的Google凭证JSON，注意填写进英文分号中间**
 >     - GOOGLE_CREDENTIALS_JSON='json密钥' 

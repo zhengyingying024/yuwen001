@@ -28,8 +28,7 @@
 > ```
 > 4. **打开.env文件按需启用vertex**：
 >     - ENABLE_VERTEX=true # 默认开启
-> 6. **填入完整的Google凭证JSON，注意填写进英文分号中间**
->     - GOOGLE_CREDENTIALS_JSON='json密钥' 
+> 6. - GOOGLE_CREDENTIALS_JSON='json密钥' # 填入完整的Google凭证JSON，注意填写进英文分号中间
  ### 启动服务
 > 在终端执行（修改成自己的文件夹路径）
 > ```bash

@@ -13,9 +13,11 @@ logger = logging.getLogger("my_logger")
 logger.setLevel(logging.DEBUG)
 
 # 控制台处理器
-console_handler = logging.StreamHandler()
+console_handler = logging.StreamHandler() 
+
+# 设置日志格式
 console_formatter = logging.Formatter('%(message)s')
-console_handler.setFormatter(console_formatter)
+console_handler.setFormatter(console_formatter) 
 logger.addHandler(console_handler)
 
 # 日志缓存，用于在网页上显示最近的日志
@@ -32,7 +34,7 @@ class LogManager:
         with self.lock:
             return list(self.logs)[-count:]
 
-# 创建日志管理器实例
+# 创建日志管理器实例 (输出到前端)
 log_manager = LogManager()
 
 def format_log_message(level, message, extra=None):
@@ -69,12 +71,14 @@ def format_log_message(level, message, extra=None):
     
 def log(level: str, message: str, extra: dict = None, **kwargs):
     final_extra = {}
-    # 如果传递了 extra 字典，先用它作为基础
+    
     if extra is not None and isinstance(extra, dict):
         final_extra.update(extra)
+    
     # 将 kwargs 中的其他关键字参数合并进来，kwargs 会覆盖 extra 中的同名键
     final_extra.update(kwargs)
     
     # 调用 format_log_message，传递合并后的 final_extra 字典
     msg = format_log_message(level.upper(), message, extra=final_extra)
+    
     getattr(logger, level.lower())(msg)

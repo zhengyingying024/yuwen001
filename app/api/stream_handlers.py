@@ -9,7 +9,6 @@ from app.services import GeminiClient
 from app.utils import handle_gemini_error, update_api_call_stats
 from app.utils.logging import log
 import app.config.settings as settings
-from app.utils.response import create_response
 from app.utils.stats import get_api_key_usage
 
 # 流式请求处理函数
@@ -59,8 +58,6 @@ async def process_stream_request(
         current_concurrent = settings.CONCURRENT_REQUESTS
         max_retry_num = settings.MAX_RETRY_NUM
         
-        # 创建一个队列（用于假流式模式的响应内容）
-        response_queue = asyncio.Queue() if settings.FAKE_STREAMING else None
         
         # 将保活消息格式化为SSE格式
         formatted_chunk = {
@@ -150,10 +147,15 @@ async def process_stream_request(
                                     extra={'request_type': "fake-stream", 'model': chat_request.model})
                                 
                                 cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)                                
-                                # log('info', f"返回结构{cached_response}")
-                                # break 
+                                formatted_chunk = {
+                                    "id": "chatcmpl-someid",
+                                    "object": "chat.completion.chunk",
+                                    "created": int(time.time()),
+                                    "model": chat_request.model,
+                                    "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "STOP"}]
+                                }
                                 
-                                yield f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n"
+                                yield f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
                                 break 
                             elif status == "empty":
                                 # 增加空响应计数
@@ -284,9 +286,8 @@ async def process_stream_request(
                     extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
                 return "empty"
 
-            # 创建响应并缓存
-            response = create_response(chat_request, response_content)            
-            response_cache_manager.store(cache_key, response)
+            # 缓存            
+            response_cache_manager.store(cache_key, response_content)
             
             return "success"
         

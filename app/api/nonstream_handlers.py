@@ -8,7 +8,7 @@ from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
-from app.utils.response import create_response
+from app.utils.response import create_complete_response
 from app.utils.stats import get_api_key_usage
 
 
@@ -76,6 +76,7 @@ async def process_nonstream_request(
             disconnect_task.cancel()
             # 获取响应内容
             response_content = await gemini_task
+            response_content.set_model(chat_request.model)
             
             # 检查响应内容是否为空
             if not response_content or not response_content.text:
@@ -83,9 +84,8 @@ async def process_nonstream_request(
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return "empty"
             
-            # 创建响应并缓存
-            response = create_response(chat_request, response_content)            
-            response_cache_manager.store(cache_key, response)
+            # 缓存       
+            response_cache_manager.store(cache_key, response_content)
             
             # log('info', f"请求成功，缓存响应: {cache_key[:8]}...",
             #     extra={'request_type': request_type, 'model': chat_request.model})
@@ -101,6 +101,7 @@ async def process_nonstream_request(
             
             # 使用shield确保任务不会被取消
             response_content = await asyncio.shield(gemini_task)
+            response_content.set_model(chat_request.model)
             
             # 更新API调用统计
             await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
@@ -111,9 +112,8 @@ async def process_nonstream_request(
                     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 return "empty"
             
-            # 创建响应并缓存
-            response = create_response(chat_request, response_content)
-            response_cache_manager.store(cache_key, response)
+            # 缓存
+            response_cache_manager.store(cache_key, response_content)
             
             return "success"
 
@@ -148,7 +148,7 @@ async def process_request(
     if cache_hit:
         log('info', f"非流式请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
             extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
-        return cached_response 
+        return create_complete_response(cached_response)
     
     # 重置已尝试的密钥
     key_manager.reset_tried_keys_for_request()
@@ -241,7 +241,7 @@ async def process_request(
                         log('info', f"非流式请求成功", 
                             extra={'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-                        return cached_response
+                        return create_complete_response(cached_response)
                     elif status == "empty":
                         # 增加空响应计数
                         empty_response_count += 1

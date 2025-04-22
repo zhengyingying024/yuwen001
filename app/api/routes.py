@@ -155,8 +155,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        
-        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)                                
+                                      
         formatted_chunk = {
             "id": "chatcmpl-someid",
             "object": "chat.completion.chunk",

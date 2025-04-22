@@ -54,7 +54,7 @@ class ResponseWrapper:
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
                     text+=part['text']
-            return part['text']
+            return text
         except (KeyError, IndexError):
             return ""
 
@@ -351,7 +351,7 @@ class GeminiClient:
             models = []
             for model in data.get("models", []):
                 models.append(model["name"])
-                if model["name"].startswith("models/gemini-2"):
+                if model["name"].startswith("models/gemini-2") and settings.search["search_mode"]:
                     models.append(model["name"] + "-search")
             models.extend(GeminiClient.EXTRA_MODELS)
                 

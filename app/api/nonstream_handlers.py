@@ -185,8 +185,11 @@ async def process_request(
     # 当前请求次数
     current_try_num = 0
     
+    # 空响应计数
+    empty_response_count = 0
+    
     # 尝试使用不同API密钥，直到所有密钥都尝试过
-    while valid_keys and (current_try_num < max_retry_num):
+    while valid_keys and (current_try_num < max_retry_num) and (empty_response_count < settings.MAX_EMPTY_RESPONSES):
         # 获取当前批次的密钥
         batch_num = min(max_retry_num - current_try_num, current_concurrent)
         
@@ -239,6 +242,11 @@ async def process_request(
                             extra={'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                         return cached_response
+                    elif status == "empty":
+                        # 增加空响应计数
+                        empty_response_count += 1
+                        log('warning', f"空响应计数: {empty_response_count}/{settings.MAX_EMPTY_RESPONSES}",
+                            extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 except Exception as e:
                     # 使用统一的API错误处理函数
                     error_result = await handle_api_error(
@@ -261,6 +269,12 @@ async def process_request(
             current_concurrent = min(current_concurrent + settings.INCREASE_CONCURRENT_ON_FAILURE, settings.MAX_CONCURRENT_REQUESTS)
             log('info', f"所有并发请求失败或返回空响应，增加并发数至: {current_concurrent}", 
                 extra={'request_type': request_type, 'model': chat_request.model})
+        
+        # 如果空响应次数达到限制，跳出循环
+        if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
+            log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
+                extra={'request_type': request_type, 'model': chat_request.model})
+            break
     
     # 如果所有尝试都失败
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})

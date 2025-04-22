@@ -86,8 +86,11 @@ async def process_stream_request(
         # 当前请求次数
         current_try_num = 0
         
+        # 空响应计数
+        empty_response_count = 0
+        
         # (假流式) 尝试使用不同API密钥，直到所有密钥都尝试过
-        while (valid_keys and settings.FAKE_STREAMING and (current_try_num < max_retry_num)):
+        while (valid_keys and settings.FAKE_STREAMING and (current_try_num < max_retry_num) and (empty_response_count < settings.MAX_EMPTY_RESPONSES)):
             
             # 获取当前批次的密钥
             batch_num= min(max_retry_num - current_try_num, current_concurrent)
@@ -152,6 +155,11 @@ async def process_stream_request(
                                 
                                 yield f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n"
                                 break 
+                            elif status == "empty":
+                                # 增加空响应计数
+                                empty_response_count += 1
+                                log('warning', f"空响应计数: {empty_response_count}/{settings.MAX_EMPTY_RESPONSES}",
+                                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                             
                         except Exception as e:
                             error_detail = handle_gemini_error(e, api_key, key_manager)
@@ -161,6 +169,12 @@ async def process_stream_request(
                 # 如果找到成功的响应，跳出循环
                 if success:
                     return
+                
+                # 如果空响应次数达到限制，跳出循环
+                if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
+                    log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
+                        extra={'request_type': 'stream', 'model': chat_request.model})
+                    break
                 
                 # 更新任务列表，移除已完成的任务
                 tasks = [(k, t) for k, t in tasks if not t.done()]
@@ -173,7 +187,7 @@ async def process_stream_request(
                     extra={'request_type': 'stream', 'model': chat_request.model})
 
         # (真流式) 尝试使用不同API密钥，直到所有密钥都尝试过或达到尝试上限
-        while (valid_keys and not settings.FAKE_STREAMING and (current_try_num < max_retry_num)):
+        while (valid_keys and not settings.FAKE_STREAMING and (current_try_num < max_retry_num) and (empty_response_count < settings.MAX_EMPTY_RESPONSES)):
             # 获取密钥
             api_key = valid_keys[0]
             valid_keys = valid_keys[1:]
@@ -206,6 +220,10 @@ async def process_stream_request(
                     else:
                         log('warning', f"流式响应: API密钥 {api_key[:8]}... 返回空响应",
                             extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                        # 增加空响应计数
+                        empty_response_count += 1
+                        log('warning', f"空响应计数: {empty_response_count}/{settings.MAX_EMPTY_RESPONSES}",
+                            extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                         break
             except Exception as e:
                 error_detail = handle_gemini_error(e, api_key, key_manager)
@@ -217,7 +235,12 @@ async def process_stream_request(
                 if success:
                     await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
                     return
-
+                
+                # 如果空响应次数达到限制，跳出循环
+                if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
+                    log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
+                        extra={'request_type': 'stream', 'model': chat_request.model})
+                    break
 
         # 所有API密钥都尝试失败的处理
         error_msg = "所有API密钥均请求失败，请稍后重试"

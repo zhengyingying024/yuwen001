@@ -12,6 +12,9 @@ FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1
 # 假流式请求的空内容返回间隔（秒）
 FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1"))
 
+# 空响应重试次数限制
+MAX_EMPTY_RESPONSES = int(os.environ.get("MAX_EMPTY_RESPONSES", "5"))  # 默认最多允许5次空响应
+
 #随机字符串
 RANDOM_STRING = os.environ.get("RANDOM_STRING", "true").lower() in ["true", "1", "yes"]
 RANDOM_STRING_LENGTH = int(os.environ.get("RANDOM_STRING_LENGTH", "5"))

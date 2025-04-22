@@ -44,9 +44,8 @@
 
 > ## Compose部署（NAS版）
 > 1.在docker文件夹内创建hajimi文件夹
-> 2.上传.env和docker-compose.yaml配置文件 **（配置文件修改同桌面版一致）** 
-> 3.进入Compose选择hajimi文件夹导入docker-compose.yaml
-文件点击部署并运行
+> 2.上传.env和docker-compose.yaml配置文件 **（配置文件修改同桌面版一致）**
+> 3.进入Compose选择hajimi文件夹导入docker-compose.yaml文件，点击部署并运行。
 
 **登录`http://localhost:7860`验证，正常则通过`http://<服务器IP>:7860`（替换IP）外网访问**
 > 

@@ -12,7 +12,7 @@
 > 1. **创建项目文件夹**
 >     - Mac/Linux：在终端执行`mkdir ~/Desktop/hajimi-app`
 >     - Windows：在命令提示符或PowerShell执行`mkdir C:\Users\<用户名>\Desktop\hajimi-app`（替换`<用户名>`）
->     - 也可直接在桌面创建hajimi-app文件夹，将下载后的配置文件解压，上传到hajimi文件夹中。
+>     - 也可直接在桌面创建hajimi-app文件夹，将下载后的配置文件，上传到hajimi文件夹中。
 > 2. **配置环境变量(.env)**：修改`hajimi-app`文件夹.env文件，主要修改以下内容
 > ```env
 > GEMINI_API_KEYS = key1,key2,key3 #替换为真实密钥，用逗号分隔。

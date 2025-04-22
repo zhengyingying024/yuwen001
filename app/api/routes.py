@@ -1,7 +1,8 @@
 import json
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import JSONResponse, StreamingResponse
-from app.models import ChatCompletionRequest, ChatCompletionResponse, ErrorResponse, ModelList
+from app.utils.response import create_complete_response
+from app.models import ChatCompletionRequest, ChatCompletionResponse, ModelList
 from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key
 from .stream_handlers import process_stream_request
@@ -12,7 +13,6 @@ import app.config.settings as settings
 import asyncio
 import time
 from app.utils.logging import log
-from typing import Optional
 
 # 导入拆分后的模块
 from .auth import verify_password
@@ -150,13 +150,21 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     if cache_hit and not request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        return cached_response
+        return create_complete_response(cached_response)
 
     if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        
-        return StreamingResponse(f"data: {json.dumps(cached_response, ensure_ascii=False)}\n\n", media_type="text/event-stream")
+                                      
+        formatted_chunk = {
+            "id": "chatcmpl-someid",
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": cached_response.model,
+            "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "STOP"}]
+        }
+          
+        return StreamingResponse(f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n", media_type="text/event-stream")
     
     
     # 构建包含缓存键的活跃请求池键
@@ -172,63 +180,13 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         try:
             # 设置超时，避免无限等待
             await asyncio.wait_for(active_task, timeout=180)
-            
-            # 通过缓存管理器获取已完成任务的结果
-            cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-            if cache_hit:
-                log('info', f"使用已完成任务的缓存: {cache_key[:8]}...", 
-                        extra={'request_type': 'non-stream'})
                 
-                return cached_response
-                
-            # 如果缓存已被清除或不存在，使用任务结果
+            # 使用任务结果
             if active_task.done() and not active_task.cancelled():
                 result = active_task.result()
                 if result:
-                    # 使用原始结果时，我们需要创建一个新的响应对象
-                    # 避免使用可能已被其他请求修改的对象
-                    try:
-                        # 检查是否是字典
-                        if isinstance(result, dict):
-                            resp_object = result.get('object', 'chat.completion') 
-                            resp_model = result.get('model')
-                            resp_choices = result.get('choices', []) 
-                        elif hasattr(result, 'object') and hasattr(result, 'model') and hasattr(result, 'choices'):
-                            resp_object = result.object
-                            resp_model = result.model
-                            resp_choices = result.choices
-                        
-                        pydantic_choices = []
-                        for choice_data in resp_choices:
-                             if isinstance(choice_data, dict):
-                                 pydantic_choices.append(Choice(
-                                     index=choice_data.get("index", 0),
-                                     message=Message(
-                                         role=choice_data.get("message", {}).get("role", "assistant"),
-                                         content=choice_data.get("message", {}).get("content", "")
-                                     ),
-                                     finish_reason=choice_data.get("finish_reason")
-                                 ))
-                             elif isinstance(choice_data, Choice): # If already a Choice object
-                                 pydantic_choices.append(choice_data)
-                             # else: handle unexpected choice format?
-
-                        new_response = ChatCompletionResponse(
-                            id=f"chatcmpl-{int(time.time()*1000)}", 
-                            object=resp_object, 
-                            created=int(time.time()), 
-                            model=resp_model,
-                            choices=pydantic_choices 
-                            
-                        )
-                    except (AttributeError, TypeError, ValueError, Exception) as e: # Catch potential errors
-                        log('error', f"创建新响应对象失败: {e}", 
-                            extra={'request_type': 'non-stream', 'model': request.model, 'result_type': type(result).__name__})
-                        # Consider raising HTTPException for clarity
-                        raise HTTPException(status_code=500, detail="Internal error processing response.")
-                    
-                    # 不要缓存此结果，因为它很可能是一个已存在但被使用后清除的缓存
-                    return new_response
+                    return result
+        
         except (asyncio.TimeoutError, asyncio.CancelledError) as e:
             # 任务超时或被取消的情况下，记录日志然后让代码继续执行
             error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"

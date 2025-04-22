@@ -5,7 +5,6 @@ from app.utils import update_api_call_stats
 
 from app.utils.logging import log
 import app.config.settings as settings
-from app.utils.response import create_response
 
 # 客户端断开检测函数
 async def check_client_disconnect(http_request: Request, current_api_key: str, request_type: str, model: str):
@@ -43,11 +42,9 @@ async def handle_client_disconnect(
             
             return False
         
-        # 响应有效，创建响应对象
-        response = create_response(chat_request, response_content)
         
-        # 将有效响应存入缓存 (追加到deque)
-        response_cache_manager.store(cache_key, response)
+        # 存入缓存 (追加到deque)
+        response_cache_manager.store(cache_key, response_content)
         log('info', f"请求成功完成，缓存响应", 
             extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
 
@@ -62,8 +59,7 @@ async def handle_client_disconnect(
     #         try:
     #             response_content = gemini_task.result()
                 
-    #             # 创建新响应并进行缓存
-    #             response = create_response(chat_request, response_content)
+    #             # 进行缓存
     #             # response_cache_manager.store(cache_key, response)
                 
     #             # 更新API调用统计

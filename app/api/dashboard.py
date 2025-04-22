@@ -131,7 +131,7 @@ async def get_dashboard_data():
     return {
         "key_count": len(key_manager.api_keys),
         "model_count": len(GeminiClient.AVAILABLE_MODELS),
-        "retry_count": len(key_manager.api_keys),
+        "retry_count": settings.MAX_RETRY_NUM,
         "last_24h_calls": last_24h_calls,
         "hourly_calls": hourly_calls,
         "minute_calls": minute_calls,

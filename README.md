@@ -21,10 +21,16 @@
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 - [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
-- [huggingface部署的使用文档](./wiki/huggingface.md)
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
+* v0.1.6
+    * 为并发模式提供缓存，并发中除了返回的成功请求，其他成功请求将被缓存，若下次请求与本次请求一致，将首先使用缓存内容
+    * 为请求添加硬限制，超过每日限定次数的key将不再发送请求，若所有key都达到次数限制，将随机选择一个key请求
+    * 添加空响应计数，单次请求空响应重试超过一定次数将直接跳出
+    * 修复联网模式bug（感谢**yoolieer**），现在能够正常的启用停用联网模式了
+    * 新增环境变量`MAX_EMPTY_RESPONSES`，为空响应重试次数，默认为5
+    * 修复若干bug
 * v0.1.5
     * 实现vertex热切换，现在在前端面板就可以切换vertex模式与ai studio模式了
     * 为vertex模式实现假流式，环境变量与ai studio模式的假流式相同，均为`FAKE_STREAMING`

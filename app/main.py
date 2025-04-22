@@ -145,6 +145,7 @@ async def startup_event():
             key_manager.api_keys.append(key)
             key_manager._reset_key_stack()
             log('info', f"初始检查: API Key {key[:8]}... 有效，已添加到可用列表")
+            settings.MAX_RETRY_NUM = 1
             valid_key_found = True
             
             # 使用这个有效密钥加载可用模型
@@ -178,6 +179,7 @@ async def startup_event():
                             log('error', f"检查密钥时发生错误: {exc}")
             finally:
                 loop.close()
+                settings.MAX_RETRY_NUM = len(key_manager.api_keys)
                 log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
         
         # 启动后台线程检查剩余密钥
@@ -250,7 +252,7 @@ async def root(request: Request):
     根路由 - 返回静态 HTML 文件
     """
     base_url = str(request.base_url).replace("http", "https")
-    api_url = f"{base_url}v1/" if base_url.endswith("/") else f"{base_url}/v1/"
+    api_url = f"{base_url}v1" if base_url.endswith("/") else f"{base_url}/v1"
     # 直接返回 index.html 文件
     return templates.TemplateResponse(
         "index.html", {"request": request, "api_url": api_url}

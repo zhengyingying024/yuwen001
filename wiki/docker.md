@@ -1,91 +1,78 @@
-# 使用 Docker 部署 Gemini 轮询魔改版教程 由 **北极星星** 编写
+# 使用 Docker 部署 Gemini 轮询魔改版教程 由 **[北极星星](https://github.com/beijixingxing)** 编写
 
-## 一、准备工作
+> # docker部署教程
+> - ## 首先下载docker部署所必须的配置文件
+> - ### [.env文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/.env)
+> - ### [docker-compose.yaml文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker-compose.yaml)
+> 
+> ## 本地部署（桌面版）
+> ### 准备工作
+> 安装Docker：从[官方下载](https://www.docker.com/)并按提示完成安装。
+> ### 快速部署
+> 1. **创建项目文件夹**
+>     - Mac/Linux：在终端执行`mkdir ~/Desktop/hajimi-app`
+>     - Windows：在命令提示符或PowerShell执行`mkdir C:\Users\<用户名>\Desktop\hajimi-app`（替换`<用户名>`）
+>     - 也可直接在桌面创建hajimi-app文件夹，将下载后的配置文件，上传到hajimi文件夹中。
+> 2. **配置环境变量(.env)**：修改.env文件，主要修改以下内容
+> ```env
+> GEMINI_API_KEYS = key1,key2,key3 #替换为真实密钥，用逗号分隔。
+> PASSWORD = your_login_password # 设置登录密码
+> ```
+> 3. **修改端口/代理**：在`hajimi-app`文件夹打开docker-compose.yaml文件按需修改。
+> ```yaml
+> ports:
+>   - "7860:7860" #端口冲突时改左侧端口
+> environment:
+>  HTTP_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
+>  HTTPS_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
+> ```
+> 4. **打开.env文件按需启用vertex**：
+>     - ENABLE_VERTEX=true # 默认开启
+>     - GOOGLE_CREDENTIALS_JSON='json密钥' # 填入完整的Google凭证JSON，注意填写进英文分号中间
+ ### 启动服务
+> 在终端执行（修改成自己的文件夹路径）
+> ```bash
+> cd ~/Desktop/hajimi-app 
+> docker-compose up -d 
+> ```
+> 访问`http://localhost:7860`
+> 
+> ## 服务器部署（SSH版）
+> 1. 用SSH工具连接到服务器
+> 2. 执行`mkdir -p /volume1/docker/hajimi-app && cd $_` 创建并进入目录（改成自己的文件夹路径，也可直接创建）
+> 3. 上传.env和docker-compose.yaml配置文件后执行`docker-compose up -d`启动服务 **（配置文件修改同桌面版一致）** 
 
-### 1.1 下载项目
+> ## Compose部署（NAS版）
+> 1. 在docker文件夹内创建hajimi文件夹
+> 2. 上传.env和docker-compose.yaml配置文件 **（配置文件修改同桌面版一致）**
+> 3. 进入Compose选择hajimi文件夹导入docker-compose.yaml文件，点击部署并运行。
 
-从 releases 下载最新版本，并解压到任意目录。
+**登录`http://localhost:7860`验证，正常则通过`http://<服务器IP>:7860`（替换IP）外网访问**
+> 
+> ## 常见问题
+> ### Q1:端口冲突
+> - Mac/Linux：`lsof -i :7860`
+> - Windows：`netstat -ano | findstr "7860"`
+> **解决方案**：修改`docker-compose.yaml`中的`7860`为其他端口，如`17860`
+> ### Q2:代理设置
+> - 不需要代理：删除或注释`HTTP_PROXY`相关配置
+> - 需要修改：替换为实际代理地址，如`http://192.168.1.100:7890`
+> 
+## 更新指南
+### docker-compose.yaml文件已内置自动更新容器，默认每一小时检测一次，有更新会自动更新。
 
-### 1.2 配置环境变量
-
-在项目根目录下创建 `.env` 文件，配置必要环境变量，示例如下：
-
+### 手动更新如下（文件夹路径修改成自己的）：
 ```
-GEMINI_API_KEYS=key1,key2,key3
-PASSWORD=your_password
-TZ=Asia/Shanghai
+# 进入 docker-compose.yaml 所在目录
+cd /volume3/docker/hajimi
+
+# 停止并删除容器、网络等资源，同时删除所有相关镜像
+docker-compose down --rmi all
+
+# 拉取最新镜像（此时已清除旧镜像）
+docker-compose pull
+
+# 重新创建容器并启动
+docker-compose up -d
 ```
-
-按需修改上述值，注意⚠️key必须使用英文逗号间隔。
-
-## 二、构建并运行 Docker 容器
-
-### 2.1 构建镜像
-
-在项目根目录打开终端，执行命令构建 Docker 镜像：
-
-```bash
-cd 项目文件夹完整路径（例如：cd /volume3/docker/hagemi）
-docker build -t hajimi-app .
-```
-
-此过程可能需一些时间，取决于网络和系统性能。
-
-### 2.2 运行容器
-
-镜像构建完成后，执行命令启动 Docker 容器，如端口被占用需修改左侧端口号：
-
-```bash
-docker run -d -p 7860:7860 --env-file .env --name hajimi-app hajimi-app
-```
-
-## 三、验证部署
-
-### 3.1 检查容器状态
-
-打开 docker 查看 hajimi-app 容器运行状态，确认正常启动。
-
-### 3.2 访问应用
-
-打开浏览器，访问 http://localhost:7860，若看到应用界面，则部署成功。
-
-API 地址：http://localhost:7860/v1  
-key：PASSWORD=your_password
-
-## 四、容器更新
-
-### 4.1 更新脚本
-
-将下面 gemini_docker_update.sh 脚本按需修改保存为一个 .sh 文件：
-
-```bash
-# 停止容器
-docker stop hajimi-app
-# 删除容器
-docker rm hajimi-app
-# 进入项目所在目录
-cd /volume3/docker/hagemi
-# 使用以下命令拉取最新代码
-git pull origin main
-# 构建新的 Docker 镜像
-docker build -t hajimi-app .
-# 运行新容器
-docker run -d -p 7860:7860 --env-file .env hajimi-app
-# 查看容器状态
-docker ps -a | grep hajimi-app    
-```
-
-### 4.2 脚本存放位置
-
-把 gemini_docker_update.sh 脚本存放在项目根目录，例如项目文件路径是 /volume3/docker/hagemi，便将脚本存放在 /volume3/docker/hagemi。
-
-### 4.3 执行更新
-
-进入终端输入命令，执行更新脚本：
-
-```bash
-cd /volume3/docker/hagemi
-./gemini_docker_update.sh
-```
-
-通过以上步骤，即可使用 Docker 成功部署 Gemini 轮询魔改版应用。
+> **提示**：首次部署用默认配置，稳定后再调整参数。

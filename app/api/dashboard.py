@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
 import time
+import asyncio
+import random
 from app.utils import (
     log_manager,
     ResponseCacheManager,
@@ -292,7 +294,26 @@ async def update_config(config_data: dict):
             if not isinstance(config_value, bool):
                 raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
             settings.search["search_mode"] = config_value
-            log('info', f"联网搜索模式已更新为：{config_value}")      
+            log('info', f"联网搜索模式已更新为：{config_value}")
+            
+            # 在切换search_mode时，重新获取一次可用模型列表
+            try:
+                # 重置密钥栈以确保随机性
+                key_manager._reset_key_stack()
+                # 获取一个随机API密钥
+                for key in key_manager.api_keys:
+                    log('info', f"使用API密钥 {key[:8]}... 刷新可用模型列表")
+                    # 使用随机密钥获取可用模型
+                    all_models = await GeminiClient.list_available_models(key)
+                    GeminiClient.AVAILABLE_MODELS = [model.replace("models/", "") for model in all_models]
+                    if len(GeminiClient.AVAILABLE_MODELS) > 0:
+                        log('info', f"可用模型列表已更新，当前模型数量：{len(GeminiClient.AVAILABLE_MODELS)}")
+                        break
+                else:
+                    log('warning', f"没有可用的API密钥，无法刷新可用模型列表")
+            except Exception as e:
+                log('warning', f"刷新可用模型列表时发生错误: {str(e)}")
+                
         elif config_key == "concurrent_requests":
             try:
                 value = int(config_value)

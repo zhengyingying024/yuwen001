@@ -74,7 +74,7 @@ def switch_api_key():
 async def check_key(key):
     """检查单个API密钥是否有效"""
     if SKIP_CHECK_API_KEY:
-        return bool(key)
+        return key
 
     is_valid = await test_api_key(key)
     status_msg = "有效" if is_valid else "无效"

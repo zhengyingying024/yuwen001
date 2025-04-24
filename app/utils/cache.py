@@ -163,7 +163,13 @@ class ResponseCacheManager:
 
 # 根据模型名称和全部消息，生成请求的唯一缓存键。
 def generate_cache_key_all(chat_request) -> str:
-    """生成请求的唯一缓存键"""
+    """
+    根据模型名称和全部消息，生成请求的唯一缓存键。
+    Args:
+        chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
+    Returns:
+        一个代表该请求的唯一缓存键字符串 (MD5哈希值)。
+    """
     # 创建包含请求关键信息的字典
     request_data = {
         'model': chat_request.model, 

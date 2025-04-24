@@ -1,10 +1,10 @@
 import json
 from fastapi import APIRouter, HTTPException, Request, Depends, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from app.utils.response import create_complete_response
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ModelList
 from app.services import GeminiClient
-from app.utils import protect_from_abuse,generate_cache_key
+from app.utils import protect_from_abuse,generate_cache_key_all,generate_cache_key
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_request
 from app.models.schemas import ChatCompletionResponse, Choice, Message 
@@ -127,7 +127,10 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     
     # 使用原有的Gemini实现
     # 生成缓存键 - 用于匹配请求内容对应缓存
-    cache_key = generate_cache_key(request,4)
+    if settings.PRECISE_CACHE:
+        cache_key = generate_cache_key_all(request)
+    else:    
+        cache_key = generate_cache_key(request,4)
     
     # 请求前基本检查
     protect_from_abuse(

@@ -65,7 +65,7 @@ async def process_stream_request(
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": chat_request.model,
-            "choices": [{"delta": {"content": "\n"}, "index": 0, "finish_reason": None}]
+            "choices": [{"delta": {"content": ""}, "index": 0, "finish_reason": None}]
         }
         keep_alive_message=f"data: {json.dumps(formatted_chunk)}\n\n"
         
@@ -152,7 +152,7 @@ async def process_stream_request(
                                     "object": "chat.completion.chunk",
                                     "created": int(time.time()),
                                     "model": chat_request.model,
-                                    "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "STOP"}]
+                                    "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "stop"}]
                                 }
                                 
                                 yield f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
@@ -245,12 +245,11 @@ async def process_stream_request(
                     break
 
         # 所有API密钥都尝试失败的处理
-        error_msg = "所有API密钥均请求失败，请稍后重试"
-        log('error', error_msg,
+        log('error', "所有API密钥均请求失败，请稍后重试",
             extra={'key': 'ALL', 'request_type': 'stream', 'model': chat_request.model})
         
         # 发送错误信息给客户端
-        raise HTTPException(status_code=500, detail = f" hajimi 服务器内部处理时发生错误\n错误原因 : {error_msg}")
+        raise HTTPException(status_code=500, detail = f" hajimi 服务器内部处理时发生错误\n错误原因 : 所有API密钥均请求失败，请稍后重试")
             
 
     # 处理假流式模式
@@ -286,7 +285,7 @@ async def process_stream_request(
                     extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
                 return "empty"
 
-            # 缓存            
+            # 缓存
             response_cache_manager.store(cache_key, response_content)
             
             return "success"

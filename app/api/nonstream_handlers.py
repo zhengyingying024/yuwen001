@@ -146,7 +146,7 @@ async def process_request(
     # --- 在开始处理前检查缓存 ---
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
-        log('info', f"非流式请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
+        log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
             extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
         return create_complete_response(cached_response)
     

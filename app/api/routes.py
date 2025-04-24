@@ -161,7 +161,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": cached_response.model,
-            "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "STOP"}]
+            "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "stop"}]
         }
           
         return StreamingResponse(f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n", media_type="text/event-stream")
@@ -248,5 +248,5 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
                 extra={'request_type': 'non-stream', 'model': request.model})
             return cached_response
         
-        # 发送错误信息给客户端
-        raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {e}")
+        # # 发送错误信息给客户端
+        # raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {e}")

@@ -84,4 +84,4 @@ async def handle_client_disconnect(
         log('error', f"客户端断开后处理API响应时出错: {error_msg}", extra=extra_log)
             
         # 向客户端抛出异常
-        raise HTTPException(status_code=500, detail="服务器内部处理时发生错误")
+        raise HTTPException(status_code=500, detail="hajimi 服务器内部处理时发生错误")

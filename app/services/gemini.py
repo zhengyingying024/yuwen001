@@ -29,7 +29,7 @@ class GeneratedText:
 
 
 class ResponseWrapper:
-    def __init__(self, data: Dict[Any, Any]):  # 正确的初始化方法名
+    def __init__(self, data: Dict[Any, Any]):  
         self._data = data
         self._text = self._extract_text()
         self._finish_reason = self._extract_finish_reason()
@@ -224,7 +224,7 @@ class GeminiClient:
                                         if text:
                                             yield text
                                         
-                                if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
+                                if candidate.get("finishReason") and candidate.get("finishReason") != "stop":
                                     error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
                                     extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
                                     log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)

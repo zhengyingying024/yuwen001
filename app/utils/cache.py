@@ -161,7 +161,7 @@ class ResponseCacheManager:
              log('info', f"因容量限制，共清理了 {items_actually_removed} 个旧缓存项。")
 
 
-# 目前不使用，若后续版本中 generate_cache_key 使用正常，则删去
+# 根据模型名称和全部消息，生成请求的唯一缓存键。
 def generate_cache_key_all(chat_request) -> str:
     """生成请求的唯一缓存键"""
     # 创建包含请求关键信息的字典
@@ -184,7 +184,7 @@ def generate_cache_key_all(chat_request) -> str:
                 elif item.get('type') == 'image_url':
                     image_data = item.get('image_url', {}).get('url', '')
                     if image_data.startswith('data:image/'):
-                        # 对于base64图像，使用前32字符作为标识符
+                        # 对于base64图像，使用前32字符的哈希作为标识符
                         content_list.append({'type': 'image_url', 'hash': hashlib.md5(image_data[:32].encode()).hexdigest()})
                     else:
                         content_list.append({'type': 'image_url', 'url': image_data})
@@ -196,63 +196,62 @@ def generate_cache_key_all(chat_request) -> str:
 
 def generate_cache_key(chat_request, last_n_user_messages: int = 4) -> str:
     """
-    根据模型名称和最后 N 条用户消息生成请求的唯一缓存键。
+    根据模型名称和最后 N 条消息生成请求的唯一缓存键。
     Args:
         chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
-        last_n_user_messages: 需要包含在缓存键计算中的最后用户消息的数量。
+        last_n_user_messages: 需要包含在缓存键计算中的最后消息的数量。
     Returns:
         一个代表该请求的唯一缓存键字符串 (MD5哈希值)。
     """
     if last_n_user_messages <= 0:
-        # 如果不考虑任何用户消息，只基于模型生成key
+        # 如果不考虑任何消息，只基于模型生成key
         key_data = {'model': chat_request.model}
         json_data = json.dumps(key_data, sort_keys=True)
         return hashlib.md5(json_data.encode()).hexdigest()
     
-    selected_user_messages_reversed = [] # 临时存放反向找到的用户消息
+    selected_user_messages_reversed = [] # 临时存放反向找到的消息
     user_messages_found = 0
     
     # 从消息列表末尾开始向前查找
     for msg in reversed(chat_request.messages):
-        if msg.role == 'user':
-            processed_content = None 
+        processed_content = None
+        
+        if isinstance(msg.content, str):
+            processed_content = msg.content
+        elif isinstance(msg.content, list):
+            # 处理图文混合内容 
+            content_list = []
+            for item in msg.content:
+                item_type = item.get('type') if hasattr(item, 'get') else None
+                if item_type == 'text':
+                    text = item.get('text', '') if hasattr(item, 'get') else ''
+                    content_list.append({'type': 'text', 'text': text})
+                elif item_type == 'image_url':
+                    image_url_data = item.get('image_url', {}) if hasattr(item, 'get') else {}
+                    url = image_url_data.get('url', '') if hasattr(image_url_data, 'get') else ''
+                    if url.startswith('data:image/'):
+                        # 对于base64图像，使用前32字符的哈希作为标识符
+                        img_hash = hashlib.md5(url[:32].encode()).hexdigest()
+                        content_list.append({'type': 'image_url', 'hash': img_hash})
+                    else:
+                        content_list.append({'type': 'image_url', 'url': url})
             
-            if isinstance(msg.content, str):
-                processed_content = msg.content
-            elif isinstance(msg.content, list):
-                # 处理图文混合内容 
-                content_list = []
-                for item in msg.content:
-                    item_type = item.get('type') if hasattr(item, 'get') else None
-                    if item_type == 'text':
-                        text = item.get('text', '') if hasattr(item, 'get') else ''
-                        content_list.append({'type': 'text', 'text': text})
-                    elif item_type == 'image_url':
-                        image_url_data = item.get('image_url', {}) if hasattr(item, 'get') else {}
-                        url = image_url_data.get('url', '') if hasattr(image_url_data, 'get') else ''
-                        if url.startswith('data:image/'):
-                            # 对于base64图像，使用前32字符的哈希作为标识符
-                            img_hash = hashlib.md5(url[:32].encode()).hexdigest()
-                            content_list.append({'type': 'image_url', 'hash': img_hash})
-                        else:
-                            content_list.append({'type': 'image_url', 'url': url})
-                        
-                processed_content = content_list
+            processed_content = content_list
+        
+        # 如果内容成功处理，则添加到列表中
+        if processed_content is not None:
             
-            # 如果内容成功处理，则添加到列表中
-            if processed_content is not None:
-                
-                selected_user_messages_reversed.append({
-                    'role': msg.role, 
-                    'content': processed_content
-                })
-                user_messages_found += 1
-                # 如果已找到足够数量的用户消息，停止遍历
-                if user_messages_found >= last_n_user_messages:
-                    break 
+            selected_user_messages_reversed.append({
+                'role': msg.role, 
+                'content': processed_content
+            })
+            user_messages_found += 1
+            # 如果已找到足够数量的消息，停止遍历
+            if user_messages_found >= last_n_user_messages:
+                break 
    
     
-    # 创建用于生成缓存键的数据结构，只包含模型和选定的用户消息（反序）
+    # 创建用于生成缓存键的数据结构，只包含模型和选定的消息（反序）
     key_data = {
         'model': chat_request.model,
         'last_user_messages': selected_user_messages_reversed # 使用特定键名区分

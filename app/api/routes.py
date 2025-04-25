@@ -216,8 +216,8 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
                 extra={'request_type': 'non-stream', 'model': request.model})
             return cached_response
         
-        # # 发送错误信息给客户端
-        # raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误\n错误原因 : {e}")
+        # 发送错误信息给客户端
+        raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误")
 
 @router.post("/vertex/chat/completions", response_model=ChatCompletionResponse)
 async def vertex_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):

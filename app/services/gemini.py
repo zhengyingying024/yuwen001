@@ -157,8 +157,11 @@ class GeminiClient:
             "topK": request.top_k,
             "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
             "candidateCount": request.n,
-            "thinkingBudget": request.thinking_budget
         }
+        if request.thinking_budget:
+            config_params["thinkingConfig"] = {
+                "thinkingBudget": request.thinking_budget
+            }
         return {k: v for k, v in config_params.items() if v is not None}
 
     # 假流式保活处理 (未完成，所以未使用)
@@ -211,8 +214,6 @@ class GeminiClient:
                         buffer += line.encode('utf-8')
                         try:
                             data = json.loads(buffer.decode('utf-8'))
-                            log('warning', f"流式响应: API密钥 {self.api_key[:8]}... 返回 {data}",
-                                extra={'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model})
                             buffer = b""
                             token=0
                             if 'candidates' in data and data['candidates']:

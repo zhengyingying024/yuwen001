@@ -32,24 +32,37 @@ def handle_gemini_error(error, current_api_key) -> str:
                 log('WARNING', error_message, extra=extra_log_400_json)
                 return error_message
 
-        elif status_code == 429:
-            error_message = "API 密钥配额已用尽或其他原因"
-            log('WARNING', f"{current_api_key[:8]} ... {current_api_key[-3:]} → 429 官方资源耗尽或其他原因", 
-                extra={'key': current_api_key[:8], 'status_code': status_code, 'error_message': error_message})
-            # key_manager.blacklist_key(current_api_key)
-             
-            return error_message
-
         elif status_code == 403:
-            error_message = "权限被拒绝"
-            log('ERROR', f"{current_api_key[:8]} ... {current_api_key[-3:]} → 403 权限被拒绝", 
-                extra={'key': current_api_key[:8], 'status_code': status_code, 'error_message': error_message})
+            error_message = f"权限被拒绝"
+            log('ERROR', error_message, 
+                extra={'key': current_api_key[:8], 'status_code': status_code})
             # key_manager.blacklist_key(current_api_key)
             
             return error_message
+        
+        elif status_code == 429:
+            error_message = f"API 密钥配额已用尽或其他原因"
+            log('WARNING', error_message, 
+                extra={'key': current_api_key[:8], 'status_code': status_code})
+            # key_manager.blacklist_key(current_api_key)
+             
+            return error_message
+        
+        if status_code == 500:
+            error_message = f'Gemini API 内部错误' 
+            log('WARNING', error_message, 
+                extra={'key': current_api_key[:8], 'status_code': status_code})
+            return error_message
+  
+        if status_code == 503:
+            error_message = f"Gemini API 服务繁忙"
+            log('WARNING', error_message, 
+                extra={'key': current_api_key[:8], 'status_code': status_code})
+            return error_message
+        
         else:
             error_message = f"未知错误: {status_code}"
-            log('WARNING', f"{current_api_key[:8]} ... {current_api_key[-3:]} → {status_code} 未知错误", 
+            log('WARNING', f"{status_code} 未知错误", 
                 extra={'key': current_api_key[:8], 'status_code': status_code, 'error_message': error_message})
             
             return f"未知错误/模型不可用: {status_code}"

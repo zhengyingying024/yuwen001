@@ -2,7 +2,7 @@ import asyncio
 from fastapi import HTTPException, status, Request
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
-from app.utils import update_api_call_stats,handle_api_error
+from app.utils import update_api_call_stats
 from app.utils.error_handling import handle_gemini_error
 from app.utils.logging import log
 from .client_disconnect import check_client_disconnect, handle_client_disconnect
@@ -249,16 +249,9 @@ async def process_request(
                             extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
                 except Exception as e:
                     # 使用统一的API错误处理函数
-                    error_result = await handle_api_error(
-                        e, 
-                        api_key, 
-                        key_manager, 
-                        request_type, 
-                        chat_request.model, 
-                        0
-                    )
-                    log('error', f"请求失败: {error_result}",
-                        extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+                    handle_gemini_error(e, api_key)
+                    # log('error', f"请求失败: {error_result}",
+                    #     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
             
                 # 更新任务列表，移除已完成的任务
                 tasks = [(k, t) for k, t in tasks if not t.done()]
@@ -278,4 +271,5 @@ async def process_request(
     
     # 如果所有尝试都失败
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
-    raise
+    
+    raise HTTPException(status_code=500, detail=f"API key 替换失败，所有API key都已尝试，请重新配置或稍后重试")

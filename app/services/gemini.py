@@ -211,8 +211,6 @@ class GeminiClient:
                         buffer += line.encode('utf-8')
                         try:
                             data = json.loads(buffer.decode('utf-8'))
-                            log('warning', f"流式响应: API密钥 {self.api_key[:8]}... 返回 {data}",
-                                extra={'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model})
                             buffer = b""
                             token=0
                             if 'candidates' in data and data['candidates']:

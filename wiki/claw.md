@@ -37,6 +37,7 @@
     *   **Image Name:** 输入镜像地址 `ghcr.io/wyeeeee/hajimi:latest`
     * 配置端口为7860并打开
     ![填写应用信息](./img/claw/11.png)
+> 在日本区域，创建容器后绑定自定义域名有概率失败，只能 http 访问。请删除容器后重新创建并绑定，或者使用新加坡的容器。参见 https://question.run.claw.cloud/questions/10010000000000298
 ---
 6.  **找到环境变量设置**
     向下滚动页面，找到 **Environment Variables** 部分。

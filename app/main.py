@@ -29,6 +29,7 @@ import sys
 import pathlib
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import os
 # 设置模板目录
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -57,6 +58,8 @@ active_requests_pool = {}
 # 初始化活跃请求管理器
 active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_pool)
 
+SKIP_CHECK_API_KEY = os.environ.get("SKIP_CHECK_API_KEY", "").lower() == "true"
+
 # --------------- 工具函数 ---------------
 
 def switch_api_key():
@@ -70,6 +73,9 @@ def switch_api_key():
 
 async def check_key(key):
     """检查单个API密钥是否有效"""
+    if SKIP_CHECK_API_KEY:
+        return key
+
     is_valid = await test_api_key(key)
     status_msg = "有效" if is_valid else "无效"
     log('info', f"API Key {key[:10]}... {status_msg}.")

@@ -1,10 +1,9 @@
 import json
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from fastapi.responses import StreamingResponse
-from app.utils.response import create_complete_response
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ModelList
 from app.services import GeminiClient
-from app.utils import protect_from_abuse,generate_cache_key_all,generate_cache_key
+from app.utils import protect_from_abuse,generate_cache_key_all,generate_cache_key,openAI_nonstream_response,openAI_stream_chunk,log
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_request
 from app.models.schemas import ChatCompletionResponse, Choice, Message 
@@ -12,7 +11,6 @@ from app.vertex.vertex import list_models as list_models_vertex
 import app.config.settings as settings
 import asyncio
 import time
-from app.utils.logging import log
 
 # 导入拆分后的模块
 from .auth import verify_password
@@ -126,6 +124,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
         return await vertex_chat_completions(vertex_request, api_key=current_api_key)
     
     # 使用原有的Gemini实现
+    
     # 生成缓存键 - 用于匹配请求内容对应缓存
     if settings.PRECISE_CACHE:
         cache_key = generate_cache_key_all(request)
@@ -150,24 +149,19 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     
     # 检查缓存是否存在，如果存在，返回缓存
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+    
     if cache_hit and not request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        return create_complete_response(cached_response)
+        return openAI_nonstream_response(cached_response)
 
     if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-                                      
-        formatted_chunk = {
-            "id": "chatcmpl-someid",
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": cached_response.model,
-            "choices": [{"delta": {"content": cached_response.text}, "index": 0, "finish_reason": "stop"}]
-        }
-          
-        return StreamingResponse(f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n", media_type="text/event-stream")
+        
+        chunk = openAI_stream_chunk(model=cached_response.model,content=cached_response.text,finish_reason="stop")
+        
+        return StreamingResponse(chunk, media_type="text/event-stream")
     
     
     # 构建包含缓存键的活跃请求池键
@@ -206,7 +200,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: Request
     if request.stream:
         # 流式请求处理任务
         process_task = asyncio.create_task(
-                process_stream_request(
+            process_stream_request(
                 chat_request = request, 
                 key_manager=key_manager,
                 response_cache_manager = response_cache_manager,

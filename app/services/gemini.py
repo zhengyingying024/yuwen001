@@ -224,7 +224,7 @@ class GeminiClient:
                                         if text:
                                             yield text
                                         
-                                if candidate.get("finishReason") and candidate.get("finishReason") != "stop":
+                                if candidate.get("finishReason") and candidate.get("finishReason").lower() != "stop":
                                     error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
                                     extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
                                     log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)

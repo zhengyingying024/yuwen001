@@ -7,7 +7,7 @@ from app.utils.logging import log
 
 logger = logging.getLogger("my_logger")
 
-def handle_gemini_error(error, current_api_key, key_manager) -> str:
+def handle_gemini_error(error, current_api_key) -> str:
     if isinstance(error, requests.exceptions.HTTPError):
         status_code = error.response.status_code
         if status_code == 400:
@@ -32,13 +32,13 @@ def handle_gemini_error(error, current_api_key, key_manager) -> str:
                 log('WARNING', error_message, extra=extra_log_400_json)
                 return error_message
 
-        # elif status_code == 429:
-        #     error_message = "API 密钥配额已用尽或其他原因"
-        #     extra_log_429 = {'key': current_api_key[:8], 'status_code': status_code, 'error_message': error_message}
-        #     log('WARNING', f"{current_api_key[:8]} ... {current_api_key[-3:]} → 429 官方资源耗尽或其他原因", extra=extra_log_429)
-        #     # key_manager.blacklist_key(current_api_key)
+        elif status_code == 429:
+            error_message = "API 密钥配额已用尽或其他原因"
+            log('WARNING', f"{current_api_key[:8]} ... {current_api_key[-3:]} → 429 官方资源耗尽或其他原因", 
+                extra={'key': current_api_key[:8], 'status_code': status_code, 'error_message': error_message})
+            # key_manager.blacklist_key(current_api_key)
              
-        #     return error_message
+            return error_message
 
         elif status_code == 403:
             error_message = "权限被拒绝"
@@ -105,7 +105,7 @@ async def handle_api_error(e: Exception, api_key: str, key_manager, request_type
             return {'remove_cache': False,'error': error_message, 'should_switch_key': True}             
 
         else:
-            error_detail = handle_gemini_error(e, api_key, key_manager)
+            error_detail = handle_gemini_error(e, api_key)
             
             # # 重试次数用尽，在日志中输出错误状态码
             # log('error', f"Gemini 服务器错误({status_code})", 
@@ -116,5 +116,5 @@ async def handle_api_error(e: Exception, api_key: str, key_manager, request_type
                           detail=f"Gemini API 服务器错误({status_code})，请稍后重试")
     
     # 对于其他错误，返回切换密钥的信号，并输出错误信息到日志中
-    error_detail = handle_gemini_error(e, api_key, key_manager)
+    error_detail = handle_gemini_error(e, api_key)
     return {'should_switch_key': True, 'error': error_detail, 'remove_cache': True}

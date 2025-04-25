@@ -3,12 +3,13 @@ from fastapi import HTTPException, status, Request
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import update_api_call_stats,handle_api_error
+from app.utils.error_handling import handle_gemini_error
 from app.utils.logging import log
 from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
-from app.utils.response import create_complete_response
+from app.utils.response import openAI_nonstream_response
 from app.utils.stats import get_api_key_usage
 
 
@@ -118,9 +119,9 @@ async def process_nonstream_request(
             return "success"
 
     except Exception as e:
-        # 其他异常，返回 None 以便并发请求可以继续尝试其他密钥
-        log('error', f"非流式请求异常: {str(e)}", 
-            extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+        handle_gemini_error(e,current_api_key)
+        # log('error', f"非流式请求异常: {str(e)}", 
+        #     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
         return "error"
     
     
@@ -148,7 +149,7 @@ async def process_request(
     if cache_hit:
         log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
             extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
-        return create_complete_response(cached_response)
+        return openAI_nonstream_response(cached_response)
     
     # 重置已尝试的密钥
     key_manager.reset_tried_keys_for_request()
@@ -241,7 +242,7 @@ async def process_request(
                         log('info', f"非流式请求成功", 
                             extra={'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-                        return create_complete_response(cached_response)
+                        return openAI_nonstream_response(cached_response)
                     elif status == "empty":
                         # 增加空响应计数
                         empty_response_count += 1

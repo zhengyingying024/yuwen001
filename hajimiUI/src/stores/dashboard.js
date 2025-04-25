@@ -109,7 +109,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     // 更新API密钥统计
     if (data.api_key_stats) {
-      apiKeyStats.value = data.api_key_stats
+      apiKeyStats.value = data.api_key_stats.map(stat => ({
+        ...stat,
+        // 确保model_stats的每个模型都有calls和tokens两个指标
+        model_stats: Object.entries(stat.model_stats || {}).reduce((acc, [model, data]) => {
+          acc[model] = {
+            calls: typeof data === 'object' ? data.calls : data, // 兼容旧格式
+            tokens: typeof data === 'object' ? data.tokens : 0
+          }
+          return acc
+        }, {})
+      }))
       
       // 提取所有可用的模型
       const models = new Set(['all']) // 始终包含"全部"选项

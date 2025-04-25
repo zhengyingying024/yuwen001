@@ -29,7 +29,7 @@ class GeneratedText:
 
 
 class ResponseWrapper:
-    def __init__(self, data: Dict[Any, Any]):  # 正确的初始化方法名
+    def __init__(self, data: Dict[Any, Any]):  
         self._data = data
         self._text = self._extract_text()
         self._finish_reason = self._extract_finish_reason()
@@ -156,7 +156,8 @@ class GeminiClient:
             "topP": request.top_p,
             "topK": request.top_k,
             "stopSequences": request.stop if isinstance(request.stop, list) else [request.stop] if request.stop is not None else None,
-            "candidateCount": request.n
+            "candidateCount": request.n,
+            "thinkingBudget": request.thinking_budget
         }
         return {k: v for k, v in config_params.items() if v is not None}
 
@@ -210,8 +211,13 @@ class GeminiClient:
                         buffer += line.encode('utf-8')
                         try:
                             data = json.loads(buffer.decode('utf-8'))
+                            log('warning', f"流式响应: API密钥 {self.api_key[:8]}... 返回 {data}",
+                                extra={'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model})
                             buffer = b""
+                            token=0
                             if 'candidates' in data and data['candidates']:
+                                if 'usageMetadata' in data and data['usageMetadata']:
+                                    token=data['usageMetadata']['totalTokenCount']
                                 candidate = data['candidates'][0]
                                 if 'content' in candidate:
                                     content = candidate['content']
@@ -222,9 +228,9 @@ class GeminiClient:
                                             if 'text' in part:
                                                 text += part['text']
                                         if text:
-                                            yield text
+                                            yield (text,token)
                                         
-                                if candidate.get("finishReason") and candidate.get("finishReason") != "STOP":
+                                if candidate.get("finishReason") and candidate.get("finishReason").lower() != "stop":
                                     error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
                                     extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
                                     log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)

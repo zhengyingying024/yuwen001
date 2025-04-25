@@ -32,7 +32,7 @@ async def handle_client_disconnect(
         response_content = await asyncio.shield(gemini_task)
 
         # 更新API调用统计
-        await update_api_call_stats(settings.api_call_stats,key,model) 
+
         
         # 检查响应文本是否为空
         if response_content is None or response_content.text == "":
@@ -41,7 +41,7 @@ async def handle_client_disconnect(
                 extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
             
             return False
-        
+        await update_api_call_stats(settings.api_call_stats,key,model,response_content.total_token_count) 
         
         # 存入缓存 (追加到deque)
         response_cache_manager.store(cache_key, response_content)
@@ -84,4 +84,4 @@ async def handle_client_disconnect(
         log('error', f"客户端断开后处理API响应时出错: {error_msg}", extra=extra_log)
             
         # 向客户端抛出异常
-        raise HTTPException(status_code=500, detail="服务器内部处理时发生错误")
+        raise HTTPException(status_code=500, detail="hajimi 服务器内部处理时发生错误")

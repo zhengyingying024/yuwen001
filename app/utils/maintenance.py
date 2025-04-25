@@ -20,6 +20,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     from app.utils.error_handling import translate_error
     error_message = translate_error(str(exc_value))
     log('error', f"未捕获的异常: {error_message}", status_code=500, error_message=error_message)
+
 '''
 def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     """

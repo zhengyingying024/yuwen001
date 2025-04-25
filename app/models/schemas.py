@@ -12,6 +12,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: Optional[float] = 1.0
     top_k: Optional[float] = 40.0
     n: int = 1
+    thinking_budget: Optional[int] = None
     stream: bool = False
     stop: Optional[Union[str, List[str]]] = None
     max_tokens: Optional[int] = None

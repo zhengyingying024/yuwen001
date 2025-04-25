@@ -44,8 +44,12 @@
     if (!modelStats) return []
     
     return Object.entries(modelStats)
-      .map(([model, count]) => ({ model, count }))
-      .sort((a, b) => b.count - a.count)
+      .map(([model, data]) => ({ 
+        model, 
+        calls: data.calls,
+        tokens: data.tokens
+      }))
+      .sort((a, b) => b.calls - a.calls)
   }
   
   // 判断是否需要折叠
@@ -202,62 +206,71 @@
         </h3>
         <transition name="fold">
           <div v-if="apiKeyStatsVisible" class="fold-content">
-          <div class="api-key-stats-list">
-            <div v-if="!dashboardStore.apiKeyStats.length" class="api-key-item">
-              没有API密钥使用数据
-            </div>
-            <div v-for="(stat, index) in dashboardStore.apiKeyStats" :key="index" class="api-key-item">
-              <div class="api-key-header">
-                <div class="api-key-name">API密钥: {{ stat.api_key }}</div>
-                <div class="api-key-usage">
-                  <span class="api-key-count">{{ stat.calls_24h }}</span> /
-                  <span class="api-key-limit">{{ stat.limit }}</span>
-                  <span class="api-key-percent">({{ stat.usage_percent }}%)</span>
+            <div class="api-key-stats-list">
+              <div v-if="!dashboardStore.apiKeyStats.length" class="api-key-item">
+                没有API密钥使用数据
+              </div>
+              <div v-for="(stat, index) in dashboardStore.apiKeyStats" :key="index" class="api-key-item">
+                <div class="api-key-header">
+                  <div class="api-key-name">API密钥: {{ stat.api_key }}</div>
+                  <div class="api-key-usage">
+                    <span class="api-key-count">{{ stat.calls_24h }}</span> /
+                    <span class="api-key-limit">{{ stat.limit }}</span>
+                    <span class="api-key-percent">({{ stat.usage_percent }}%)</span>
+                  </div>
                 </div>
-              </div>
-              <div class="progress-container">
-                <div
-                  class="progress-bar"
-                  :class="getProgressBarClass(stat.usage_percent)"
-                  :style="{ width: Math.min(stat.usage_percent, 100) + '%' }"
-                ></div>
-              </div>
-              
-              <!-- 模型使用统计 -->
-              <div v-if="stat.model_stats && Object.keys(stat.model_stats).length > 0" class="model-stats-container">
-                <div class="model-stats-header" @click="toggleModelFold(stat.api_key)">
-                  <span class="model-stats-title">模型使用统计</span>
-                  <span :class="getFoldIconClass(modelFoldState[stat.api_key])">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </span>
+                <div class="progress-container">
+                  <div
+                    class="progress-bar"
+                    :class="getProgressBarClass(stat.usage_percent)"
+                    :style="{ width: Math.min(stat.usage_percent, 100) + '%' }"
+                  ></div>
                 </div>
                 
-                <transition name="fold">
-                  <div v-if="modelFoldState[stat.api_key]" class="model-stats-list fold-content">
-                    <!-- 显示所有模型或前三个模型 -->
-                    <div v-for="(modelStat, mIndex) in getModelStats(stat.model_stats).slice(0, shouldFoldModels(stat.model_stats) && !modelFoldState[stat.api_key] ? 3 : undefined)" :key="mIndex" class="model-stat-item">
-                      <div class="model-name">{{ modelStat.model }}</div>
-                      <div class="model-count">
-                        <span>{{ modelStat.count }}</span>
-                        <span class="model-usage-text">次调用</span>
+                <!-- 显示总token使用量 -->
+                <div class="total-tokens">
+                  <span class="total-tokens-label">总Token使用量:</span>
+                  <span class="total-tokens-value">{{ stat.total_tokens.toLocaleString() }}</span>
+                </div>
+                
+                <!-- 模型使用统计 -->
+                <div v-if="stat.model_stats && Object.keys(stat.model_stats).length > 0" class="model-stats-container">
+                  <div class="model-stats-header" @click="toggleModelFold(stat.api_key)">
+                    <span class="model-stats-title">模型使用统计</span>
+                    <span :class="getFoldIconClass(modelFoldState[stat.api_key])">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </span>
+                  </div>
+                  
+                  <transition name="fold">
+                    <div v-if="modelFoldState[stat.api_key]" class="model-stats-list fold-content">
+                      <!-- 显示所有模型或前三个模型 -->
+                      <div v-for="(modelStat, mIndex) in getModelStats(stat.model_stats).slice(0, shouldFoldModels(stat.model_stats) && !modelFoldState[stat.api_key] ? 3 : undefined)" :key="mIndex" class="model-stat-item">
+                        <div class="model-info">
+                          <div class="model-name">{{ modelStat.model }}</div>
+                          <div class="model-count">
+                            <span>{{ modelStat.calls }}</span>
+                            <span class="model-usage-text">次调用</span>
+                          </div>
+                          <div class="model-tokens">{{ modelStat.tokens.toLocaleString() }} tokens</div>
+                        </div>
+                      </div>
+                      
+                      <!-- 显示"查看更多"按钮，如果模型数量超过3个且未展开全部 -->
+                      <div
+                        v-if="shouldFoldModels(stat.model_stats) && getModelStats(stat.model_stats).length > 3"
+                        class="view-more-models"
+                        @click="toggleModelFold(stat.api_key)"
+                      >
+                        {{ modelFoldState[stat.api_key] ? '收起' : '查看更多模型' }}
                       </div>
                     </div>
-                    
-                    <!-- 显示"查看更多"按钮，如果模型数量超过3个且未展开全部 -->
-                    <div
-                      v-if="shouldFoldModels(stat.model_stats) && getModelStats(stat.model_stats).length > 3"
-                      class="view-more-models"
-                      @click="toggleModelFold(stat.api_key)"
-                    >
-                      {{ modelFoldState[stat.api_key] ? '收起' : '查看更多模型' }}
-                    </div>
-                  </div>
-                </transition>
+                  </transition>
+                </div>
               </div>
             </div>
-          </div>
           </div>
         </transition>
       </div>
@@ -682,12 +695,19 @@
   .model-stat-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 6px 10px;
+    align-items: flex-start;
+    padding: 10px;
     background-color: var(--color-background-mute);
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 13px;
     transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+  }
+  
+  .model-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
   }
   
   .model-name {
@@ -696,7 +716,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 60%;
+    max-width: 100%;
     transition: color 0.3s;
   }
   
@@ -816,8 +836,7 @@
     }
     
     .model-stat-item {
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 8px;
     }
     
     .model-progress-container {
@@ -896,6 +915,46 @@
     
     .notice-text {
       font-size: 12px;
+    }
+  }
+  
+  /* 修改总token使用量样式 */
+  .total-tokens {
+    margin-top: 6px;
+    padding: 4px 8px;
+    background-color: var(--color-background-mute);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .total-tokens-label {
+    font-size: 11px;
+    color: var(--color-text);
+    opacity: 0.8;
+    white-space: nowrap;
+  }
+  
+  .total-tokens-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--button-primary);
+  }
+  
+  /* 移动端优化 */
+  @media (max-width: 768px) {
+    .total-tokens {
+      margin-top: 4px;
+      padding: 3px 6px;
+    }
+    
+    .total-tokens-label {
+      font-size: 10px;
+    }
+    
+    .total-tokens-value {
+      font-size: 11px;
     }
   }
 </style>

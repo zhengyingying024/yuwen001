@@ -90,8 +90,7 @@ async def process_nonstream_request(
             
             # log('info', f"请求成功，缓存响应: {cache_key[:8]}...",
             #     extra={'request_type': request_type, 'model': chat_request.model})
-
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model) 
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count) 
             
             return "success"
 
@@ -105,7 +104,7 @@ async def process_nonstream_request(
             response_content.set_model(chat_request.model)
             
             # 更新API调用统计
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model)
+            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count)
             
             # 检查响应内容是否为空
             if not response_content or not response_content.text:

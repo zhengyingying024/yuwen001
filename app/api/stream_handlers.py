@@ -182,10 +182,11 @@ async def process_stream_request(
                     safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
                     system_instruction
                 )
-                
+                token=0
                 # 处理流式响应
-                async for chunk in stream_generator:
-                    if chunk or success:                    
+                async for chunk,token_count in stream_generator:
+                    if chunk or success:
+                        token=token_count
                         success = True
                         yield openAI_stream_chunk(model=chat_request.model,content=chunk)
                     
@@ -206,7 +207,12 @@ async def process_stream_request(
             finally: 
                 # 更新API调用统计
                 if success:
-                    await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model)
+                    await update_api_call_stats(
+                        settings.api_call_stats, 
+                        endpoint=api_key, 
+                        model=chat_request.model,
+                        token=token  # 添加token参数
+                    )
                     return
                 
                 # 如果空响应次数达到限制，跳出循环
@@ -247,7 +253,7 @@ async def process_stream_request(
                 extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
 
             # 更新API调用统计
-            await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model) 
+            await update_api_call_stats(settings.api_call_stats, endpoint=api_key, model=chat_request.model,token=response_content.total_token_count) 
                         
             # 检查响应内容是否为空
             if not response_content or not response_content.text:

@@ -210,8 +210,13 @@ class GeminiClient:
                         buffer += line.encode('utf-8')
                         try:
                             data = json.loads(buffer.decode('utf-8'))
+                            log('warning', f"流式响应: API密钥 {self.api_key[:8]}... 返回 {data}",
+                                extra={'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model})
                             buffer = b""
+                            token=0
                             if 'candidates' in data and data['candidates']:
+                                if 'usageMetadata' in data and data['usageMetadata']:
+                                    token=data['usageMetadata']['totalTokenCount']
                                 candidate = data['candidates'][0]
                                 if 'content' in candidate:
                                     content = candidate['content']
@@ -222,7 +227,7 @@ class GeminiClient:
                                             if 'text' in part:
                                                 text += part['text']
                                         if text:
-                                            yield text
+                                            yield (text,token)
                                         
                                 if candidate.get("finishReason") and candidate.get("finishReason").lower() != "stop":
                                     error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"

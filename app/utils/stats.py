@@ -29,14 +29,14 @@ def clean_expired_stats(api_call_stats):
                 del api_call_stats['last_24h']['by_endpoint'][endpoint][model]
                 continue
                 
-            for hour_key in list(api_call_stats['last_24h']['by_endpoint'][endpoint][model].keys()):
+            for hour_key in list(api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'].keys()):
                 try:
                     hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
                     if (now - hour_time).total_seconds() > 24 * 3600:  # 超过24小时
-                        del api_call_stats['last_24h']['by_endpoint'][endpoint][model][hour_key]
+                        del api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'][hour_key]
                 except ValueError:
                     # 如果键格式不正确，直接删除
-                    del api_call_stats['last_24h']['by_endpoint'][endpoint][model][hour_key]
+                    del api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'][hour_key]
     
     # 清理一小时前的小时统计数据
     one_hour_ago = now - timedelta(hours=1)
@@ -61,14 +61,14 @@ def clean_expired_stats(api_call_stats):
                 del api_call_stats['hourly']['by_endpoint'][endpoint][model]
                 continue
                 
-            for hour_key in list(api_call_stats['hourly']['by_endpoint'][endpoint][model].keys()):
+            for hour_key in list(api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'].keys()):
                 try:
                     hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
                     if hour_time < one_hour_ago:
-                        del api_call_stats['hourly']['by_endpoint'][endpoint][model][hour_key]
+                        del api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'][hour_key]
                 except ValueError:
                     # 如果键格式不正确，直接删除
-                    del api_call_stats['hourly']['by_endpoint'][endpoint][model][hour_key]
+                    del api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'][hour_key]
     
     # 清理一分钟前的分钟统计数据
     one_minute_ago = now - timedelta(minutes=1)
@@ -93,16 +93,16 @@ def clean_expired_stats(api_call_stats):
                 del api_call_stats['minute']['by_endpoint'][endpoint][model]
                 continue
                 
-            for minute_key in list(api_call_stats['minute']['by_endpoint'][endpoint][model].keys()):
+            for minute_key in list(api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'].keys()):
                 try:
                     minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
                     if minute_time < one_minute_ago:
-                        del api_call_stats['minute']['by_endpoint'][endpoint][model][minute_key]
+                        del api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'][minute_key]
                 except ValueError:
                     # 如果键格式不正确，直接删除
-                    del api_call_stats['minute']['by_endpoint'][endpoint][model][minute_key]
+                    del api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'][minute_key]
 
-async def update_api_call_stats(api_call_stats, endpoint=None, model=None): 
+async def update_api_call_stats(api_call_stats, endpoint=None, model=None, token=None): 
     """
     更新API调用统计的函数
     
@@ -141,23 +141,32 @@ async def update_api_call_stats(api_call_stats, endpoint=None, model=None):
                 api_call_stats[period]['by_endpoint'][endpoint] = {}
             
             if model not in api_call_stats[period]['by_endpoint'][endpoint]:
-                api_call_stats[period]['by_endpoint'][endpoint][model] = {}
+                api_call_stats[period]['by_endpoint'][endpoint][model] = {
+                    'calls': {},
+                    'total_tokens': 0  # 初始化总token计数
+                }
         
         # 初始化端点和模型特定的时间键（如果不存在）
-        if hour_key not in api_call_stats['last_24h']['by_endpoint'][endpoint][model]:
-            api_call_stats['last_24h']['by_endpoint'][endpoint][model][hour_key] = 0
+        if hour_key not in api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls']:
+            api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'][hour_key] = 0
             
-        if hour_key not in api_call_stats['hourly']['by_endpoint'][endpoint][model]:
-            api_call_stats['hourly']['by_endpoint'][endpoint][model][hour_key] = 0
+        if hour_key not in api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls']:
+            api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'][hour_key] = 0
             
-        if minute_key not in api_call_stats['minute']['by_endpoint'][endpoint][model]:
-            api_call_stats['minute']['by_endpoint'][endpoint][model][minute_key] = 0
+        if minute_key not in api_call_stats['minute']['by_endpoint'][endpoint][model]['calls']:
+            api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'][minute_key] = 0
         
         # 更新端点特定的统计
         if model is not None:
-            api_call_stats['last_24h']['by_endpoint'][endpoint][model][hour_key] += 1
-            api_call_stats['hourly']['by_endpoint'][endpoint][model][hour_key] += 1
-            api_call_stats['minute']['by_endpoint'][endpoint][model][minute_key] += 1
+            api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'][hour_key] += 1
+            api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'][hour_key] += 1
+            api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'][minute_key] += 1
+            
+            # 更新token总计数
+            if token is not None:
+                api_call_stats['last_24h']['by_endpoint'][endpoint][model]['total_tokens'] += token
+                api_call_stats['hourly']['by_endpoint'][endpoint][model]['total_tokens'] += token
+                api_call_stats['minute']['by_endpoint'][endpoint][model]['total_tokens'] += token
     
     # 计算总调用次数
     total_24h = sum(api_call_stats['last_24h']['total'].values())
@@ -171,22 +180,28 @@ async def update_api_call_stats(api_call_stats, endpoint=None, model=None):
     # 如果提供了端点和模型，添加端点特定的统计信息
     if endpoint and model is not None:
         try:
-            endpoint_24h = sum(api_call_stats['last_24h']['by_endpoint'][endpoint][model].values())
-            endpoint_hourly = sum(api_call_stats['hourly']['by_endpoint'][endpoint][model].values())
-            endpoint_minute = sum(api_call_stats['minute']['by_endpoint'][endpoint][model].values())
+            endpoint_24h = sum(api_call_stats['last_24h']['by_endpoint'][endpoint][model]['calls'].values())
+            endpoint_hourly = sum(api_call_stats['hourly']['by_endpoint'][endpoint][model]['calls'].values())
+            endpoint_minute = sum(api_call_stats['minute']['by_endpoint'][endpoint][model]['calls'].values())
             
-            log_message += " | 端点 '%s' 模型 '%s': 24小时=%s, 1小时=%s, 1分钟=%s" % (
-                endpoint[:8], model[:8], endpoint_24h, endpoint_hourly, endpoint_minute
+            tokens_24h = api_call_stats['last_24h']['by_endpoint'][endpoint][model]['total_tokens']
+            tokens_hourly = api_call_stats['hourly']['by_endpoint'][endpoint][model]['total_tokens']
+            tokens_minute = api_call_stats['minute']['by_endpoint'][endpoint][model]['total_tokens']
+            
+            log_message += " | 端点 '%s' 模型 '%s': 24小时=%s(总令牌:%s), 1小时=%s(总令牌:%s), 1分钟=%s(总令牌:%s)" % (
+                endpoint[:8], model[:8], 
+                endpoint_24h, tokens_24h,
+                endpoint_hourly, tokens_hourly,
+                endpoint_minute, tokens_minute
             )
         except (KeyError, TypeError):
-            # 如果统计数据结构中缺少某些键，记录基本信息
             log_message += " | 端点 '%s' 模型 '%s': 统计数据不完整" % (
                 endpoint[:8], model[:8]
             )
     else:
         log_message += " | 端点 '%s' 模型 '%s': 统计数据不完整"
 
-    log('info', log_message) 
+    log('info', log_message)
 
 async def get_api_key_usage(api_call_stats, api_key, model=None):
     """
@@ -209,7 +224,7 @@ async def get_api_key_usage(api_call_stats, api_key, model=None):
         if model:
             try:
                 # 获取24小时内的调用次数
-                usage = sum(api_call_stats['last_24h']['by_endpoint'][api_key][model].values())
+                usage = sum(api_call_stats['last_24h']['by_endpoint'][api_key][model]['calls'].values())
                 return usage
             except (KeyError, TypeError):
                 # 如果统计数据结构中缺少某些键，返回0
@@ -220,7 +235,7 @@ async def get_api_key_usage(api_call_stats, api_key, model=None):
             try:
                 if api_key in api_call_stats['last_24h']['by_endpoint']:
                     for model_key in api_call_stats['last_24h']['by_endpoint'][api_key]:
-                        total_usage += sum(api_call_stats['last_24h']['by_endpoint'][api_key][model_key].values())
+                        total_usage += sum(api_call_stats['last_24h']['by_endpoint'][api_key][model_key]['calls'].values())
                 return total_usage
             except (KeyError, TypeError):
                 # 如果统计数据结构中缺少某些键，返回0

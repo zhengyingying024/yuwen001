@@ -88,8 +88,8 @@ async def vertex_list_models():
 @router.get("/models",response_model=ModelList)
 async def list_models():
     if settings.ENABLE_VERTEX:
-        return await aistudio_list_models()
-    return await vertex_list_models()
+        return await vertex_list_models()
+    return await aistudio_list_models()
 
 @router.post("/aistudio/chat/completions", response_model=ChatCompletionResponse)
 async def aistudio_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):

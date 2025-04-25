@@ -229,7 +229,8 @@
                 
                 <!-- 显示总token使用量 -->
                 <div class="total-tokens">
-                  总Token使用量: {{ stat.total_tokens.toLocaleString() }}
+                  <span class="total-tokens-label">总Token使用量:</span>
+                  <span class="total-tokens-value">{{ stat.total_tokens.toLocaleString() }}</span>
                 </div>
                 
                 <!-- 模型使用统计 -->
@@ -247,11 +248,13 @@
                     <div v-if="modelFoldState[stat.api_key]" class="model-stats-list fold-content">
                       <!-- 显示所有模型或前三个模型 -->
                       <div v-for="(modelStat, mIndex) in getModelStats(stat.model_stats).slice(0, shouldFoldModels(stat.model_stats) && !modelFoldState[stat.api_key] ? 3 : undefined)" :key="mIndex" class="model-stat-item">
-                        <div class="model-name">{{ modelStat.model }}</div>
-                        <div class="model-count">
-                          <span>{{ modelStat.calls }}</span>
-                          <span class="model-usage-text">次调用</span>
-                          <span class="model-tokens">({{ modelStat.tokens.toLocaleString() }} tokens)</span>
+                        <div class="model-info">
+                          <div class="model-name">{{ modelStat.model }}</div>
+                          <div class="model-count">
+                            <span>{{ modelStat.calls }}</span>
+                            <span class="model-usage-text">次调用</span>
+                          </div>
+                          <div class="model-tokens">{{ modelStat.tokens.toLocaleString() }} tokens</div>
                         </div>
                       </div>
                       
@@ -692,12 +695,19 @@
   .model-stat-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 6px 10px;
+    align-items: flex-start;
+    padding: 10px;
     background-color: var(--color-background-mute);
-    border-radius: 4px;
+    border-radius: 6px;
     font-size: 13px;
     transition: transform 0.2s, box-shadow 0.2s, background-color 0.3s;
+  }
+  
+  .model-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
   }
   
   .model-name {
@@ -706,7 +716,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 60%;
+    max-width: 100%;
     transition: color 0.3s;
   }
   
@@ -826,8 +836,7 @@
     }
     
     .model-stat-item {
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 8px;
     }
     
     .model-progress-container {
@@ -909,19 +918,43 @@
     }
   }
   
-  /* 添加总token使用量样式 */
+  /* 修改总token使用量样式 */
   .total-tokens {
-    margin-top: 8px;
-    font-size: 14px;
-    color: var(--color-text);
-    text-align: right;
-    font-weight: 500;
+    margin-top: 6px;
+    padding: 4px 8px;
+    background-color: var(--color-background-mute);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   
-  /* 修改模型token显示样式 */
-  .model-tokens {
+  .total-tokens-label {
+    font-size: 11px;
     color: var(--color-text);
-    font-size: 12px;
-    margin-left: 5px;
+    opacity: 0.8;
+    white-space: nowrap;
+  }
+  
+  .total-tokens-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--button-primary);
+  }
+  
+  /* 移动端优化 */
+  @media (max-width: 768px) {
+    .total-tokens {
+      margin-top: 4px;
+      padding: 3px 6px;
+    }
+    
+    .total-tokens-label {
+      font-size: 10px;
+    }
+    
+    .total-tokens-value {
+      font-size: 11px;
+    }
   }
 </style>

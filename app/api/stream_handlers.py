@@ -140,7 +140,7 @@ async def process_stream_request(
                                     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
                             
                         except Exception as e:
-                            error_detail = handle_gemini_error(e, api_key, key_manager)
+                            error_detail = handle_gemini_error(e, api_key)
                             log('error', f"请求失败: {error_detail}",
                                 extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   hajimi-app:
     image: beijixingxing/hajimi:latest

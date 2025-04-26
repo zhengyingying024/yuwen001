@@ -28,13 +28,13 @@ PASSWORD = your_login_password # 设置登录密码
 ports:
   - "7860:7860" #端口冲突时改左侧端口
 environment:
- HTTP_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
- HTTPS_PROXY: "http://127.0.0.1:7890" # 启用代理，按需修改
+# HTTP_PROXY: "http://127.0.0.1:7890" # 无外网环境需要取消注释并添加代理，按需修改
+# HTTPS_PROXY: "http://127.0.0.1:7890" # 无外网环境需要取消注释并添加代理，按需修改
 ```
 
 4. **打开.env文件按需启用vertex**：
-    - ENABLE_VERTEX=true # 默认开启
-    - GOOGLE_CREDENTIALS_JSON='json密钥' # 填入完整的Google凭证JSON，注意填写进英文分号中间
+    - ENABLE_VERTEX=false # 默认关闭，如需开启，改为true
+    - GOOGLE_CREDENTIALS_JSON='json密钥' # 填入完整的Google凭证JSON，注意填写进英文单引号中间
 
 ### 启动服务
 在终端执行（修改成自己的文件夹路径）
@@ -43,6 +43,7 @@ cd ~/Desktop/hajimi-app
 docker-compose up -d 
 ```
 访问`http://localhost:7860`
+API地址：`http://localhost:7860/v1`
 
 ## 服务器部署（SSH版）
 1. 用SSH工具连接到服务器
@@ -55,6 +56,7 @@ docker-compose up -d
 3. 进入Compose选择hajimi文件夹导入docker-compose.yml文件，点击部署并运行。
 
 **登录`http://localhost:7860`验证，正常则通过`http://<服务器IP>:7860`（替换IP）外网访问**
+**API端点地址：`http://localhost:7860/v1`**
 
 ## 常见问题
 ### Q1:端口冲突

@@ -21,7 +21,7 @@
 - [huggingface 部署的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
-- [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
+- ~~[zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写~~（已过时且暂时无人更新，欢迎提交pull requests）
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
@@ -40,8 +40,7 @@
     * 新增环境变量`MAX_EMPTY_RESPONSES`，为空响应重试次数，默认为5
     * 修复若干bug
 
-
-* 历史版本更新日志请查看[update](./wiki/update.md)
+* 历史版本更新日志请查看[update](./update.md)
 
 ## ✨ 主要功能：
 

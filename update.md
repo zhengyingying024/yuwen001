@@ -1,3 +1,18 @@
+# 更新日志
+* v0.1.7
+    * 添加token计数器，现在可以在前端看到每一个api使用的token数与单模型使用的token数量了
+    * 为2.5flash模型适配`thinkingBudget`参数，用户只需在附加参数中添加`- thinking_budget : 1024`即可调整
+    * 修复在报错中错误漏出key的问题
+    * 为并发缓存功能实现缓存键值计算切换，用户可选择使用最后四条消息或全部消息计算缓存
+    * 新增环境变量`PRECISE_CACHE`，为切换缓存计算方法，默认为`false`
+    * 修复若干bug
+* v0.1.6
+    * 为并发模式提供缓存，并发中除了返回的成功请求，其他成功请求将被缓存，若下次请求与本次请求一致，将首先使用缓存内容
+    * 为请求添加硬限制，超过每日限定次数的key将不再发送请求，若所有key都达到次数限制，将随机选择一个key请求
+    * 添加空响应计数，单次请求空响应重试超过一定次数将直接跳出
+    * 修复联网模式bug（感谢**yoolieer**），现在能够正常的启用停用联网模式了
+    * 新增环境变量`MAX_EMPTY_RESPONSES`，为空响应重试次数，默认为5
+    * 修复若干bug
 * v0.1.5
     * 实现vertex热切换，现在在前端面板就可以切换vertex模式与ai studio模式了
     * 为vertex模式实现假流式，环境变量与ai studio模式的假流式相同，均为`FAKE_STREAMING`
@@ -24,7 +39,6 @@
     * 新增环境变量`CONCURRENT_REQUESTS`用于设置默认的并发请求数，初始默认值为1。
     * 新增环境变量`INCREASE_CONCURRENT_ON_FAILURE`用于设置当请求失败时增加的并发请求数，初始默认值为1。
     * 新增环境变量`MAX_CONCURRENT_REQUESTS`用于设置允许的最大并发请求数，初始默认值为3。
-
 *   v0.1.1
     * 新增联网模式,为所有gemini2.x模型提供联网能力，在模型列表中选择-search后缀的模型启用
     * 新增环境变量`SEARCH_MODE`是否启用联网模式，默认为true
@@ -52,9 +66,7 @@
     * 新增**单api使用次数统计**，在原API调用统计下方新增可折叠的单api使用次数统计，同时提供进度条查看剩余使用次数
     * 在环境变量中新增`API_KEY_DAILY_LIMIT`，为单api 24小时最大使用次数，默认值为25
     * 在环境变量中新增`BLOCKED_MODELS`，为需要屏蔽的模型名称，多个模型用英文逗号分隔
-
 *   v0.0.3beta
     * 完善了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）
     * 新增“假流式传输模式”，该模式默认开启，以解决在某些情况下客户端断开连接的问题。如需关闭，请将环境变量 `FAKE_STREAMING` 设置为 `false`。
-
 *   v0.0.2 修复了在log中错误暴露apikey的问题，修改了客户端断开连接的处理逻辑（感谢[@warming-afternoon](https://github.com/warming-afternoon)）

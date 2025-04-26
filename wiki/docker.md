@@ -16,7 +16,7 @@
 
 **[.env文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/.env)**
 
-**[docker-compose.yml文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/docker-compose.yml)**
+**[docker-compose.yml文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/docker-compose.yaml)**
 
 ### （三）创建项目目录并放置配置文件件 📂
 在您选择的位置创建一个专门用于部署 Hajimi 的文件夹，并将下载的 .env 和 docker-compose.yml 文件放入该文件夹中。
@@ -93,12 +93,12 @@ mkdir -p /path/to/your/hajimi-app && cd /path/to/your/hajimi-app
 wget https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/.env
 
 # 下载 docker-compose.yml
-wget https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yml
+wget https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yaml
 ```
 或使用curl：
 ```bash
 curl -O https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/.env
-curl -O https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yaml
 ```
 4. 验证文件
 ```bash

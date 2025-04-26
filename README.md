@@ -15,10 +15,9 @@
 遇到问题请先查看以下的 **错误自查** 文档，确保已尝试按照其上的指示进行了相应的排查与处理。
 
 - [错误自查](./wiki/error.md)
-
 ###  使用文档
-- [Claw Cloud部署的使用文档（推荐，免费，手机电脑均可使用）](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
-- [huggingface 部署的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
+- [huggingface 部署的使用文档（推荐，免费，手机电脑均可使用）](./wiki/huggingface.md)
+- [Claw Cloud部署的使用文档（免费，手机电脑均可使用）](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 - ~~[zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写~~（已过时且暂时无人更新，欢迎提交pull requests）

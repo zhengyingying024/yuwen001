@@ -14,6 +14,7 @@
 ### （二）获取配置文件
 下载部署所需的两个核心配置文件：
 **[.env文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/.env)**
+
 **[docker-compose.yml文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/docker-compose.yml)**
 
 ### （三）创建项目目录并放置配置文件件 📂

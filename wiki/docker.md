@@ -13,6 +13,7 @@
 
 ### （二）获取配置文件
 下载部署所需的两个核心配置文件：
+
 **[.env文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/.env)**
 
 **[docker-compose.yml文件下载](https://github.com/beijixingxing/hajimi/blob/main/wiki/docker/docker-compose.yml)**
@@ -86,8 +87,25 @@ Docker 会自动拉取镜像并根据 docker-compose.yml 和 .env 文件启动�
 mkdir -p /path/to/your/hajimi-app && cd /path/to/your/hajimi-app
 # 例如: mkdir -p /opt/hajimi-app && cd /opt/hajimi-app
 ```
-3. 上传配置文件：使用 scp、SFTP 工具（如 FileZilla, WinSCP）或其他方式将您本地修改好的 .env 和 docker-compose.yml 文件上传到服务器上刚创建的 `/path/to/your/hajimi-app` 目录中。
-4. 启动服务：在 SSH 终端中，确保您位于项目目录下，执行启动命令。
+3. 直接下载配置文件
+```bash
+# 下载 .env 文件
+wget https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/.env
+
+# 下载 docker-compose.yml
+wget https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yml
+```
+或使用curl：
+```bash
+curl -O https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/.env
+curl -O https://raw.githubusercontent.com/beijixingxing/hajimi/main/wiki/docker/docker-compose.yml
+```
+4. 验证文件
+```bash
+ls -l  # 应看到两个文件
+cat .env  # 检查配置文件内容
+```
+5. 启动服务：在 SSH 终端中，确保您位于项目目录下，执行启动命令。
 ```
 docker-compose up -d
 ```

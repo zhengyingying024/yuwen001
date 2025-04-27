@@ -4,7 +4,7 @@
 ### 1.1 下载
 - 从[releases](https://github.com/wyeeeee/hajimi/releases/tag/sp)下载单文件特别版的Dockerfile。
 - 下载后应只有一个Dockerfile文件，且名称只能为Dockerfile，不能存在任何的后缀（如.bin）。
-
+- 对于文件部分除了上传Dockerfile以外其他什么都别干
 
 ### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。

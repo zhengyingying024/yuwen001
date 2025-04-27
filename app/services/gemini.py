@@ -189,6 +189,78 @@ class GeminiClient:
         finally:
             log('INFO', "假流式请求结束", extra=extra_log)
 
+    # 解析单个 SSE 数据块
+    def _parse_sse_chunk(self, chunk_data: dict) -> Optional[Dict[str, Any]]:
+        """
+        解析从 Gemini API 返回的单个 SSE JSON 数据块。
+
+        Args:
+            chunk_data: 从 SSE 消息中解析出的 JSON 对象。
+
+        Returns:
+            一个字典，包含解析后的信息 (type, content, token, reason)，
+            如果无法解析或块无效，则返回 None。
+        """
+        try:
+            # 提取 token 计数 (如果存在)
+            token = chunk_data.get('usageMetadata', {}).get('totalTokenCount')
+
+            # 检查 candidates 是否存在且非空
+            if not chunk_data.get('candidates'):
+                # 可能是只有 usageMetadata 的块，或者其他类型的块，暂时忽略
+                return None # 或者返回一个表示 metadata 的类型
+
+            candidate = chunk_data['candidates'][0]
+            content = candidate.get('content')
+            finish_reason = candidate.get('finishReason')
+
+            # 检查安全评级 - 如果被阻止，视为错误并抛出
+            if 'safetyRatings' in candidate:
+                for rating in candidate['safetyRatings']:
+                    if rating.get('blocked'): # 检查是否被阻止
+                        category = rating.get('category', 'UNKNOWN')
+                        error_msg = f"响应因安全原因被阻止: 类别 {category}"
+                        # 此处直接抛出异常，让 stream_chat 中的外层 try-except 处理
+                        raise ValueError(error_msg) 
+
+            # 检查是否有内容部分
+            if content and content.get('parts'):
+                parts = content['parts']
+                text_content = ""
+                function_call_content = None
+                for part in parts:
+                    if 'text' in part:
+                        text_content += part['text']
+                    elif 'functionCall' in part:
+                        # 假设一个块中只有一个 functionCall
+                        function_call_content = part['functionCall']
+                        # 通常 functionCall 后没有 text，如果需要处理混合，逻辑需调整
+                        break 
+                
+                if function_call_content:
+                    # 发现函数调用
+                    return {'type': 'function_call', 'content': function_call_content, 'token': token}
+                elif finish_reason:
+                    # 如果有完成原因，这通常是流的最后一个有效信息块
+                    # Gemini 可能的 finishReason: STOP, MAX_TOKENS, SAFETY, RECITATION, OTHER, TOOL_CODE (或类似)
+                    return {'type': 'finish', 'content': text_content, 'reason': finish_reason, 'token': token}
+                
+                elif text_content:
+                    # 发现文本内容
+                    return {'type': 'text', 'content': text_content, 'token': token}
+
+            # 如果块既没有 finishReason 也没有有效 content parts，则忽略
+            return None
+
+        except (KeyError, IndexError, TypeError) as e:
+            log('warming', f"解析 SSE 块时出错", extra={'key': self.api_key[:8]})
+            # 返回错误类型，让上层决定如何处理
+            return {'type': 'error', 'content': f"解析 SSE 块失败", 'reason': 'PARSE_ERROR'}
+        except ValueError as e:
+             # 捕获由安全检查抛出的 ValueError
+             log('error', f"SSE 块包含不安全内容或错误: {e}", extra={'key': self.api_key[:8]})
+             raise e # 重新抛出，让 stream_chat 处理
+
     # 真流式处理
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         # 真流式请求处理逻辑
@@ -204,50 +276,43 @@ class GeminiClient:
         
         async with httpx.AsyncClient() as client:
             async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
-                buffer = b""
+                buffer = b"" # 用于累积可能不完整的 JSON 数据
                 try:
                     async for line in response.aiter_lines():
-                        if not line.strip():
+                        if not line.strip(): # 跳过空行 (SSE 消息分隔符)
                             continue
                         if line.startswith("data: "):
-                            line = line[len("data: "):]
+                            line = line[len("data: "):] # 去除 "data: " 前缀
+                        
                         buffer += line.encode('utf-8')
                         try:
+                            # 尝试解析整个缓冲区
                             data = json.loads(buffer.decode('utf-8'))
-                            buffer = b""
-                            token=0
-                            if 'candidates' in data and data['candidates']:
-                                if 'usageMetadata' in data and data['usageMetadata']:
-                                    token=data['usageMetadata']['totalTokenCount']
-                                candidate = data['candidates'][0]
-                                if 'content' in candidate:
-                                    content = candidate['content']
-                                    if 'parts' in content and content['parts']:
-                                        parts = content['parts']
-                                        text = ""
-                                        for part in parts:
-                                            if 'text' in part:
-                                                text += part['text']
-                                        if text:
-                                            yield (text,token)
-                                        
-                                if candidate.get("finishReason") and candidate.get("finishReason").lower() != "stop":
-                                    error_msg = f"模型的响应被截断: {candidate.get('finishReason')}"
-                                    extra_log_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                    log_msg = format_log_message('WARNING', error_msg, extra=extra_log_error)
-                                    logger.warning(log_msg)
-                                    raise ValueError(error_msg)
+                            # 解析成功，清空缓冲区
+                            buffer = b"" 
+                            
+                            # 使用辅助函数解析 SSE 块内容
+                            parsed_chunk = self._parse_sse_chunk(data)
+                            
+                            if parsed_chunk:
                                 
-                                if 'safetyRatings' in candidate:
-                                    for rating in candidate['safetyRatings']:
-                                        if rating['probability'] == 'HIGH':
-                                            error_msg = f"模型的响应被截断: {rating['category']}"
-                                            extra_log_safety = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
-                                            log_msg = format_log_message('WARNING', error_msg, extra=extra_log_safety)
-                                            logger.warning(log_msg)
-                                            raise ValueError(error_msg)
+                                # 产生解析后的块 (字典格式)
+                                yield parsed_chunk
+                                
+                                # 如果是结束块或错误块，提前结束循环 
+                                # 当前 _parse_sse_chunk 对于 PARSE_ERROR 返回错误类型，对于 SAFETY 抛出 ValueError
+                                if parsed_chunk['type'] == 'finish':
+                                    break # 收到 finishReason，正常结束
+                                if parsed_chunk['type'] == 'error':
+                                    break # 停止处理后续块
+
                         except json.JSONDecodeError:
-                            continue
+                            # JSON 不完整，继续累积到 buffer
+                            continue 
+                        except ValueError as ve:
+                            # 捕获 _parse_sse_chunk 中因安全问题抛出的 ValueError
+                            log('error', f"流处理因安全问题终止", extra=extra_log)
+                            return 
                         except Exception as e:
                             error_msg = f"流式处理期间发生错误: {str(e)}"
                             extra_log_stream_error = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model, 'status_code': 'ERROR', 'error_message': error_msg}
@@ -277,6 +342,7 @@ class GeminiClient:
         except Exception as e:
             raise
 
+    # OpenAI 格式请求转换为 gemini 格式请求
     def convert_messages(self, messages, use_system_prompt=False,model=None):
         gemini_history = []
         errors = []

@@ -10,7 +10,7 @@ services:
       - .env  
     environment:
       - TZ=Asia/Shanghai # 中国时区
-     # - HTTP_PROXY=http://127.0.0.1:7890  # 代理地址，请注意！无外网环境需要取消注释添加代理地址
+     # - HTTP_PROXY=http://127.0.0.1:7890  # 代理地址，请注意！无外网环境需要取消注释，添加自己的代理地址
      # - HTTPS_PROXY=http://127.0.0.1:7890  # 同上，保持一样就行
     restart: unless-stopped # 自动重启，但手动停止后不再重启
 

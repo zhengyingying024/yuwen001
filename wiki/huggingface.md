@@ -13,7 +13,7 @@
 - 如图所示，填入创建选项，填写完成后，点击create space，一定要记住owner与space name，在之后的酒馆连接中要使用<br> 注意：pace name不要使用任何标点符号<br>![create_space](./img/create_space.png)
 - 如图所示，选择upload files<br>![files](./img/files.png)
 - 如图所示，将1.1下载Dockerfile拖入，上传完成后点击Commit changes to main<br>![upload_files](./img/upload_files.png)
-- 检查上传的Dockerfile有没有lfs字样，<br>![LFS](./img/LFS.jpg)如果有，删掉文件重新上传或者重新下载后上传。
+- 检查上传的Dockerfile有没有lfs字样，如果有，删掉文件重新上传或者重新下载后上传。<br>![LFS](./img/LFS.jpg)
 
 ## 2. 配置
 ### 2.0 什么是环境变量？

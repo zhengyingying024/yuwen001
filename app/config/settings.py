@@ -29,6 +29,7 @@ logging.getLogger("uvicorn.access").disabled = True
 
 # 安全配置
 PASSWORD = os.environ.get("PASSWORD", "123").strip('"')
+WEB_PASSWORD = os.environ.get("WEB_PASSWORD", PASSWORD).strip('"')
 MAX_REQUESTS_PER_MINUTE = int(os.environ.get("MAX_REQUESTS_PER_MINUTE", "30"))
 MAX_REQUESTS_PER_DAY_PER_IP = int(os.environ.get("MAX_REQUESTS_PER_DAY_PER_IP", "600"))
 RETRY_DELAY = 1

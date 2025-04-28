@@ -133,11 +133,14 @@ async function verifyAndToggleVertex() {
       </div>
     </div>
     
-    <!-- 运行状态部分 -->
-    <StatusSection class="section-animate" :class="{ 'animate-in': animationStep >= 2 || animationCompleted }" />
-    
-    <!-- 环境配置部分 -->
-    <ConfigSection class="section-animate" :class="{ 'animate-in': animationStep >= 3 || animationCompleted }" />
+    <!-- 运行状态和环境配置并排显示 -->
+    <div class="sections-row">
+      <!-- 运行状态部分 -->
+      <StatusSection class="section-animate status-section" :class="{ 'animate-in': animationStep >= 2 || animationCompleted }" />
+      
+      <!-- 环境配置部分 -->
+      <ConfigSection class="section-animate config-section" :class="{ 'animate-in': animationStep >= 3 || animationCompleted }" />
+    </div>
     
     <!-- 系统日志部分 -->
     <LogSection class="section-animate" :class="{ 'animate-in': animationStep >= 4 || animationCompleted }" />
@@ -201,6 +204,34 @@ body {
   opacity: 0;
   transform: translateY(20px) scale(0.95);
   transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: var(--gradient-primary);
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 70%);
+  z-index: 0;
+}
+
+.header-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.1), transparent 70%);
+  z-index: 0;
 }
 
 .header-container.animate-in {
@@ -213,52 +244,70 @@ body {
   align-items: center;
   gap: 15px;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
 }
 
 .toggle-container {
   display: flex;
   align-items: center;
   gap: 15px;
+  position: relative;
+  z-index: 1;
 }
 
 .vertex-button, .theme-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--card-background);
-  padding: 5px 10px;
-  border-radius: 20px;
-  border: 1px solid var(--card-border);
+  background-color: rgba(255, 255, 255, 0.15);
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
   font-size: 0.9rem;
-  color: var(--color-text);
+  color: white;
   font-weight: 500;
-  min-width: 80px;
+  min-width: 90px;
+  backdrop-filter: blur(5px);
 }
 
 .vertex-button.active, .theme-button.active {
-  background-color: var(--toggle-active);
-  border-color: var(--toggle-active);
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.3);
   color: white;
 }
 
 .vertex-button:hover, .theme-button:hover {
-  background-color: var(--card-hover);
+  background-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
 }
 
 h1 {
-  color: var(--color-heading);
+  color: white;
   margin: 0;
   font-size: 1.8rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* 按钮样式替代滑块 */
 .vertex-toggle, .theme-toggle, .switch, .slider {
   display: none;
+}
+
+/* 并排显示部分 */
+.sections-row {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.status-section, .config-section {
+  width: 100%;
 }
 
 /* 移动端优化 - 减小整体边距 */
@@ -271,6 +320,7 @@ h1 {
     flex-direction: row;
     align-items: center;
     margin-bottom: 15px;
+    padding: 15px;
   }
   
   .title-container {
@@ -299,9 +349,15 @@ h1 {
   }
   
   .vertex-button, .theme-button {
-    padding: 4px 8px;
+    padding: 6px 12px;
     font-size: 0.8rem;
-    min-width: 70px;
+    min-width: 80px;
+  }
+  
+  /* 移动端下保持垂直布局 */
+  .sections-row {
+    flex-direction: column;
+    gap: 15px;
   }
 }
 
@@ -314,6 +370,7 @@ h1 {
     flex-direction: row;
     align-items: center;
     margin-bottom: 15px;
+    padding: 12px;
   }
   
   .title-container {
@@ -341,25 +398,50 @@ h1 {
   }
   
   .vertex-button, .theme-button {
-    padding: 2px 6px;
+    padding: 4px 8px;
     font-size: 0.65rem;
-    min-width: 60px;
+    min-width: 70px;
+  }
+  
+  /* 移动端下保持垂直布局 */
+  .sections-row {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 
 .refresh-button {
   display: block;
   margin: 20px auto;
-  padding: 10px 20px;
-  background-color: var(--button-primary);
-  color: var(--button-text);
+  padding: 12px 24px;
+  background: var(--gradient-secondary);
+  color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-lg);
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.3s ease;
   opacity: 0;
   transform: translateY(20px) scale(0.95);
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.refresh-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.refresh-button:hover::before {
+  transform: translateX(100%);
 }
 
 .refresh-button.animate-in {
@@ -368,37 +450,62 @@ h1 {
 }
 
 .refresh-button:hover {
-  background-color: var(--button-primary-hover);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
 }
 
 /* 全局响应式样式 - 保持三栏布局但优化显示 */
 @media (max-width: 768px) {
   /* 覆盖所有组件中的卡片样式 */
   :deep(.info-box) {
-    padding: 10px 6px;
-    margin-bottom: 10px;
-    border-radius: 6px;
+    padding: 15px 10px;
+    margin-bottom: 15px;
+    border-radius: var(--radius-lg);
     background-color: var(--card-background);
     border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  :deep(.info-box)::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gradient-primary);
   }
   
   :deep(.section-title) {
     font-size: 1.1rem;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
     color: var(--color-heading);
     border-bottom: 1px solid var(--color-border);
+    position: relative;
+  }
+  
+  :deep(.section-title)::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 50px;
+    height: 2px;
+    background: var(--gradient-primary);
   }
   
   :deep(.stats-grid) {
-    gap: 5px;
-    margin-top: 10px;
-    margin-bottom: 15px;
+    gap: 10px;
+    margin-top: 15px;
+    margin-bottom: 20px;
   }
   
   .refresh-button {
-    margin: 15px auto;
-    padding: 8px 16px;
+    margin: 20px auto;
+    padding: 10px 20px;
     font-size: 14px;
   }
 }
@@ -406,26 +513,26 @@ h1 {
 /* 小屏幕手机适配 */
 @media (max-width: 480px) {
   :deep(.info-box) {
-    padding: 8px 4px;
-    margin-bottom: 6px;
-    border-radius: 5px;
+    padding: 12px 8px;
+    margin-bottom: 10px;
+    border-radius: var(--radius-md);
   }
   
   :deep(.section-title) {
     font-size: 1rem;
-    margin-bottom: 8px;
-    padding-bottom: 4px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
   }
   
   :deep(.stats-grid) {
-    gap: 4px;
-    margin-top: 8px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-top: 10px;
+    margin-bottom: 15px;
   }
   
   .refresh-button {
-    margin: 10px auto;
-    padding: 6px 12px;
+    margin: 15px auto;
+    padding: 8px 16px;
     font-size: 13px;
   }
 }
@@ -460,6 +567,24 @@ h1 {
   opacity: 0;
   transform: scale(0.9) translateY(10px);
   transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s, background-color 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+:deep(.stat-card)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--gradient-secondary);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+:deep(.stat-card:hover)::before {
+  opacity: 1;
 }
 
 .animate-in :deep(.stat-card) {
@@ -504,6 +629,24 @@ h1 {
   opacity: 0;
   transform: translateX(-10px) scale(0.98);
   transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+:deep(.log-entry)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+:deep(.log-entry:hover)::after {
+  transform: translateX(100%);
 }
 
 .animate-in :deep(.log-entry) {
@@ -619,21 +762,35 @@ h1 {
   justify-content: center;
   z-index: 1000;
   padding-top: 100px;
+  backdrop-filter: blur(5px);
 }
 
 .password-dialog-content {
   background-color: var(--card-background);
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: 25px;
   width: 90%;
   max-width: 400px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.password-dialog-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background: var(--gradient-primary);
 }
 
 .password-dialog-content h3 {
   margin-top: 0;
   margin-bottom: 10px;
   color: var(--color-heading);
+  font-size: 1.3rem;
 }
 
 .password-dialog-content p {
@@ -644,22 +801,31 @@ h1 {
 
 .password-input-container {
   margin-bottom: 20px;
+  position: relative;
 }
 
 .password-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background-color: var(--color-background);
   color: var(--color-text);
   font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
 }
 
 .password-error {
-  color: #dc3545;
+  color: #ef4444;
   font-size: 12px;
   margin-top: 8px;
+  padding-left: 5px;
 }
 
 .password-actions {
@@ -669,31 +835,34 @@ h1 {
 }
 
 .cancel-btn, .confirm-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .cancel-btn {
-  background-color: var(--color-background-mute);
+  background-color: var(--button-secondary);
   border: 1px solid var(--color-border);
-  color: var(--color-text);
+  color: var(--button-secondary-text);
 }
 
 .confirm-btn {
-  background-color: var(--button-primary);
+  background: var(--gradient-primary);
   border: none;
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .cancel-btn:hover {
-  background-color: var(--color-background);
+  background-color: var(--button-secondary-hover);
+  transform: translateY(-2px);
 }
 
 .confirm-btn:hover {
-  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 移动端优化 */
@@ -703,7 +872,7 @@ h1 {
   }
   
   .password-dialog-content {
-    padding: 15px;
+    padding: 20px;
   }
 }
 
@@ -713,11 +882,11 @@ h1 {
   }
   
   .password-dialog-content {
-    padding: 12px;
+    padding: 15px;
   }
   
   .password-dialog-content h3 {
-    font-size: 16px;
+    font-size: 1.1rem;
   }
   
   .password-dialog-content p {
@@ -726,11 +895,11 @@ h1 {
   
   .password-input {
     font-size: 12px;
-    padding: 6px 10px;
+    padding: 10px 14px;
   }
   
   .cancel-btn, .confirm-btn {
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-size: 12px;
   }
 }

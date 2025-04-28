@@ -121,7 +121,7 @@ async function verifyAndToggleVertex() {
   <div class="dashboard" :class="{ 'page-loaded': isPageLoaded }">
     <div class="header-container" :class="{ 'animate-in': animationStep >= 1 || animationCompleted }">
       <div class="title-container">
-        <h1>🤖 Gemini API 代理服务</h1>
+        <h1><span>🤖 Gemini API 代理服务</span></h1>
       </div>
       <div class="toggle-container">
         <button class="vertex-button" :class="{ 'active': config.enableVertex }" @click="openPasswordDialog">
@@ -337,6 +337,14 @@ h1 {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  
+  h1::before {
+    content: '🤖Gemini代理';
+  }
+  
+  h1 span {
+    display: none;
   }
   
   .toggle-container {

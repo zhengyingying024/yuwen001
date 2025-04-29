@@ -17,7 +17,7 @@ from google.oauth2 import service_account
 import app.vertex.config as config
 from fastapi import APIRouter
 from google.genai import types
-from app.utils.logging import log
+from app.utils.logging import vertex_log as log
 from google import genai
 import app.config.settings as settings
 

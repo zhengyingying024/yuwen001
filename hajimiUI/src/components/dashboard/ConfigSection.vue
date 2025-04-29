@@ -161,11 +161,15 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
           <div class="stat-label">最新版本</div>
         </div>
         <div class="stat-card">
-          <div 
-            class="stat-value" 
-            :class="dashboardStore.config.hasUpdate ? 'update-needed' : 'up-to-date'"
-          >
-            {{ dashboardStore.config.hasUpdate ? "需要更新" : "已是最新" }}
+          <div class="update-status-container">
+            <div class="update-status" v-if="dashboardStore.config.hasUpdate">
+              <span class="status-icon update-needed">⚠️</span>
+              <span class="status-text update-needed">需要更新</span>
+            </div>
+            <div class="update-status" v-else>
+              <span class="status-icon up-to-date">✓</span>
+              <span class="status-text up-to-date">已是最新</span>
+            </div>
           </div>
           <div class="stat-label">更新状态</div>
         </div>
@@ -348,11 +352,15 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
       <div class="stat-label">最新版本</div>
     </div>
     <div class="stat-card">
-      <div 
-        class="stat-value" 
-        :class="dashboardStore.config.hasUpdate ? 'update-needed' : 'up-to-date'"
-      >
-        {{ dashboardStore.config.hasUpdate ? "需要更新" : "已是最新" }}
+      <div class="update-status-container">
+        <div class="update-status" v-if="dashboardStore.config.hasUpdate">
+          <span class="status-icon update-needed">⚠️</span>
+          <span class="status-text update-needed">需要更新</span>
+        </div>
+        <div class="update-status" v-else>
+          <span class="status-icon up-to-date">✓</span>
+          <span class="status-text up-to-date">已是最新</span>
+        </div>
       </div>
       <div class="stat-label">更新状态</div>
     </div>
@@ -431,24 +439,40 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
 .info-box {
   background-color: var(--card-background);
   border: 1px solid var(--card-border);
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s ease;
   position: relative;
+  overflow: hidden;
+}
+
+.info-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--gradient-primary);
+  opacity: 0.8;
 }
 
 /* 移动端优化 - 减小外边距 */
 @media (max-width: 768px) {
   .info-box {
     margin-bottom: 12px;
+    padding: 15px 10px;
+    border-radius: var(--radius-lg);
   }
 }
 
 @media (max-width: 480px) {
   .info-box {
     margin-bottom: 8px;
+    padding: 12px 8px;
+    border-radius: var(--radius-md);
   }
 }
 
@@ -457,7 +481,19 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 10px;
   margin-bottom: 20px;
-  transition: color 0.3s, border-color 0.3s;
+  transition: all 0.3s ease;
+  position: relative;
+  font-weight: 600;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 50px;
+  height: 2px;
+  background: var(--gradient-primary);
 }
 
 .stats-grid {
@@ -471,23 +507,42 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
 /* 移动端优化 - 保持三栏但减小间距 */
 @media (max-width: 768px) {
   .stats-grid {
-    gap: 6px;
+    gap: 8px;
   }
 }
 
 .stat-card {
   background-color: var(--stats-item-bg);
-  padding: 15px;
-  border-radius: 8px;
+  padding: 10px 15px;
+  border-radius: var(--radius-lg);
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: transform 0.2s, background-color 0.3s, box-shadow 0.3s;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
   position: relative;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--gradient-secondary);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--button-primary);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
 }
 
 .stat-value {
@@ -497,7 +552,96 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  margin-bottom: 5px;
+  position: relative;
+  display: inline-block;
+}
+
+.stat-value .status-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.stat-value .status-icon.update-needed {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.stat-value .status-icon.update-needed::before {
+  content: '×';
+  color: #ef4444;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.stat-value .status-icon.up-to-date {
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+.stat-value .status-icon.up-to-date::before {
+  content: '✓';
+  color: #10b981;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.stat-value .status-text {
+  font-size: 16px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.stat-value .status-icon.update-needed + .status-text {
+  color: #ef4444;
+}
+
+.stat-value .status-icon.up-to-date + .status-text {
+  color: #10b981;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .stat-value {
+    font-size: 16px;
+  }
+  
+  .stat-value .status-icon {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .stat-value .status-icon::before {
+    font-size: 16px;
+  }
+  
+  .stat-value .status-text {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-value {
+    font-size: 14px;
+  }
+  
+  .stat-value .status-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .stat-value .status-icon::before {
+    font-size: 14px;
+  }
+  
+  .stat-value .status-text {
+    font-size: 12px;
+  }
 }
 
 .stat-label {
@@ -507,7 +651,13 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  opacity: 0.8;
+}
+
+.stat-card:hover .stat-label {
+  opacity: 1;
+  color: var(--color-heading);
 }
 
 /* 编辑按钮样式 */
@@ -520,18 +670,20 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   color: var(--color-text-muted);
   cursor: pointer;
   opacity: 0.5;
-  transition: opacity 0.2s, transform 0.2s;
+  transition: all 0.3s ease;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 .edit-btn:hover {
   opacity: 1;
-  transform: scale(1.1);
+  transform: scale(1.1) rotate(15deg);
   background-color: var(--color-background-mute);
+  color: var(--button-primary);
 }
 
 /* 编辑对话框样式 */
@@ -546,21 +698,59 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(5px);
 }
 
 .edit-dialog-content {
   background-color: var(--card-background);
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: 25px;
   width: 90%;
   max-width: 400px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  overflow: hidden;
+  animation: dialogAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialogAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.edit-dialog-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--gradient-primary);
 }
 
 .edit-dialog-content h3 {
   margin-top: 0;
   margin-bottom: 15px;
   color: var(--color-heading);
+  font-size: 1.3rem;
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.edit-dialog-content h3::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: var(--gradient-primary);
 }
 
 .edit-field {
@@ -572,73 +762,115 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   margin-bottom: 8px;
   color: var(--color-text);
   font-size: 14px;
+  line-height: 1.5;
 }
 
 .edit-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 12px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background-color: var(--color-background);
   color: var(--color-text);
   font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
 }
 
 .boolean-selector {
   display: flex;
   gap: 15px;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .boolean-option {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
   cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background-color: var(--stats-item-bg);
+  transition: all 0.3s ease;
+  border: 1px solid var(--color-border);
+}
+
+.boolean-option:hover {
+  background-color: var(--color-background-mute);
+  transform: translateY(-2px);
+}
+
+.boolean-option input[type="radio"] {
+  accent-color: var(--button-primary);
 }
 
 .password-field {
   margin-top: 15px;
+  position: relative;
+}
+
+.password-field label {
+  margin-bottom: 8px;
+  display: block;
 }
 
 .edit-error {
-  color: #dc3545;
+  color: #ef4444;
   font-size: 12px;
   margin-top: 8px;
+  padding-left: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.edit-error::before {
+  content: '⚠️';
+  font-size: 14px;
 }
 
 .edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  margin-top: 20px;
 }
 
 .cancel-btn, .save-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
 .cancel-btn {
-  background-color: var(--color-background-mute);
+  background-color: var(--button-secondary);
   border: 1px solid var(--color-border);
-  color: var(--color-text);
+  color: var(--button-secondary-text);
 }
 
 .save-btn {
-  background-color: var(--button-primary);
+  background: var(--gradient-primary);
   border: none;
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .cancel-btn:hover {
-  background-color: var(--color-background);
+  background-color: var(--button-secondary-hover);
+  transform: translateY(-2px);
 }
 
 .save-btn:hover {
-  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 工具提示样式 */
@@ -647,20 +879,34 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   background-color: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-size: 12px;
   max-width: 250px;
   z-index: 1000;
   pointer-events: none;
   transform: translate(-50%, -100%);
   margin-top: -10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: tooltipAppear 0.2s ease;
+}
+
+@keyframes tooltipAppear {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -90%);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
 }
 
 /* 移动端优化 - 更紧凑的卡片 */
 @media (max-width: 768px) {
   .stat-card {
-    padding: 8px 5px;
+    padding: 8px 8px;
   }
   
   .stat-value {
@@ -668,21 +914,30 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   }
   
   .stat-label {
-    font-size: 11px;
-    margin-top: 3px;
+    font-size: 12px;
+    margin-top: 2px;
   }
   
   .edit-btn {
-    top: 2px;
-    right: 2px;
+    top: 3px;
+    right: 3px;
     padding: 2px;
+  }
+  
+  .edit-dialog-content {
+    padding: 20px;
+  }
+  
+  .boolean-selector {
+    flex-direction: column;
+    gap: 8px;
   }
 }
 
 /* 小屏幕手机进一步优化 */
 @media (max-width: 480px) {
   .stat-card {
-    padding: 6px 3px;
+    padding: 6px 6px;
   }
   
   .stat-value {
@@ -690,8 +945,8 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   }
   
   .stat-label {
-    font-size: 10px;
-    margin-top: 2px;
+    font-size: 11px;
+    margin-top: 1px;
   }
   
   .tooltip {
@@ -702,15 +957,90 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   .edit-dialog-content {
     padding: 15px;
   }
+  
+  .edit-dialog-content h3 {
+    font-size: 1.1rem;
+  }
+  
+  .edit-input {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  
+  .cancel-btn, .save-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
 }
 
 /* 版本更新状态样式 */
-.update-needed {
-  color: #dc3545 !important; /* 红色 - 需要更新 */
+.update-status-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  width: 100%;
 }
 
-.up-to-date {
-  color: #28a745 !important; /* 绿色 - 已是最新 */
+.update-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-lg);
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.update-status .status-icon {
+  font-size: 1.2em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.update-status .status-text {
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.update-status .status-icon.update-needed,
+.update-status .status-text.update-needed {
+  color: #ef4444;
+}
+
+.update-status .status-icon.up-to-date,
+.update-status .status-text.up-to-date {
+  color: #10b981;
+}
+
+@media (max-width: 768px) {
+  .update-status {
+    padding: 6px 10px;
+  }
+  
+  .update-status .status-icon {
+    font-size: 1.1em;
+  }
+  
+  .update-status .status-text {
+    font-size: 0.9em;
+  }
+}
+
+@media (max-width: 480px) {
+  .update-status {
+    padding: 4px 8px;
+  }
+  
+  .update-status .status-icon {
+    font-size: 1em;
+  }
+  
+  .update-status .status-text {
+    font-size: 0.85em;
+  }
 }
 
 /* 折叠动画和UI优化 */
@@ -720,13 +1050,18 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.2s;
-  border-radius: 6px;
-  padding: 5px 8px;
+  transition: all 0.3s ease;
+  border-radius: var(--radius-lg);
+  padding: 10px 15px;
+  background-color: var(--stats-item-bg);
+  border: 1px solid var(--card-border);
+  margin-bottom: 15px;
 }
 
 .fold-header:hover {
   background-color: var(--color-background-mute);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .fold-icon {
@@ -734,6 +1069,7 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   align-items: center;
   justify-content: center;
   transition: transform 0.3s ease;
+  color: var(--button-primary);
 }
 
 .fold-icon.rotated {
@@ -765,66 +1101,110 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 12px;
-  margin-top: 15px;
+  padding: 15px;
+  margin-top: 20px;
   transition: all 0.3s ease;
 }
 
 .project-link {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--button-primary);
   text-decoration: none;
   font-size: 14px;
-  padding: 8px 16px;
-  border-radius: 20px;
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
   background-color: var(--stats-item-bg);
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--card-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.project-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
 }
 
 .project-link:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
   background-color: var(--color-background-mute);
+  border-color: var(--button-primary);
+}
+
+.project-link:hover::before {
+  transform: translateX(100%);
 }
 
 .github-icon {
-  font-size: 16px;
+  font-size: 18px;
   opacity: 0.8;
   transition: all 0.3s ease;
 }
 
 .project-link:hover .github-icon {
   opacity: 1;
-  transform: scale(1.1);
+  transform: scale(1.2) rotate(10deg);
 }
 
 .project-text {
   font-weight: 500;
+  position: relative;
+}
+
+.project-text::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--gradient-primary);
+  transition: width 0.3s ease;
+}
+
+.project-link:hover .project-text::after {
+  width: 100%;
 }
 
 /* 移动端优化 */
 @media (max-width: 768px) {
   .project-link {
     font-size: 12px;
-    padding: 6px 12px;
+    padding: 8px 14px;
   }
   
   .github-icon {
-    font-size: 14px;
+    font-size: 16px;
+  }
+  
+  .fold-header {
+    padding: 8px 12px;
   }
 }
 
 @media (max-width: 480px) {
   .project-link {
     font-size: 11px;
-    padding: 4px 10px;
+    padding: 6px 12px;
   }
   
   .github-icon {
-    font-size: 12px;
+    font-size: 14px;
+  }
+  
+  .fold-header {
+    padding: 6px 10px;
   }
 }
 </style>

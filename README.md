@@ -15,16 +15,28 @@
 遇到问题请先查看以下的 **错误自查** 文档，确保已尝试按照其上的指示进行了相应的排查与处理。
 
 - [错误自查](./wiki/error.md)
-
 ###  使用文档
-- [Claw Cloud部署的使用文档（推荐，免费，手机电脑均可使用）](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
-- [huggingface 部署的使用文档（手机电脑均可使用）](./wiki/huggingface.md)
+- [huggingface 部署的使用文档（推荐，免费，手机电脑均可使用）](./wiki/huggingface.md)
+- [上面看不到图的看这里](https://blog.rzline.eu.org/2025/04/29/HuggingFace%E9%83%A8%E7%BD%B2Gemini%E8%BD%AE%E8%AF%A2%E9%A1%B9%E7%9B%AEHajimi)
+
+- [Claw Cloud部署的使用文档（免费，手机电脑均可使用）](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
+- [同上，看不到的看这里](https://blog.rzline.eu.org/2025/04/29/Claw%20Cloud%E9%83%A8%E7%BD%B2Gemini%E8%BD%AE%E8%AF%A2%E9%A1%B9%E7%9B%AEHajimi)
+
 - [docker部署的使用文档（服务器自建使用）](./wiki/docker.md) 感谢[@北极星星](https://github.com/beijixingxing)编写
+
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
-- [zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写
+
+- ~~[zeabur部署的使用文档(需付费)](./wiki/zeabur.md) 感谢**墨舞ink**编写~~（已过时且暂时无人更新，欢迎提交pull requests）
+
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
+* v0.2.0
+    * ui全面焕新，更动态更好看，为api key显示添加分页，适配拥有大量key的用户
+    * 隔离vertex模式与ai studio模式日志，ai studio玩家再也不会看到vertex的报错了
+    * 拆分web ui密码与连接密码，现在可以安全的把反代分享给其他人了
+    * 新增环境变量`WEB_PASSWORD`，为web ui修改设置密码，默认值为环境变量`PASSWORD`的值
+    * 修复若干bug，增加系统稳定性
 * v0.1.7
     * 添加token计数器，现在可以在前端看到每一个api使用的token数与单模型使用的token数量了
     * 为2.5flash模型适配`thinkingBudget`参数，用户只需在附加参数中添加`- thinking_budget : 1024`即可调整
@@ -40,8 +52,7 @@
     * 新增环境变量`MAX_EMPTY_RESPONSES`，为空响应重试次数，默认为5
     * 修复若干bug
 
-
-* 历史版本更新日志请查看[update](./wiki/update.md)
+* 历史版本更新日志请查看[update](./update.md)
 
 ## ✨ 主要功能：
 

@@ -11,9 +11,9 @@ from app.utils import (
 )
 import app.config.settings as settings
 from app.services import GeminiClient
-from app.utils.auth import verify_password
+from app.utils.auth import verify_web_password
 from app.utils.maintenance import api_call_stats_clean
-from app.utils.logging import log
+from app.utils.logging import log, vertex_log_manager
 # 创建路由器
 dashboard_router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -109,8 +109,11 @@ async def get_dashboard_data():
     # 按使用百分比降序排序
     api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
     
-    # 获取最近的日志
-    recent_logs = log_manager.get_recent_logs(500)  # 获取最近500条日志
+    # 根据ENABLE_VERTEX设置决定返回哪种日志
+    if settings.ENABLE_VERTEX:
+        recent_logs = vertex_log_manager.get_recent_logs(500)  # 获取最近500条Vertex日志
+    else:
+        recent_logs = log_manager.get_recent_logs(500)  # 获取最近500条普通日志
     
     # 获取缓存统计
     total_cache = response_cache_manager.cur_cache_num
@@ -202,7 +205,7 @@ async def reset_stats(password_data: dict):
         if not isinstance(password, str):
             raise HTTPException(status_code=422, detail="密码参数类型错误：应为字符串")
             
-        if not verify_password(password):
+        if not verify_web_password(password):
             raise HTTPException(status_code=401, detail="密码错误")
         
         # 调用重置函数
@@ -236,7 +239,7 @@ async def update_config(config_data: dict):
         if not isinstance(password, str):
             raise HTTPException(status_code=422, detail="密码参数类型错误：应为字符串")
             
-        if not verify_password(password):
+        if not verify_web_password(password):
             raise HTTPException(status_code=401, detail="密码错误")
         
         # 获取要更新的配置项

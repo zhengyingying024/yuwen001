@@ -5,7 +5,7 @@ import random
 # from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
-from app.services import GeminiClient
+from app.services import GeminiClient,OpenAIClient
 from app.utils import handle_gemini_error, update_api_call_stats,log,openAI_stream_chunk
 from app.utils.stats import get_api_key_usage
 import app.config.settings as settings
@@ -173,10 +173,10 @@ async def process_stream_request(
             
             success = False
             try:            
-                gemini_client = GeminiClient(api_key)
+                client = GeminiClient(api_key)
                 
                 # 获取流式响应
-                stream_generator = gemini_client.stream_chat(
+                stream_generator = client.stream_chat(
                     chat_request,
                     contents,
                     safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
@@ -184,9 +184,9 @@ async def process_stream_request(
                 )
                 token=0
                 # 处理流式响应
-                async for chunk,token_count in stream_generator:
+                async for chunk in stream_generator:
                     if chunk or success:
-                        token=token_count
+                        token += chunk.token_count
                         success = True
                         yield openAI_stream_chunk(model=chat_request.model,content=chunk)
                     

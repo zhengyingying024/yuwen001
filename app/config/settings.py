@@ -3,10 +3,11 @@ import pathlib
 import logging
 from datetime import datetime, timedelta
 import asyncio 
-
+GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS", "")
 # 基础目录设置
 BASE_DIR = pathlib.Path(__file__).parent.parent
-
+# 存储目录
+STORAGE_DIR = os.environ.get("STORAGE_DIR", "/hajimi/settings/")
 # 流式响应配置
 FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1", "yes"]
 # 假流式请求的空内容返回间隔（秒）
@@ -63,18 +64,7 @@ version={
 
 # API调用统计
 api_call_stats = {
-    'last_24h': {
-        'total': {},  # 按小时统计过去24小时总调用次数
-        'by_endpoint': {}  # 按API端点分类的24小时统计（也用于API密钥统计）
-    },
-    'hourly': {
-        'total': {},  # 按小时统计过去一小时总调用次数
-        'by_endpoint': {}  # 按API端点分类的小时统计（也用于API密钥统计）
-    },
-    'minute': {
-        'total': {},  # 按分钟统计过去一分钟总调用次数
-        'by_endpoint': {}  # 按API端点分类的分钟统计（也用于API密钥统计）
-    }
+    'calls': []  # 存储每次调用的记录，每个记录包含 api_key, model, timestamp, tokens
 }
 
 # 用于保护 api_call_stats 并发访问的锁

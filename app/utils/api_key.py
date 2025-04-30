@@ -5,14 +5,13 @@ import logging
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.utils.logging import format_log_message
-
+import app.config.settings as settings
 logger = logging.getLogger("my_logger")
 
 class APIKeyManager:
     def __init__(self):
         self.api_keys = re.findall(
-            r"AIzaSy[a-zA-Z0-9_-]{33}", os.environ.get('GEMINI_API_KEYS', ""))
-        
+            r"AIzaSy[a-zA-Z0-9_-]{33}", settings.GEMINI_API_KEYS)
         # 加载更多 GEMINI_API_KEYS
         for i in range(1, 99):
             if keys := os.environ.get(f"GEMINI_API_KEYS_{i}", ""):

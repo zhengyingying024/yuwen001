@@ -14,6 +14,7 @@ from app.services import GeminiClient
 from app.utils.auth import verify_web_password
 from app.utils.maintenance import api_call_stats_clean
 from app.utils.logging import log, vertex_log_manager
+from app.config.persistence import save_settings
 # 创建路由器
 dashboard_router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -46,29 +47,45 @@ async def get_dashboard_data():
     now = datetime.now()
     
     # 计算过去24小时的调用总数
-    last_24h_calls = sum(settings.api_call_stats['last_24h']['total'].values())
+    last_24h_calls = len(settings.api_call_stats['calls'])
     
     # 计算过去一小时内的调用总数
     one_hour_ago = now - timedelta(hours=1)
-    hourly_calls = 0
-    for hour_key, count in settings.api_call_stats['hourly']['total'].items():
-        try:
-            hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
-            if hour_time >= one_hour_ago:
-                hourly_calls += count
-        except ValueError:
-            continue
+    hourly_calls = sum(1 for call in settings.api_call_stats['calls'] 
+                      if call['timestamp'] >= one_hour_ago)
     
     # 计算过去一分钟内的调用总数
     one_minute_ago = now - timedelta(minutes=1)
-    minute_calls = 0
-    for minute_key, count in settings.api_call_stats['minute']['total'].items():
-        try:
-            minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
-            if minute_time >= one_minute_ago:
-                minute_calls += count
-        except ValueError:
-            continue
+    minute_calls = sum(1 for call in settings.api_call_stats['calls'] 
+                      if call['timestamp'] >= one_minute_ago)
+    
+    # 计算时间序列数据（过去30分钟，每分钟一个数据点）
+    time_series_data = []
+    tokens_time_series = []
+    
+    # 过去30分钟的每分钟API调用统计
+    for i in range(30, -1, -1):
+        minute_start = now - timedelta(minutes=i)
+        minute_end = now - timedelta(minutes=i-1) if i > 0 else now
+        
+        # 这一分钟的调用次数
+        calls_in_minute = sum(1 for call in settings.api_call_stats['calls'] 
+                            if minute_start <= call['timestamp'] < minute_end)
+        
+        # 这一分钟的token使用量
+        tokens_in_minute = sum(call['tokens'] for call in settings.api_call_stats['calls'] 
+                             if minute_start <= call['timestamp'] < minute_end)
+        
+        # 添加到时间序列
+        time_series_data.append({
+            'time': minute_start.strftime('%H:%M'),
+            'value': calls_in_minute
+        })
+        
+        tokens_time_series.append({
+            'time': minute_start.strftime('%H:%M'),
+            'value': tokens_in_minute
+        })
     
     # 获取API密钥使用统计
     api_key_stats = []
@@ -81,17 +98,26 @@ async def get_dashboard_data():
         total_tokens = 0
         model_stats = {}
         
-        if 'by_endpoint' in settings.api_call_stats['last_24h'] and api_key in settings.api_call_stats['last_24h']['by_endpoint']:
-            # 遍历所有模型
-            for model, model_data in settings.api_call_stats['last_24h']['by_endpoint'][api_key].items():
-                model_calls = sum(model_data['calls'].values())
-                model_tokens = model_data['total_tokens']
-                calls_24h += model_calls
-                total_tokens += model_tokens
+        # 筛选该API密钥的调用记录
+        api_key_calls = [call for call in settings.api_call_stats['calls'] 
+                        if call['api_key'] == api_key]
+        
+        # 按模型分类统计
+        for call in api_key_calls:
+            model = call['model']
+            tokens = call['tokens']
+            
+            calls_24h += 1
+            total_tokens += tokens
+            
+            if model not in model_stats:
                 model_stats[model] = {
-                    'calls': model_calls,
-                    'tokens': model_tokens
+                    'calls': 0,
+                    'tokens': 0
                 }
+            
+            model_stats[model]['calls'] += 1
+            model_stats[model]['tokens'] += tokens
         
         # 计算使用百分比
         usage_percent = (calls_24h / settings.API_KEY_DAILY_LIMIT) * 100 if settings.API_KEY_DAILY_LIMIT > 0 else 0
@@ -117,22 +143,6 @@ async def get_dashboard_data():
     
     # 获取缓存统计
     total_cache = response_cache_manager.cur_cache_num
-    # cache_by_model = {}
-    
-    # # 分析缓存数据
-    # for _, cache_data in response_cache_manager.cache.items():
-    #     if time.time() < cache_data.get('expiry_time', 0):
-    #         # 按模型统计缓存
-    #         response_obj = cache_data.get('response')
-    #         # 如果 response_obj 是 None，或者它是一个没有 'model' 属性的对象（比如空字典 {}），
-    #         # getattr 会返回第三个参数指定的默认值 None
-    #         model = getattr(response_obj, 'model', None)
-    #         if model:
-    #             if model in cache_by_model:
-    #                 cache_by_model[model] += 1
-    #             else:
-    #                 cache_by_model[model] = 1
-
     
     # 获取活跃请求统计
     active_count = len(active_requests_manager.active_requests)
@@ -147,6 +157,8 @@ async def get_dashboard_data():
         "last_24h_calls": last_24h_calls,
         "hourly_calls": hourly_calls,
         "minute_calls": minute_calls,
+        "calls_time_series": time_series_data,      # 添加API调用时间序列
+        "tokens_time_series": tokens_time_series,   # 添加Token使用时间序列
         "current_time": datetime.now().strftime('%H:%M:%S'),
         "logs": recent_logs,
         "api_key_stats": api_key_stats,
@@ -170,7 +182,6 @@ async def get_dashboard_data():
         "cache_entries": total_cache,
         "cache_expiry_time": settings.CACHE_EXPIRY_TIME,
         "max_cache_entries": settings.MAX_CACHE_ENTRIES,
-        # "cache_by_model": cache_by_model,
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,
@@ -362,7 +373,7 @@ async def update_config(config_data: dict):
                 
         else:
             raise HTTPException(status_code=400, detail=f"不支持的配置项：{config_key}")
-        
+        save_settings()
         return {"status": "success", "message": f"配置项 {config_key} 已更新"}
     except HTTPException:
         raise

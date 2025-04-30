@@ -1,4 +1,10 @@
 # 更新日志
+* v0.2.0
+    * ui全面焕新，更动态更好看，为api key显示添加分页，适配拥有大量key的用户
+    * 隔离vertex模式与ai studio模式日志，ai studio玩家再也不会看到vertex的报错了
+    * 拆分web ui密码与连接密码，现在可以安全的把反代分享给其他人了
+    * 新增环境变量`WEB_PASSWORD`，为web ui修改设置密码，默认值为环境变量`PASSWORD`的值
+    * 修复若干bug，增加系统稳定性
 * v0.1.7
     * 添加token计数器，现在可以在前端看到每一个api使用的token数与单模型使用的token数量了
     * 为2.5flash模型适配`thinkingBudget`参数，用户只需在附加参数中添加`- thinking_budget : 1024`即可调整

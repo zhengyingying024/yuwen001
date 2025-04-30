@@ -6,7 +6,6 @@ from app.models import ChatCompletionRequest, Message
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx
-import logging
 import secrets
 import string
 from app.utils import format_log_message
@@ -52,20 +51,23 @@ class GeminiResponseWrapper:
             text=""
             for part in self._data['candidates'][0]['content']['parts']:
                 if 'thought' not in part:
-                    tex += part['text']
+                    text += part['text']
             return text
         except (KeyError, IndexError):
             return ""
 
-    # 提取 functionCall 
     def _extract_function_call(self) -> Optional[Dict[str, Any]]:
         try:
-            # 检查 candidates[0].content.parts 是否存在 functionCall
+            # 安全地获取 parts 列表，如果路径不存在则返回空列表
             parts = self._data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
-            for part in parts:
-                if 'functionCall' in part:
-                    return part['functionCall']
-            return None
+            # 使用列表推导式查找所有包含 'functionCall' 的 part，并提取其值
+            function_calls = [
+                part['functionCall']
+                for part in parts
+                if isinstance(part, dict) and 'functionCall' in part 
+            ]
+            # 如果列表不为空，则返回列表；否则返回 None
+            return function_calls if function_calls else None
         except (KeyError, IndexError, TypeError):
             # 如果结构不符合预期或不存在 functionCall，返回 None
             return None
@@ -129,7 +131,6 @@ class GeminiResponseWrapper:
     def model(self) -> str:
         return self._model
 
-    # 新增：function_call 属性
     @property
     def function_call(self) -> Optional[Dict[str, Any]]:
         return self._function_call
@@ -144,7 +145,7 @@ class GeminiClient:
         self.api_key = api_key
 
     # 请求参数处理
-    def _prepare_request_data(self, request, contents, safety_settings, system_instruction,model):
+    def _prepare_request_data(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction, model):
         
         config_params = {
             "temperature": request.temperature,
@@ -167,9 +168,55 @@ class GeminiClient:
             "generationConfig": generationConfig,
             "safetySettings": safety_settings,
         }
+
+        # --- 函数调用处理 ---
+        # 1. 添加 tools (函数声明)
+        function_declarations = []
+        if request.tools:
+            # 使用列表推导式提取所有类型为 'function' 的工具的函数定义部分
+            function_declarations = [
+                tool.get("function")
+                for tool in request.tools
+                if tool.get("type") == "function" and tool.get("function") 
+            ]
         
+        if function_declarations:
+            data["tools"] = [{"function_declarations": function_declarations}]
+
+        # 2. 添加 tool_config (基于 tool_choice)
+        tool_config = None 
+        if request.tool_choice:
+            choice = request.tool_choice
+            mode = None
+            allowed_functions = None
+            if isinstance(choice, str):
+                if choice == "none":
+                    mode = "NONE"
+                elif choice == "auto":
+                    mode = "AUTO"
+            elif isinstance(choice, dict) and choice.get("type") == "function":
+                func_name = choice.get("function", {}).get("name")
+                if func_name:
+                    mode = "ANY" # 'ANY' 模式用于强制调用特定函数
+                    allowed_functions = [func_name]
+            
+            # 如果成功解析出有效的 mode，构建 tool_config
+            if mode:
+                config = {"mode": mode}
+                if allowed_functions:
+                    config["allowed_function_names"] = allowed_functions
+                tool_config = {"function_calling_config": config}
+        
+        # 3. 添加 tool_config 到 data，并处理依赖关系
+        if tool_config:
+            data["tool_config"] = tool_config
+            if tool_config["function_calling_config"]["mode"] != "NONE" and "tools" not in data:
+                data["tools"] = [{"function_declarations": []}]
+        
+        # 联网模式
         if settings.search["search_mode"] and model.endswith("-search"):
             log('INFO', "开启联网搜索模式", extra={'key': self.api_key[:8], 'model':request.model})
+            
             data.setdefault("tools", []).append({"google_search": {}})
         
         if system_instruction:
@@ -245,36 +292,71 @@ class GeminiClient:
             raise
 
     # OpenAI 格式请求转换为 gemini 格式请求
-    def convert_messages(self, messages, use_system_prompt=False,model=None):
+    def convert_messages(self, messages, use_system_prompt=False, model=None):
         gemini_history = []
         errors = []
+        
         system_instruction_text = ""
         is_system_phase = use_system_prompt
+        system_instruction_parts = [] # 用于收集系统指令文本
+        
+        # 处理系统指令 
+        if use_system_prompt:
+            # 遍历消息列表，查找开头的连续 system 消息
+            for i, message in enumerate(messages):
+                # 必须是 system 角色且内容是字符串
+                if message.role == 'system' and isinstance(message.content, str):
+                    system_instruction_parts.append(message.content)
+                else:
+                    break # 遇到第一个非 system 或内容非字符串的消息就停止
+        
+        # 将收集到的系统指令合并为一个字符串
+        system_instruction_text = "\n".join(system_instruction_parts)
+        system_instruction = {"parts": [{"text": system_instruction_text}]} if system_instruction_text else None
+        
+        # 转换主要消息
+        
         for i, message in enumerate(messages):
             role = message.role
             content = message.content
             if isinstance(content, str):
-                if is_system_phase and role == 'system':
-                    if system_instruction_text:
-                        system_instruction_text += "\n" + content
-                    else:
-                        system_instruction_text = content
-                else:
-                    is_system_phase = False
 
-                    if role in ['user', 'system']:
-                        role_to_use = 'user'
-                    elif role == 'assistant':
-                        role_to_use = 'model'
+                if role == 'tool':
+                    role_to_use = 'function'
+                    tool_call_id = message.tool_call_id
+
+                    prefix = "call_"
+                    if tool_call_id.startswith(prefix):
+                        # 假设 tool_call_id = f"call_{function_name}" 
+                        function_name = tool_call_id[len(prefix):]
                     else:
-                        errors.append(f"Invalid role: {role}")
                         continue
 
-                    if gemini_history and gemini_history[-1]['role'] == role_to_use:
-                        gemini_history[-1]['parts'].append({"text": content})
-                    else:
-                        gemini_history.append(
-                            {"role": role_to_use, "parts": [{"text": content}]})
+                    function_response_part = {
+                        "functionResponse": {
+                            "name": function_name,
+                            "response": {"content": content}
+                        }
+                    }
+                    
+                    gemini_history.append({"role": role_to_use, "parts": [function_response_part]})
+                    # Skip the normal text appending logic below for 'tool' role
+                    continue
+                elif role in ['user', 'system']:
+                    role_to_use = 'user'
+                elif role == 'assistant':
+                    role_to_use = 'model'
+                    
+                else:
+                    errors.append(f"Invalid role: {role}")
+                    continue
+
+                # Gemini 的一个重要规则：连续的同角色消息需要合并
+                # 如果 gemini_history 已有内容，并且最后一条消息的角色和当前要添加的角色相同
+                if gemini_history and gemini_history[-1]['role'] == role_to_use:
+                    gemini_history[-1]['parts'].append({"text": content})
+                else:
+                    gemini_history.append({"role": role_to_use, "parts": [{"text": content}]})
             elif isinstance(content, list):
                 parts = []
                 for item in content:
@@ -306,6 +388,7 @@ class GeminiClient:
                     else:
                         errors.append(f"Invalid role: {role}")
                         continue
+                    
                     if gemini_history and gemini_history[-1]['role'] == role_to_use:
                         gemini_history[-1]['parts'].extend(parts)
                     else:
@@ -313,15 +396,19 @@ class GeminiClient:
                             {"role": role_to_use, "parts": parts})
         if errors:
             return errors
-        else:
-            # 只有当search_mode为真且模型名称以-search结尾时，才添加搜索提示
-            if settings.search["search_mode"] and model and model.endswith("-search"):
-                gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.search["search_prompt"]}]})
-            if settings.RANDOM_STRING:
-                gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
-                gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
-                log_msg = format_log_message('INFO', "伪装消息成功")
-            return gemini_history, {"parts": [{"text": system_instruction_text}]}
+        
+        # --- 后处理 ---
+        
+        # 注入搜索提示
+        if settings.search["search_mode"] and model and model.endswith("-search"):
+            gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.search["search_prompt"]}]})
+        
+        # 注入随机字符串 
+        if settings.RANDOM_STRING:
+            gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
+            gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
+            log_msg = format_log_message('INFO', "伪装消息成功")
+        return gemini_history, system_instruction
 
     @staticmethod
     async def list_available_models(api_key) -> list:
@@ -339,3 +426,4 @@ class GeminiClient:
             models.extend(GeminiClient.EXTRA_MODELS)
                 
             return models
+

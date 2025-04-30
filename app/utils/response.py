@@ -21,6 +21,8 @@ def openAI_stream_chunk(model="gemini",content=None,finish_reason=None,total_tok
     
     return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
 
+
+# 已废弃，将在后续版本中删除
 def openAI_nonstream_response(response):
     """
     使用 gemini 非流式响应对象(提取后),
@@ -100,7 +102,7 @@ def openAI_from_Gemini(response,stream=True):
             "completion_tokens": response.candidates_token_count,
             "total_tokens": response.total_token_count
         }
-    
+        
     if stream:
         # 返回 SSE 格式的流式块
         return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"

@@ -171,13 +171,23 @@ class GeminiClient:
         # 1. 添加 tools (函数声明)
         function_declarations = []
         if request.tools:
-            # 使用列表推导式提取所有类型为 'function' 的工具的函数定义部分
-            function_declarations = [
-                tool.get("function")
-                for tool in request.tools
-                if tool.get("type") == "function" and tool.get("function") 
-            ]
-        
+            # 显式提取 Gemini API 所需的字段，避免包含 'id' 等无效字段
+            function_declarations = []
+            for tool in request.tools:
+                if tool.get("type") == "function":
+                    func_def = tool.get("function")
+                    if func_def:
+                        # 只包含 Gemini API 接受的字段
+                        declaration = {
+                            "name": func_def.get("name"),
+                            "description": func_def.get("description"),
+                            "parameters": func_def.get("parameters")
+                        }
+                        # 移除值为 None 的键，以保持 payload 清洁
+                        declaration = {k: v for k, v in declaration.items() if v is not None}
+                        if declaration.get("name"): # 确保 name 存在
+                            function_declarations.append(declaration)
+
         if function_declarations:
             data["tools"] = [{"function_declarations": function_declarations}]
 
@@ -230,6 +240,7 @@ class GeminiClient:
         log('INFO', "流式请求开始", extra=extra_log)
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
+        
         model= request.model.removesuffix("-search")
         url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:streamGenerateContent?key={self.api_key}&alt=sse"
         headers = {
@@ -424,4 +435,3 @@ class GeminiClient:
             models.extend(GeminiClient.EXTRA_MODELS)
                 
             return models
-

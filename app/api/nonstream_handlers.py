@@ -9,7 +9,7 @@ from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
-from app.utils.response import openAI_from_Gemini, openAI_nonstream_response
+from app.utils.response import openAI_from_Gemini
 from app.utils.stats import get_api_key_usage
 
 

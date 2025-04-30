@@ -31,6 +31,13 @@
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
+* v0.2.1beta
+    * 为vps/本地部署用户提供持久化支持（测试版），现在所有的配置选项与请求记录都可以持久化存储
+    * 为前端添加API实时调用统计图表
+    * 为前端新增添加API秘钥功能（注意，如果您没有配置持久化，在这里添加的key在项目重启后会丢失）
+    * 新增环境变量`STORAGE_DIR`，为持久化存储目录，默认为`/hajimi/settings/`
+    * 新增环境变量`ENABLE_STORAGE`，为是否启用持久化，默认为`false` 
+    * 修复若干bug，提高系统稳定性
 * v0.2.0
     * ui全面焕新，更动态更好看，为api key显示添加分页，适配拥有大量key的用户
     * 隔离vertex模式与ai studio模式日志，ai studio玩家再也不会看到vertex的报错了

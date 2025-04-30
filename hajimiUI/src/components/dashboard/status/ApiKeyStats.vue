@@ -8,6 +8,14 @@ const apiKeyStatsVisible = ref(false)
 // 存储每个API密钥的模型折叠状态
 const modelFoldState = ref({})
 
+// 新增API密钥输入相关变量
+const showApiKeyInput = ref(false)
+const newApiKeys = ref('')
+const apiKeyPassword = ref('')
+const apiKeyError = ref('')
+const apiKeySuccess = ref('')
+const isSubmitting = ref(false)
+
 // 分页相关
 const currentPage = ref(1)
 const itemsPerPage = 20
@@ -15,6 +23,75 @@ const itemsPerPage = 20
 // 切换API密钥统计显示/隐藏
 function toggleApiKeyStats() {
   apiKeyStatsVisible.value = !apiKeyStatsVisible.value
+}
+
+// 切换API密钥输入表单显示/隐藏
+function toggleApiKeyInput() {
+  showApiKeyInput.value = !showApiKeyInput.value
+  if (!showApiKeyInput.value) {
+    // 重置表单
+    newApiKeys.value = ''
+    apiKeyPassword.value = ''
+    apiKeyError.value = ''
+    apiKeySuccess.value = ''
+  }
+}
+
+// 提交新的API密钥
+async function submitApiKeys() {
+  // 重置消息
+  apiKeyError.value = ''
+  apiKeySuccess.value = ''
+  
+  // 表单验证
+  if (!newApiKeys.value.trim()) {
+    apiKeyError.value = '请输入API密钥'
+    return
+  }
+  
+  if (!apiKeyPassword.value.trim()) {
+    apiKeyError.value = '请输入密码'
+    return
+  }
+  
+  // 验证API密钥格式
+  const keys = newApiKeys.value.split(',').map(key => key.trim()).filter(key => key)
+  if (keys.length === 0) {
+    apiKeyError.value = '请输入至少一个有效的API密钥'
+    return
+  }
+  
+  // 验证是否有无效的密钥格式
+  for (const key of keys) {
+    if (key.length < 10) { // 简单验证，实际可能需要更复杂的验证
+      apiKeyError.value = `API密钥格式不正确: ${key}`
+      return
+    }
+  }
+  
+  isSubmitting.value = true
+  try {
+    // 调用API添加密钥
+    await dashboardStore.updateConfig(
+      'geminiApiKeys',
+      newApiKeys.value,
+      apiKeyPassword.value
+    )
+    
+    // 成功提示
+    apiKeySuccess.value = `成功添加 ${keys.length} 个API密钥`
+    
+    // 清空输入框
+    newApiKeys.value = ''
+    apiKeyPassword.value = ''
+    
+    // 刷新数据
+    await dashboardStore.fetchDashboardData()
+  } catch (error) {
+    apiKeyError.value = error.message || '添加API密钥失败'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 // 切换模型详情的折叠状态
@@ -99,14 +176,81 @@ const totalTokens = computed(() => {
 
 <template>
   <div class="api-key-stats-container" v-if="!dashboardStore.status.enableVertex">
-    <h3 class="section-title fold-header" @click="toggleApiKeyStats">
-      API调用统计
-      <span :class="getFoldIconClass(apiKeyStatsVisible)">
+    <div class="header-section">
+      <h3 class="section-title fold-header" @click="toggleApiKeyStats">
+        API调用统计
+        <span :class="getFoldIconClass(apiKeyStatsVisible)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </h3>
+      
+      <!-- 添加API密钥按钮 -->
+      <button class="add-api-key-button" @click="toggleApiKeyInput">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-      </span>
-    </h3>
+        添加API密钥
+      </button>
+    </div>
+    
+    <!-- API密钥输入表单 -->
+    <transition name="slide">
+      <div v-if="showApiKeyInput" class="api-key-input-form">
+        <div class="form-group">
+          <label for="newApiKeys">API密钥 (以逗号分隔)</label>
+          <textarea 
+            id="newApiKeys" 
+            v-model="newApiKeys" 
+            placeholder="在此输入API密钥，多个密钥请用逗号分隔（注意：如果您使用的是云部署方案或您没有配置持久化，在此处配置的api密钥在重启后会丢失）"
+            :disabled="isSubmitting"
+            rows="3"
+            class="api-key-textarea"
+          ></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="apiKeyPassword">密码</label>
+          <input 
+            id="apiKeyPassword" 
+            v-model="apiKeyPassword" 
+            type="password" 
+            placeholder="请输入管理密码"
+            :disabled="isSubmitting"
+            class="api-key-password"
+          />
+        </div>
+        
+        <div v-if="apiKeyError" class="api-key-error">
+          {{ apiKeyError }}
+        </div>
+        
+        <div v-if="apiKeySuccess" class="api-key-success">
+          {{ apiKeySuccess }}
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            class="submit-api-key" 
+            @click="submitApiKeys" 
+            :disabled="isSubmitting"
+          >
+            <span v-if="isSubmitting">提交中...</span>
+            <span v-else>提交</span>
+          </button>
+          
+          <button 
+            class="cancel-api-key" 
+            @click="toggleApiKeyInput" 
+            :disabled="isSubmitting"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </transition>
     
     <!-- 收起时显示的总计信息 -->
     <div v-if="!apiKeyStatsVisible" class="stats-grid">
@@ -243,6 +387,193 @@ const totalTokens = computed(() => {
 <style scoped>
 .api-key-stats-container {
   margin-top: 20px;
+}
+
+/* 添加头部区域样式 */
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+/* API密钥添加按钮样式 */
+.add-api-key-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--button-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.add-api-key-button svg {
+  transition: transform 0.3s ease;
+  stroke: white;
+}
+
+.add-api-key-button:hover {
+  background-color: var(--button-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.add-api-key-button:hover svg {
+  transform: rotate(90deg);
+  stroke: white;
+}
+
+/* API密钥输入表单样式 */
+.api-key-input-form {
+  background-color: var(--color-background-mute);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-md);
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-heading);
+}
+
+.api-key-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  transition: all 0.3s ease;
+}
+
+.api-key-textarea:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.api-key-password {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.api-key-password:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.api-key-error {
+  color: var(--color-danger);
+  font-size: 14px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-danger);
+}
+
+.api-key-success {
+  color: var(--color-success);
+  font-size: 14px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(34, 197, 94, 0.1);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-success);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.submit-api-key {
+  padding: 8px 20px;
+  background-color: var(--button-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.submit-api-key:hover:not(:disabled) {
+  background-color: var(--button-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.submit-api-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-api-key {
+  padding: 8px 20px;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-api-key:hover:not(:disabled) {
+  background-color: var(--button-secondary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cancel-api-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 滑动动画 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
 }
 
 .stats-grid {
@@ -607,7 +938,9 @@ const totalTokens = computed(() => {
   border-radius: var(--radius-md);
   padding: 8px 12px;
   background-color: var(--color-background-mute);
-  margin-bottom: 15px;
+  margin-bottom: 0;
+  margin-right: 10px;
+  flex: 1;
 }
 
 .fold-header:hover {
@@ -720,6 +1053,29 @@ const totalTokens = computed(() => {
 
 /* 移动端优化 */
 @media (max-width: 768px) {
+  .header-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .fold-header {
+    margin-right: 0;
+  }
+  
+  .add-api-key-button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .api-key-input-form {
+    padding: 15px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
   .stats-grid {
     gap: 6px;
   }

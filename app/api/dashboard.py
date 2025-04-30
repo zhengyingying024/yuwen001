@@ -370,6 +370,33 @@ async def update_config(config_data: dict):
                 raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
             settings.ENABLE_VERTEX = config_value
             log('info', f"Vertex AI 已更新为：{config_value}")
+        
+        elif config_key == "gemini_api_keys":
+            if not isinstance(config_value, str):
+                raise HTTPException(status_code=422, detail="参数类型错误：API密钥应为逗号分隔的字符串")
+            
+            # 分割并清理API密钥
+            new_keys = [key.strip() for key in config_value.split(',') if key.strip()]
+            if not new_keys:
+                raise HTTPException(status_code=400, detail="未提供有效的API密钥")
+            
+            # 添加到现有的API密钥字符串中
+            current_keys = settings.GEMINI_API_KEYS.split(',') if settings.GEMINI_API_KEYS else []
+            current_keys = [key.strip() for key in current_keys if key.strip()]
+            
+            # 合并新旧密钥并去重
+            all_keys = list(set(current_keys + new_keys))
+            settings.GEMINI_API_KEYS = ','.join(all_keys)
+            
+            # 更新key_manager
+            for key in new_keys:
+                if key not in key_manager.api_keys:
+                    key_manager.api_keys.append(key)
+            
+            # 重置密钥栈
+            key_manager._reset_key_stack()
+            
+            log('info', f"已添加 {len(new_keys)} 个API密钥，当前共有 {len(key_manager.api_keys)} 个")
                 
         else:
             raise HTTPException(status_code=400, detail=f"不支持的配置项：{config_key}")

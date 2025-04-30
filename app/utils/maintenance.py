@@ -5,7 +5,7 @@ from app.utils.logging import log
 from app.utils.stats import clean_expired_stats
 from app.utils import check_version
 from zoneinfo import ZoneInfo
-from app.config import settings
+from app.config import settings,persistence
 import copy  # 添加copy模块导入
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -85,6 +85,7 @@ async def api_call_stats_clean():
         # 验证重置是否成功
         if len(settings.api_call_stats['calls']) == 0:
             log('info', "API调用统计数据已成功重置")
+            persistence.save_settings()
         else:
             log('error', "API调用统计数据重置可能未完全成功")
             

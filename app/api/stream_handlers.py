@@ -188,14 +188,11 @@ async def process_stream_request(
                 async for chunk in stream_generator:
                     if chunk :
                         
-                        # if chunk.total_token_count:
-                        #     token += int(chunk.total_token_count)
+                        if chunk.total_token_count:
+                            token += int(chunk.total_token_count)
                         success = True
-                        log('info', f"流式响应接收数据")
-                        # 添加日志记录chunk的类型和值
-                        log('info', f"Received chunk type: {type(chunk)}, value: {repr(chunk)}")
                         data = openAI_from_Gemini(chunk)
-                        log('info', f"流式响应发送数据: {data}")
+                        # log('info', f"流式响应发送数据: {data}")
                         yield data
                     
                     else:

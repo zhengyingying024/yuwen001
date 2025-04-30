@@ -19,7 +19,7 @@ def openAI_stream_chunk(model="gemini",content=None,finish_reason=None,total_tok
     if finish_reason:
         formatted_chunk["usage"]= {"total_tokens": total_token_count}
     
-    return f"data: {json.dumps(formatted_chunk)}\n\n"
+    return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
 
 def openAI_nonstream_response(response):
     """
@@ -56,7 +56,6 @@ def openAI_from_Gemini(response):
     Returns:
         格式化后的 SSE 字符串 ("data: {...}\n\n")。
     """
-    log('info', f"格式转换开始")
     now_time = int(time.time())
     chunk_id = f"chatcmpl-{now_time}" # 使用时间戳生成唯一 ID 
     
@@ -95,5 +94,5 @@ def openAI_from_Gemini(response):
         # 处理普通文本响应
         formatted_chunk["choices"][0]["delta"] = {"role": "assistant", "content": response.text}
 
-    log('info', f"格式转换最终结构: {formatted_chunk}")
-    return f"data: {json.dumps(formatted_chunk)}\n\n"
+    # log('info', f"格式转换最终结构: {formatted_chunk}")
+    return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"

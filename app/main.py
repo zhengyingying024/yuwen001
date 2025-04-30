@@ -60,6 +60,7 @@ active_requests_pool = {}
 active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_pool)
 
 SKIP_CHECK_API_KEY = os.environ.get("SKIP_CHECK_API_KEY", "").lower() == "true"
+MAX_RETRY_NUM = os.environ.get("MAX_RETRY_NUM", "65535")
 
 # --------------- 工具函数 ---------------
 
@@ -74,9 +75,6 @@ def switch_api_key():
 
 async def check_key(key):
     """检查单个API密钥是否有效"""
-    if SKIP_CHECK_API_KEY:
-        return key
-
     is_valid = await test_api_key(key)
     status_msg = "有效" if is_valid else "无效"
     log('info', f"API Key {key[:10]}... {status_msg}.")
@@ -100,6 +98,9 @@ def check_key_in_thread(key):
 
 async def check_keys():
     """启动线程池来并行检查所有密钥"""
+    if SKIP_CHECK_API_KEY:
+        return key_manager.api_keys
+
     # 保存原始密钥列表的副本
     all_keys = key_manager.api_keys.copy()
     # 清空当前密钥列表，将在检查过程中逐个添加有效密钥
@@ -169,30 +170,37 @@ async def startup_event():
     if not valid_key_found:
         log('warning', "初始检查未找到有效密钥，将在后台继续检查")
     
-    # 在后台线程中检查剩余的密钥
-    remaining_keys = [k for k in all_keys if k not in key_manager.api_keys]
-    if remaining_keys:
-        def check_remaining_keys():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                # 创建线程池检查剩余密钥
-                with ThreadPoolExecutor(max_workers=min(10, len(remaining_keys))) as executor:
-                    future_to_key = {executor.submit(check_key_in_thread, key): key for key in remaining_keys}
-                    for future in future_to_key:
-                        try:
-                            future.result()
-                        except Exception as exc:
-                            log('error', f"检查密钥时发生错误: {exc}")
-            finally:
-                loop.close()
-                settings.MAX_RETRY_NUM = len(key_manager.api_keys)
-                log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
-        
-        # 启动后台线程检查剩余密钥
-        threading.Thread(target=check_remaining_keys, daemon=True).start()
-        log('info', f"后台线程已启动，正在检查剩余的 {len(remaining_keys)} 个API密钥...")
+    if not SKIP_CHECK_API_KEY:
+        # 在后台线程中检查剩余的密钥
+        remaining_keys = [k for k in all_keys if k not in key_manager.api_keys]
+        if remaining_keys:
+            def check_remaining_keys():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # 创建线程池检查剩余密钥
+                    with ThreadPoolExecutor(max_workers=min(10, len(remaining_keys))) as executor:
+                        future_to_key = {executor.submit(check_key_in_thread, key): key for key in remaining_keys}
+                        for future in future_to_key:
+                            try:
+                                future.result()
+                            except Exception as exc:
+                                log('error', f"检查密钥时发生错误: {exc}")
+                finally:
+                    loop.close()
+                    settings.MAX_RETRY_NUM = len(key_manager.api_keys)
+                    log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
+            
+            # 启动后台线程检查剩余密钥
+            threading.Thread(target=check_remaining_keys, daemon=True).start()
+            log('info', f"后台线程已启动，正在检查剩余的 {len(remaining_keys)} 个API密钥...")
+    elif valid_key_found:
+        idx = all_keys.index(key_manager.api_keys[-1])
+        key_manager.api_keys += all_keys[idx+1:]
+        settings.MAX_RETRY_NUM = len(key_manager.api_keys)
     
+    settings.MAX_RETRY_NUM = min(settings.MAX_RETRY_NUM, int(MAX_RETRY_NUM) if MAX_RETRY_NUM.isdigit() else settings.MAX_RETRY_NUM)
+
     # 显示当前可用密钥
     key_manager.show_all_keys()
     log('info', f"当前可用 API 密钥数量：{len(key_manager.api_keys)}")

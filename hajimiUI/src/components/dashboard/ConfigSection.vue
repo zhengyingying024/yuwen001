@@ -1,6 +1,9 @@
 <script setup>
 import { useDashboardStore } from '../../stores/dashboard'
 import { ref, computed, watch } from 'vue'
+import BasicConfig from './config/BasicConfig.vue'
+import FeaturesConfig from './config/FeaturesConfig.vue'
+import VersionInfo from './config/VersionInfo.vue'
 
 const dashboardStore = useDashboardStore()
 const isExpanded = ref(true)
@@ -19,7 +22,8 @@ const configExplanations = {
   maxConcurrentRequests: '最大并发请求数量，防止系统过载',
   localVersion: '当前系统版本号',
   remoteVersion: '远程仓库最新版本号',
-  hasUpdate: '是否有可用更新'
+  hasUpdate: '是否有可用更新',
+  searchMode: '是否启用联网搜索功能'
 }
 
 // 显示解释的工具提示
@@ -149,234 +153,64 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
 
 <template>
   <div class="info-box">
+    <!-- Vertex模式只显示版本信息 -->
     <div v-if="dashboardStore.status.enableVertex">
-      <h3 class="section-title">版本信息</h3>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">{{ dashboardStore.config.localVersion }}</div>
-          <div class="stat-label">当前版本</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ dashboardStore.config.remoteVersion }}</div>
-          <div class="stat-label">最新版本</div>
-        </div>
-        <div class="stat-card">
-          <div class="update-status-container">
-            <div class="update-status" v-if="dashboardStore.config.hasUpdate">
-              <span class="status-icon update-needed">⚠️</span>
-              <span class="status-text update-needed">需要更新</span>
-            </div>
-            <div class="update-status" v-else>
-              <span class="status-icon up-to-date">✓</span>
-              <span class="status-text up-to-date">已是最新</span>
-            </div>
-          </div>
-          <div class="stat-label">更新状态</div>
-        </div>
-      </div>
+      <VersionInfo />
+    </div>
     
-      <!-- 项目地址 -->
-      <div class="project-link-container">
-        <a href="https://github.com/wyeeeee/hajimi" target="_blank" rel="noopener noreferrer" class="project-link">
-          <span class="github-icon">🌸</span>
-          <span class="project-text">项目地址：github.com/wyeeeee/hajimi</span>
-          <span class="github-icon">🌸</span>
-        </a>
-      </div>
-    </div>
-    <h3 class="section-title fold-header" @click="isExpanded = !isExpanded" v-if="!dashboardStore.status.enableVertex">
-      ⚙️ 环境配置
-      <span :class="getFoldIconClass(isExpanded)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </span>
-    </h3>
-    
-    <!-- 默认显示的一行三栏 -->
-<div v-if="!dashboardStore.status.enableVertex">
-  <div class="stats-grid" v-if="!isExpanded" >
-    <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.config.maxRequestsPerMinute }}</div>
-      <div class="stat-label">每分钟请求限制</div>
-      <button class="edit-btn" @click="openEditDialog('maxRequestsPerMinute', dashboardStore.config.maxRequestsPerMinute)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.config.concurrentRequests }}</div>
-      <div class="stat-label">并发请求数</div>
-      <button class="edit-btn" @click="openEditDialog('concurrentRequests', dashboardStore.config.concurrentRequests)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.config.currentTime }}</div>
-      <div class="stat-label">当前服务器时间</div>
-    </div>
-  </div>
-</div>
-    
-    <!-- 展开后显示的所有配置项 -->
-    <transition name="fold" v-if="!dashboardStore.status.enableVertex">
-      <div v-if="isExpanded" class="fold-content">
-        <!-- 基本配置 -->
-        <h3 class="section-title">基本配置</h3>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.maxRequestsPerMinute }}</div>
-            <div class="stat-label">每分钟请求限制</div>
-            <button class="edit-btn" @click="openEditDialog('maxRequestsPerMinute', dashboardStore.config.maxRequestsPerMinute)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.maxRequestsPerDayPerIp }}</div>
-            <div class="stat-label">每IP每日请求限制</div>
-            <button class="edit-btn" @click="openEditDialog('maxRequestsPerDayPerIp', dashboardStore.config.maxRequestsPerDayPerIp)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.currentTime }}</div>
-            <div class="stat-label">当前服务器时间</div>
-          </div>
+    <!-- 非Vertex模式显示环境配置和折叠内容 -->
+    <div v-else>
+      <h3 class="section-title fold-header" @click="isExpanded = !isExpanded">
+        ⚙️ 环境配置
+        <span :class="getFoldIconClass(isExpanded)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </h3>
+      
+      <!-- 默认显示的简略配置 -->
+      <div v-if="!isExpanded" class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value">{{ dashboardStore.config.maxRequestsPerMinute }}</div>
+          <div class="stat-label">每分钟请求限制</div>
+          <button class="edit-btn" @click="openEditDialog('maxRequestsPerMinute', dashboardStore.config.maxRequestsPerMinute)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
         </div>
-        
-        <!-- 功能配置 -->
-        <h3 class="section-title">功能配置</h3>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.searchMode ? '启用' : '禁用' }}</div>
-            <div class="stat-label">联网搜索</div>
-            <button class="edit-btn" @click="openEditDialog('searchMode', dashboardStore.config.searchMode)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ getConfigDisplayValue('fakeStreaming') }}</div>
-            <div class="stat-label">假流式响应</div>
-            <button class="edit-btn" @click="openEditDialog('fakeStreaming', dashboardStore.config.fakeStreaming)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.fakeStreamingInterval }}秒</div>
-            <div class="stat-label">假流式间隔</div>
-            <button class="edit-btn" @click="openEditDialog('fakeStreamingInterval', dashboardStore.config.fakeStreamingInterval)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ getConfigDisplayValue('randomString') }}</div>
-            <div class="stat-label">伪装信息</div>
-            <button class="edit-btn" @click="openEditDialog('randomString', dashboardStore.config.randomString)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.randomStringLength }}字符</div>
-            <div class="stat-label">伪装信息长度</div>
-            <button class="edit-btn" @click="openEditDialog('randomStringLength', dashboardStore.config.randomStringLength)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.concurrentRequests }}</div>
-            <div class="stat-label">默认并发请求数</div>
-            <button class="edit-btn" @click="openEditDialog('concurrentRequests', dashboardStore.config.concurrentRequests)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.increaseConcurrentOnFailure }}</div>
-            <div class="stat-label">失败时增加并发数</div>
-            <button class="edit-btn" @click="openEditDialog('increaseConcurrentOnFailure', dashboardStore.config.increaseConcurrentOnFailure)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ dashboardStore.config.maxConcurrentRequests }}</div>
-            <div class="stat-label">最大并发请求数</div>
-            <button class="edit-btn" @click="openEditDialog('maxConcurrentRequests', dashboardStore.config.maxConcurrentRequests)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-          </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ dashboardStore.config.concurrentRequests }}</div>
+          <div class="stat-label">并发请求数</div>
+          <button class="edit-btn" @click="openEditDialog('concurrentRequests', dashboardStore.config.concurrentRequests)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </button>
         </div>
-        <!-- 版本信息 -->
-<div>
-  <h3 class="section-title">版本信息</h3>
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.config.localVersion }}</div>
-      <div class="stat-label">当前版本</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.config.remoteVersion }}</div>
-      <div class="stat-label">最新版本</div>
-    </div>
-    <div class="stat-card">
-      <div class="update-status-container">
-        <div class="update-status" v-if="dashboardStore.config.hasUpdate">
-          <span class="status-icon update-needed">⚠️</span>
-          <span class="status-text update-needed">需要更新</span>
-        </div>
-        <div class="update-status" v-else>
-          <span class="status-icon up-to-date">✓</span>
-          <span class="status-text up-to-date">已是最新</span>
+        <div class="stat-card">
+          <div class="stat-value">{{ dashboardStore.config.currentTime }}</div>
+          <div class="stat-label">当前服务器时间</div>
         </div>
       </div>
-      <div class="stat-label">更新状态</div>
+      
+      <!-- 展开后显示的所有配置项 -->
+      <transition name="fold">
+        <div v-if="isExpanded" class="fold-content">
+          <!-- 基本配置 -->
+          <BasicConfig :openEditDialog="openEditDialog" />
+          
+          <!-- 功能配置 -->
+          <FeaturesConfig :openEditDialog="openEditDialog" :getConfigDisplayValue="getConfigDisplayValue" />
+          
+          <!-- 版本信息 -->
+          <VersionInfo />
+        </div>
+      </transition>
     </div>
-  </div>
-
-  <!-- 项目地址 -->
-  <div class="project-link-container">
-    <a href="https://github.com/wyeeeee/hajimi" target="_blank" rel="noopener noreferrer" class="project-link">
-      <span class="github-icon">🌸</span>
-      <span class="project-text">项目地址：github.com/wyeeeee/hajimi</span>
-      <span class="github-icon">🌸</span>
-    </a>
-  </div>
-</div>
-      </div>
-    </transition>
     
     <!-- 工具提示 -->
     <div class="tooltip" v-if="showTooltip" :style="{ left: tooltipPosition.x + 'px', top: tooltipPosition.y + 'px' }" @mouseleave="hideTooltip">
@@ -556,92 +390,6 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   margin-bottom: 5px;
   position: relative;
   display: inline-block;
-}
-
-.stat-value .status-icon {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
-}
-
-.stat-value .status-icon.update-needed {
-  background-color: rgba(239, 68, 68, 0.1);
-}
-
-.stat-value .status-icon.update-needed::before {
-  content: '×';
-  color: #ef4444;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.stat-value .status-icon.up-to-date {
-  background-color: rgba(16, 185, 129, 0.1);
-}
-
-.stat-value .status-icon.up-to-date::before {
-  content: '✓';
-  color: #10b981;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.stat-value .status-text {
-  font-size: 16px;
-  font-weight: 500;
-  vertical-align: middle;
-}
-
-.stat-value .status-icon.update-needed + .status-text {
-  color: #ef4444;
-}
-
-.stat-value .status-icon.up-to-date + .status-text {
-  color: #10b981;
-}
-
-/* 移动端优化 */
-@media (max-width: 768px) {
-  .stat-value {
-    font-size: 16px;
-  }
-  
-  .stat-value .status-icon {
-    width: 20px;
-    height: 20px;
-  }
-  
-  .stat-value .status-icon::before {
-    font-size: 16px;
-  }
-  
-  .stat-value .status-text {
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 480px) {
-  .stat-value {
-    font-size: 14px;
-  }
-  
-  .stat-value .status-icon {
-    width: 18px;
-    height: 18px;
-  }
-  
-  .stat-value .status-icon::before {
-    font-size: 14px;
-  }
-  
-  .stat-value .status-text {
-    font-size: 12px;
-  }
 }
 
 .stat-label {
@@ -973,76 +721,6 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   }
 }
 
-/* 版本更新状态样式 */
-.update-status-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  width: 100%;
-}
-
-.update-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-lg);
-  transition: all 0.3s ease;
-  width: 100%;
-}
-
-.update-status .status-icon {
-  font-size: 1.2em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.update-status .status-text {
-  font-size: 1em;
-  font-weight: 600;
-}
-
-.update-status .status-icon.update-needed,
-.update-status .status-text.update-needed {
-  color: #ef4444;
-}
-
-.update-status .status-icon.up-to-date,
-.update-status .status-text.up-to-date {
-  color: #10b981;
-}
-
-@media (max-width: 768px) {
-  .update-status {
-    padding: 6px 10px;
-  }
-  
-  .update-status .status-icon {
-    font-size: 1.1em;
-  }
-  
-  .update-status .status-text {
-    font-size: 0.9em;
-  }
-}
-
-@media (max-width: 480px) {
-  .update-status {
-    padding: 4px 8px;
-  }
-  
-  .update-status .status-icon {
-    font-size: 1em;
-  }
-  
-  .update-status .status-text {
-    font-size: 0.85em;
-  }
-}
-
 /* 折叠动画和UI优化 */
 .fold-header {
   cursor: pointer;
@@ -1096,113 +774,14 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   overflow: hidden;
 }
 
-/* 项目链接样式 */
-.project-link-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 15px;
-  margin-top: 20px;
-  transition: all 0.3s ease;
-}
-
-.project-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--button-primary);
-  text-decoration: none;
-  font-size: 14px;
-  padding: 10px 18px;
-  border-radius: var(--radius-full);
-  background-color: var(--stats-item-bg);
-  transition: all 0.3s ease;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--card-border);
-  position: relative;
-  overflow: hidden;
-}
-
-.project-link::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.6s ease;
-}
-
-.project-link:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-  background-color: var(--color-background-mute);
-  border-color: var(--button-primary);
-}
-
-.project-link:hover::before {
-  transform: translateX(100%);
-}
-
-.github-icon {
-  font-size: 18px;
-  opacity: 0.8;
-  transition: all 0.3s ease;
-}
-
-.project-link:hover .github-icon {
-  opacity: 1;
-  transform: scale(1.2) rotate(10deg);
-}
-
-.project-text {
-  font-weight: 500;
-  position: relative;
-}
-
-.project-text::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 0;
-  height: 1px;
-  background: var(--gradient-primary);
-  transition: width 0.3s ease;
-}
-
-.project-link:hover .project-text::after {
-  width: 100%;
-}
-
 /* 移动端优化 */
 @media (max-width: 768px) {
-  .project-link {
-    font-size: 12px;
-    padding: 8px 14px;
-  }
-  
-  .github-icon {
-    font-size: 16px;
-  }
-  
   .fold-header {
     padding: 8px 12px;
   }
 }
 
 @media (max-width: 480px) {
-  .project-link {
-    font-size: 11px;
-    padding: 6px 12px;
-  }
-  
-  .github-icon {
-    font-size: 14px;
-  }
-  
   .fold-header {
     padding: 6px 10px;
   }

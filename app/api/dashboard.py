@@ -58,6 +58,34 @@ async def get_dashboard_data():
     minute_calls = sum(1 for call in settings.api_call_stats['calls'] 
                       if call['timestamp'] >= one_minute_ago)
     
+    # 计算时间序列数据（过去30分钟，每分钟一个数据点）
+    time_series_data = []
+    tokens_time_series = []
+    
+    # 过去30分钟的每分钟API调用统计
+    for i in range(30, -1, -1):
+        minute_start = now - timedelta(minutes=i)
+        minute_end = now - timedelta(minutes=i-1) if i > 0 else now
+        
+        # 这一分钟的调用次数
+        calls_in_minute = sum(1 for call in settings.api_call_stats['calls'] 
+                            if minute_start <= call['timestamp'] < minute_end)
+        
+        # 这一分钟的token使用量
+        tokens_in_minute = sum(call['tokens'] for call in settings.api_call_stats['calls'] 
+                             if minute_start <= call['timestamp'] < minute_end)
+        
+        # 添加到时间序列
+        time_series_data.append({
+            'time': minute_start.strftime('%H:%M'),
+            'value': calls_in_minute
+        })
+        
+        tokens_time_series.append({
+            'time': minute_start.strftime('%H:%M'),
+            'value': tokens_in_minute
+        })
+    
     # 获取API密钥使用统计
     api_key_stats = []
     for api_key in key_manager.api_keys:
@@ -128,6 +156,8 @@ async def get_dashboard_data():
         "last_24h_calls": last_24h_calls,
         "hourly_calls": hourly_calls,
         "minute_calls": minute_calls,
+        "calls_time_series": time_series_data,      # 添加API调用时间序列
+        "tokens_time_series": tokens_time_series,   # 添加Token使用时间序列
         "current_time": datetime.now().strftime('%H:%M:%S'),
         "logs": recent_logs,
         "api_key_stats": api_key_stats,

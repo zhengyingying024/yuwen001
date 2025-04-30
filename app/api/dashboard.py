@@ -46,29 +46,17 @@ async def get_dashboard_data():
     now = datetime.now()
     
     # 计算过去24小时的调用总数
-    last_24h_calls = sum(settings.api_call_stats['last_24h']['total'].values())
+    last_24h_calls = len(settings.api_call_stats['calls'])
     
     # 计算过去一小时内的调用总数
     one_hour_ago = now - timedelta(hours=1)
-    hourly_calls = 0
-    for hour_key, count in settings.api_call_stats['hourly']['total'].items():
-        try:
-            hour_time = datetime.strptime(hour_key, '%Y-%m-%d %H:00')
-            if hour_time >= one_hour_ago:
-                hourly_calls += count
-        except ValueError:
-            continue
+    hourly_calls = sum(1 for call in settings.api_call_stats['calls'] 
+                      if call['timestamp'] >= one_hour_ago)
     
     # 计算过去一分钟内的调用总数
     one_minute_ago = now - timedelta(minutes=1)
-    minute_calls = 0
-    for minute_key, count in settings.api_call_stats['minute']['total'].items():
-        try:
-            minute_time = datetime.strptime(minute_key, '%Y-%m-%d %H:%M')
-            if minute_time >= one_minute_ago:
-                minute_calls += count
-        except ValueError:
-            continue
+    minute_calls = sum(1 for call in settings.api_call_stats['calls'] 
+                      if call['timestamp'] >= one_minute_ago)
     
     # 获取API密钥使用统计
     api_key_stats = []
@@ -81,17 +69,26 @@ async def get_dashboard_data():
         total_tokens = 0
         model_stats = {}
         
-        if 'by_endpoint' in settings.api_call_stats['last_24h'] and api_key in settings.api_call_stats['last_24h']['by_endpoint']:
-            # 遍历所有模型
-            for model, model_data in settings.api_call_stats['last_24h']['by_endpoint'][api_key].items():
-                model_calls = sum(model_data['calls'].values())
-                model_tokens = model_data['total_tokens']
-                calls_24h += model_calls
-                total_tokens += model_tokens
+        # 筛选该API密钥的调用记录
+        api_key_calls = [call for call in settings.api_call_stats['calls'] 
+                        if call['api_key'] == api_key]
+        
+        # 按模型分类统计
+        for call in api_key_calls:
+            model = call['model']
+            tokens = call['tokens']
+            
+            calls_24h += 1
+            total_tokens += tokens
+            
+            if model not in model_stats:
                 model_stats[model] = {
-                    'calls': model_calls,
-                    'tokens': model_tokens
+                    'calls': 0,
+                    'tokens': 0
                 }
+            
+            model_stats[model]['calls'] += 1
+            model_stats[model]['tokens'] += tokens
         
         # 计算使用百分比
         usage_percent = (calls_24h / settings.API_KEY_DAILY_LIMIT) * 100 if settings.API_KEY_DAILY_LIMIT > 0 else 0
@@ -117,22 +114,6 @@ async def get_dashboard_data():
     
     # 获取缓存统计
     total_cache = response_cache_manager.cur_cache_num
-    # cache_by_model = {}
-    
-    # # 分析缓存数据
-    # for _, cache_data in response_cache_manager.cache.items():
-    #     if time.time() < cache_data.get('expiry_time', 0):
-    #         # 按模型统计缓存
-    #         response_obj = cache_data.get('response')
-    #         # 如果 response_obj 是 None，或者它是一个没有 'model' 属性的对象（比如空字典 {}），
-    #         # getattr 会返回第三个参数指定的默认值 None
-    #         model = getattr(response_obj, 'model', None)
-    #         if model:
-    #             if model in cache_by_model:
-    #                 cache_by_model[model] += 1
-    #             else:
-    #                 cache_by_model[model] = 1
-
     
     # 获取活跃请求统计
     active_count = len(active_requests_manager.active_requests)
@@ -170,7 +151,6 @@ async def get_dashboard_data():
         "cache_entries": total_cache,
         "cache_expiry_time": settings.CACHE_EXPIRY_TIME,
         "max_cache_entries": settings.MAX_CACHE_ENTRIES,
-        # "cache_by_model": cache_by_model,
         # 添加活跃请求池信息
         "active_count": active_count,
         "active_done": active_done,

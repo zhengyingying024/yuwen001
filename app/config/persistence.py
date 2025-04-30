@@ -60,7 +60,7 @@ def load_settings():
         for name, value in loaded_settings.items():
             if hasattr(settings, name):
                 setattr(settings, name, value)
-        log('info', f"加载设置: {loaded_settings}")
+        log('info', f"加载设置成功")
         return True
     except Exception as e:
         print(f"加载设置时出错: {e}")

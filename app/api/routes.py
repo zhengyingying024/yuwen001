@@ -101,7 +101,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
     if settings.PRECISE_CACHE:
         cache_key = generate_cache_key_all(request)
     else:    
-        cache_key = generate_cache_key(request,4)
+        cache_key = generate_cache_key(request,8)
     
     # 请求前基本检查
     protect_from_abuse(

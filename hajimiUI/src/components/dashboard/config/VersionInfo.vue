@@ -159,6 +159,9 @@ const dashboardStore = useDashboardStore()
   border-radius: var(--radius-lg);
   transition: all 0.3s ease;
   width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .update-status .status-icon {
@@ -166,11 +169,15 @@ const dashboardStore = useDashboardStore()
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .update-status .status-text {
   font-size: 1em;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .update-status .status-icon.update-needed,

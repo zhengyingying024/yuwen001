@@ -5,7 +5,7 @@ from app.utils.logging import log
 from app.utils.stats import clean_expired_stats
 from app.utils import check_version
 from zoneinfo import ZoneInfo
-from app.config import settings
+from app.config import settings,persistence
 import copy  # 添加copy模块导入
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -76,28 +76,16 @@ async def api_call_stats_clean():
         
         # 创建一个全新的空结构
         new_stats = {
-            'last_24h': {
-                'total': {},
-                'by_endpoint': {}
-            },
-            'hourly': {
-                'total': {},
-                'by_endpoint': {}
-            },
-            'minute': {
-                'total': {},
-                'by_endpoint': {}
-            }
+            'calls': []  # 存储每次调用的记录，每个记录包含 api_key, model, timestamp, tokens
         }
         
         # 使用深拷贝确保完全替换原结构
         settings.api_call_stats = copy.deepcopy(new_stats)
         
         # 验证重置是否成功
-        if (settings.api_call_stats['last_24h']['total'] == {} and 
-            settings.api_call_stats['hourly']['total'] == {} and 
-            settings.api_call_stats['minute']['total'] == {}):
+        if len(settings.api_call_stats['calls']) == 0:
             log('info', "API调用统计数据已成功重置")
+            persistence.save_settings()
         else:
             log('error', "API调用统计数据重置可能未完全成功")
             

@@ -12,6 +12,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     minuteCalls: 0
   })
 
+  // 添加图表相关的时间序列数据
+  const timeSeriesData = ref({
+    calls: [],  // API调用时间序列
+    tokens: []  // Token使用时间序列
+  })
+
   const config = ref({
     maxRequestsPerMinute: 0,
     maxRequestsPerDayPerIp: 0,
@@ -86,6 +92,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
       hourlyCalls: data.hourly_calls || 0,
       minuteCalls: data.minute_calls || 0,
       enableVertex: data.enable_vertex || false
+    }
+
+    // 更新时间序列数据
+    if (data.calls_time_series) {
+      timeSeriesData.value.calls = data.calls_time_series
+    }
+    
+    if (data.tokens_time_series) {
+      timeSeriesData.value.tokens = data.tokens_time_series
     }
 
     // 更新配置数据
@@ -203,6 +218,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     apiKeyStats,
     logs,
     isRefreshing,
+    timeSeriesData,  // 导出时间序列数据
     fetchDashboardData,
     selectedModel,
     availableModels,

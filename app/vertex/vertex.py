@@ -17,7 +17,7 @@ from google.oauth2 import service_account
 import app.vertex.config as config
 from fastapi import APIRouter
 from google.genai import types
-from app.utils.logging import log
+from app.utils.logging import vertex_log as log
 from google import genai
 import app.config.settings as settings
 
@@ -420,70 +420,90 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
     将 OpenAI 消息转换为 Gemini 格式。
     返回一个 Content 对象或 Content 对象列表，作为 Gemini API 所需的格式。
     """
-    log('info', "转换 OpenAI 消息为 Gemini 格式...")
+    log('info', f"开始转换消息, 总数: {len(messages)}")
     
     # 创建一个列表来保存 Gemini 格式的消息
     gemini_messages = []
     
     # 按原始顺序处理所有消息
     for idx, message in enumerate(messages):
-        # Map OpenAI roles to Gemini roles
-        role = message.role
-        
-        # If role is "system", use "user" as specified
-        if role == "system":
-            role = "user"
-        # If role is "assistant", map to "model"
-        elif role == "assistant":
-            role = "model"
-        
-        # Handle unsupported roles as per user's feedback
-        if role not in SUPPORTED_ROLES:
-            if role == "tool":
+        try:
+            # Map OpenAI roles to Gemini roles
+            role = message.role
+            
+            # If role is "system", use "user" as specified
+            if role == "system":
                 role = "user"
-            else:
-                # If it's the last message, treat it as a user message
-                if idx == len(messages) - 1:
+            # If role is "assistant", map to "model"
+            elif role == "assistant":
+                role = "model"
+            
+            # Handle unsupported roles as per user's feedback
+            if role not in SUPPORTED_ROLES:
+                if role == "tool":
                     role = "user"
                 else:
-                    role = "model"
-        
-        # Create parts list for this message
-        parts = []
-        
-        # Handle different content types
-        if isinstance(message.content, str):
-            # Simple string content
-            parts.append(types.Part(text=message.content))
-        elif isinstance(message.content, list):
-            # List of content parts (may include text and images)
-            for part in message.content:
-                if isinstance(part, dict):
-                    if part.get('type') == 'text':
-                        parts.append(types.Part(text=part.get('text', '')))
-                    elif part.get('type') == 'image_url':
-                        image_url = part.get('image_url', {}).get('url', '')
-                        if image_url.startswith('data:'):
-                            # Extract mime type and base64 data
-                            mime_match = re.match(r'data:([^;]+);base64,(.+)', image_url)
-                            if mime_match:
-                                mime_type, b64_data = mime_match.groups()
-                                image_bytes = base64.b64decode(b64_data)
-                                parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
-                elif isinstance(part, ContentPartText):
-                    parts.append(types.Part(text=part.text))
-                elif isinstance(part, ContentPartImage):
-                    image_url = part.image_url.url
-                    if image_url.startswith('data:'):
-                        # Extract mime type and base64 data
-                        mime_match = re.match(r'data:([^;]+);base64,(.+)', image_url)
-                        if mime_match:
-                            mime_type, b64_data = mime_match.groups()
-                            image_bytes = base64.b64decode(b64_data)
-                            parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
-        else:
-            # Fallback for unexpected format
-            parts.append(types.Part(text=str(message.content)))
+                    # If it's the last message, treat it as a user message
+                    if idx == len(messages) - 1:
+                        role = "user"
+                    else:
+                        role = "model"
+            
+            # Create parts list for this message
+            parts = []
+            
+            # 只记录结构信息
+            log('debug', f"消息 {idx}: role={role}, content_type={type(message.content).__name__}")
+            
+            if isinstance(message.content, str):
+                # 只记录是否为空
+                if not message.content.strip():
+                    log('warning', f"消息 {idx} 内容为空，使用默认文本")
+                    parts.append(types.Part(text="Empty message"))
+                else:
+                    parts.append(types.Part(text=message.content))
+            elif isinstance(message.content, list):
+                log('debug', f"消息 {idx} 包含 {len(message.content)} 个部分")
+                for part_idx, part in enumerate(message.content):
+                    try:
+                        if isinstance(part, dict):
+                            part_type = part.get('type', 'unknown')
+                            log('debug', f"部分 {part_idx}: 类型={part_type}")
+                            if part.get('type') == 'text':
+                                parts.append(types.Part(text=part.get('text', '')))
+                            elif part.get('type') == 'image_url':
+                                image_url = part.get('image_url', {}).get('url', '')
+                                if image_url.startswith('data:'):
+                                    # Extract mime type and base64 data
+                                    mime_match = re.match(r'data:([^;]+);base64,(.+)', image_url)
+                                    if mime_match:
+                                        mime_type, b64_data = mime_match.groups()
+                                        image_bytes = base64.b64decode(b64_data)
+                                        parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+                        elif isinstance(part, (ContentPartText, ContentPartImage)):
+                            log('debug', f"部分 {part_idx}: 类型={type(part).__name__}")
+                            if isinstance(part, ContentPartText):
+                                parts.append(types.Part(text=part.text))
+                            elif isinstance(part, ContentPartImage):
+                                image_url = part.image_url.url
+                                if image_url.startswith('data:'):
+                                    # Extract mime type and base64 data
+                                    mime_match = re.match(r'data:([^;]+);base64,(.+)', image_url)
+                                    if mime_match:
+                                        mime_type, b64_data = mime_match.groups()
+                                        image_bytes = base64.b64decode(b64_data)
+                                        parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
+                    except Exception as e:
+                        log('error', f"处理部分 {part_idx} 时出错: {type(e).__name__}")
+                        continue
+            
+            if not parts:
+                log('warning', f"消息 {idx} 没有有效部分")
+                parts.append(types.Part(text="Empty message"))
+                
+        except Exception as e:
+            log('error', f"处理消息 {idx} 时出错: {type(e).__name__}")
+            parts = [types.Part(text="Error processing message")]
         
         # Create a Content object with role and parts
         content = types.Content(
@@ -494,7 +514,13 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
         # Add to our list
         gemini_messages.append(content)
     
-    log('info', f"转换为 {len(gemini_messages)} 个 Gemini 消息")
+    # 添加最终验证
+    if not gemini_messages:
+        log('error', "没有生成任何有效的 Gemini 消息")
+        # 返回一个默认消息而不是空列表
+        return types.Content(role="user", parts=[types.Part(text="Error: No valid messages")])
+    
+    log('info', f"转换完成，生成了 {len(gemini_messages)} 个消息")
     
     # If there's only one message, return it directly
     if len(gemini_messages) == 1:

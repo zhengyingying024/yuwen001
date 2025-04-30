@@ -18,6 +18,7 @@ from app.utils import (
     handle_exception,
     log
 )
+from app.config.persistence import save_settings, load_settings
 from app.api import router, init_router, dashboard_router, init_dashboard_router
 from app.vertex.vertex import router as vertex_router
 from app.vertex.vertex import init_vertex_ai
@@ -135,10 +136,10 @@ async def startup_event():
     init_vertex_ai()
     log('info', "初始化Vertex AI")
     schedule_cache_cleanup(response_cache_manager, active_requests_manager)
-    
     # 检查版本
     await check_version()
-    
+    load_settings()
+    save_settings()
     # 先同步检查一个密钥，用于加载可用模型
     all_keys = key_manager.api_keys.copy()
     key_manager.api_keys = []  # 清空当前密钥列表

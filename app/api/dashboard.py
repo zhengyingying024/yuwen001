@@ -14,6 +14,7 @@ from app.services import GeminiClient
 from app.utils.auth import verify_web_password
 from app.utils.maintenance import api_call_stats_clean
 from app.utils.logging import log, vertex_log_manager
+from app.config.persistence import save_settings
 # 创建路由器
 dashboard_router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -372,7 +373,7 @@ async def update_config(config_data: dict):
                 
         else:
             raise HTTPException(status_code=400, detail=f"不支持的配置项：{config_key}")
-        
+        save_settings()
         return {"status": "success", "message": f"配置项 {config_key} 已更新"}
     except HTTPException:
         raise

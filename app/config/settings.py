@@ -3,10 +3,11 @@ import pathlib
 import logging
 from datetime import datetime, timedelta
 import asyncio 
-
+GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS", "")
 # 基础目录设置
 BASE_DIR = pathlib.Path(__file__).parent.parent
-
+# 存储目录
+STORAGE_DIR = os.environ.get("STORAGE_DIR", "/hajimi/settings/")
 # 流式响应配置
 FAKE_STREAMING = os.environ.get("FAKE_STREAMING", "true").lower() in ["true", "1", "yes"]
 # 假流式请求的空内容返回间隔（秒）

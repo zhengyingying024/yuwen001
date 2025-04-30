@@ -58,7 +58,6 @@ class GeminiResponseWrapper:
 
     def _extract_function_call(self) -> Optional[Dict[str, Any]]:
         try:
-            # 安全地获取 parts 列表，如果路径不存在则返回空列表
             parts = self._data.get('candidates', [{}])[0].get('content', {}).get('parts', [])
             # 使用列表推导式查找所有包含 'functionCall' 的 part，并提取其值
             function_calls = [
@@ -69,7 +68,6 @@ class GeminiResponseWrapper:
             # 如果列表不为空，则返回列表；否则返回 None
             return function_calls if function_calls else None
         except (KeyError, IndexError, TypeError):
-            # 如果结构不符合预期或不存在 functionCall，返回 None
             return None
 
     def _extract_finish_reason(self) -> Optional[str]:

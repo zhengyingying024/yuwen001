@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest, ChatCompletionResponse, ModelList
 from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key_all,generate_cache_key,openAI_nonstream_response,openAI_stream_chunk,log
+from app.utils.response import openAI_from_Gemini
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_request
 from app.models.schemas import ChatCompletionResponse, Choice, Message 
@@ -124,7 +125,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
     if cache_hit and not request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 
             extra={'request_type': 'non-stream', 'model': request.model})
-        return openAI_nonstream_response(cached_response)
+        return openAI_from_Gemini(cached_response,stream=False)
 
     if cache_hit and request.stream:
         log('info', f"缓存命中: {cache_key[:8]}...", 

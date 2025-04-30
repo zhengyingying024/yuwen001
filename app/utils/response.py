@@ -46,7 +46,7 @@ def openAI_nonstream_response(response):
         }
     }
 
-def openAI_from_Gemini(response):
+def openAI_from_Gemini(response,stream=True):
     """
     根据 GeminiResponseWrapper 对象创建 OpenAI 流式标准响应对象块 (SSE 格式)。
 
@@ -93,6 +93,20 @@ def openAI_from_Gemini(response):
     elif response.text:
         # 处理普通文本响应
         formatted_chunk["choices"][0]["delta"] = {"role": "assistant", "content": response.text}
-
-    # log('info', f"格式转换最终结构: {formatted_chunk}")
-    return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
+    
+    if response.finish_reason == 'STOP':
+        formatted_chunk["usage"] ={
+            "prompt_tokens": response.prompt_token_count,
+            "completion_tokens": response.candidates_token_count,
+            "total_tokens": response.total_token_count
+        }
+    
+    if stream:
+        # 返回 SSE 格式的流式块
+        return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
+    else:
+        # 构建非流式响应
+        formatted_chunk["object"] = "chat.completion"
+        # 将 'delta' 键重命名为 'message'
+        formatted_chunk["choices"][0]["message"] = formatted_chunk["choices"][0].pop("delta")
+        return formatted_chunk

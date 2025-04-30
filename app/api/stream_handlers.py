@@ -191,7 +191,7 @@ async def process_stream_request(
                         if chunk.total_token_count:
                             token += int(chunk.total_token_count)
                         success = True
-                        data = openAI_from_Gemini(chunk)
+                        data = openAI_from_Gemini(chunk,stream=True)
                         # log('info', f"流式响应发送数据: {data}")
                         yield data
                     

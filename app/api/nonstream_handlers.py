@@ -28,7 +28,8 @@ async def process_nonstream_request(
 ):
     """处理非流式API请求"""
     gemini_client = GeminiClient(current_api_key)
-    
+    if settings.PUBLIC_MODE:
+        settings.MAX_RETRY_NUM = 3
     # 创建调用 Gemini API 的主任务
     api_call_future = asyncio.create_task(
         asyncio.to_thread(

@@ -82,3 +82,5 @@ BLOCKED_MODELS = os.environ.get("BLOCKED_MODELS", ",".join(DEFAULT_BLOCKED_MODEL
 BLOCKED_MODELS = [model.strip() for model in BLOCKED_MODELS.split(",") if model.strip()]
 #公益站模式
 PUBLIC_MODE = os.environ.get("PUBLIC_MODE", "false").lower() in ["true", "1", "yes"]
+# 白名单模式
+WHITELIST_MODELS = [x.strip() for x in os.environ.get("WHITELIST_MODELS", "").split(",") if x.strip()]

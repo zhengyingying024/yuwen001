@@ -38,7 +38,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app = FastAPI(limit="50M")
 
 # --------------- 全局实例 ---------------
-
+load_settings()
 # 初始化API密钥管理器
 key_manager = APIKeyManager()
 current_api_key = key_manager.get_available_key()

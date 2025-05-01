@@ -197,6 +197,9 @@ async def process_request(
         current_batch = valid_keys[:batch_num]
         valid_keys = valid_keys[batch_num:]
         
+        # 更新当前尝试次数
+        current_try_num += batch_num
+        
         # 创建并发任务
         tasks = []
         tasks_map = {}

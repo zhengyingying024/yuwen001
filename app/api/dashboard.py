@@ -388,15 +388,36 @@ async def update_config(config_data: dict):
             all_keys = list(set(current_keys + new_keys))
             settings.GEMINI_API_KEYS = ','.join(all_keys)
             
-            # 更新key_manager
+            # 计算新添加的密钥数量
+            added_key_count = 0
             for key in new_keys:
                 if key not in key_manager.api_keys:
                     key_manager.api_keys.append(key)
+                    added_key_count += 1
+            
+            # 更新MAX_RETRY_NUM
+            if added_key_count > 0:
+                settings.MAX_RETRY_NUM += added_key_count
+                log('info', f"MAX_RETRY_NUM已更新为：{settings.MAX_RETRY_NUM}")
             
             # 重置密钥栈
             key_manager._reset_key_stack()
             
-            log('info', f"已添加 {len(new_keys)} 个API密钥，当前共有 {len(key_manager.api_keys)} 个")
+            # 如果可用模型为空，尝试获取模型列表
+            if not GeminiClient.AVAILABLE_MODELS:
+                try:
+                    # 使用新添加的密钥之一尝试获取可用模型
+                    for key in new_keys:
+                        log('info', f"使用新添加的API密钥 {key[:8]}... 获取可用模型列表")
+                        all_models = await GeminiClient.list_available_models(key)
+                        GeminiClient.AVAILABLE_MODELS = [model.replace("models/", "") for model in all_models]
+                        if GeminiClient.AVAILABLE_MODELS:
+                            log('info', f"成功获取可用模型列表，共 {len(GeminiClient.AVAILABLE_MODELS)} 个模型")
+                            break
+                except Exception as e:
+                    log('warning', f"获取可用模型列表时发生错误: {str(e)}")
+            
+            log('info', f"已添加 {added_key_count} 个新API密钥，当前共有 {len(key_manager.api_keys)} 个")
                 
         else:
             raise HTTPException(status_code=400, detail=f"不支持的配置项：{config_key}")

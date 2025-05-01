@@ -28,7 +28,8 @@ async def process_nonstream_request(
 ):
     """处理非流式API请求"""
     gemini_client = GeminiClient(current_api_key)
-    
+    if settings.PUBLIC_MODE:
+        settings.MAX_RETRY_NUM = 3
     # 创建调用 Gemini API 的主任务
     api_call_future = asyncio.create_task(
         asyncio.to_thread(
@@ -195,6 +196,9 @@ async def process_request(
         
         current_batch = valid_keys[:batch_num]
         valid_keys = valid_keys[batch_num:]
+        
+        # 更新当前尝试次数
+        current_try_num += batch_num
         
         # 创建并发任务
         tasks = []

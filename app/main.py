@@ -38,7 +38,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app = FastAPI(limit="50M")
 
 # --------------- 全局实例 ---------------
-
+load_settings()
 # 初始化API密钥管理器
 key_manager = APIKeyManager()
 current_api_key = key_manager.get_available_key()
@@ -198,9 +198,9 @@ async def startup_event():
         idx = all_keys.index(key_manager.api_keys[-1])
         key_manager.api_keys += all_keys[idx+1:]
         settings.MAX_RETRY_NUM = len(key_manager.api_keys)
-    
     settings.MAX_RETRY_NUM = min(settings.MAX_RETRY_NUM, int(MAX_RETRY_NUM) if MAX_RETRY_NUM.isdigit() else settings.MAX_RETRY_NUM)
-
+    if settings.PUBLIC_MODE:
+        settings.MAX_RETRY_NUM = 3
     # 显示当前可用密钥
     key_manager.show_all_keys()
     log('info', f"当前可用 API 密钥数量：{len(key_manager.api_keys)}")

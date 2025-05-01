@@ -24,7 +24,8 @@ async def process_stream_request(
     
     # 创建一个直接流式响应的生成器函数
     async def stream_response_generator():
-        
+        if settings.PUBLIC_MODE:
+            settings.MAX_RETRY_NUM = 3
         # 转换消息格式
         contents, system_instruction = GeminiClient.convert_messages(
         GeminiClient, chat_request.messages,model=chat_request.model)

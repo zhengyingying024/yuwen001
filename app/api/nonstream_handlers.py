@@ -9,7 +9,7 @@ from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
-from app.utils.response import openAI_nonstream_response
+from app.utils.response import openAI_from_Gemini
 from app.utils.stats import get_api_key_usage
 
 
@@ -148,7 +148,7 @@ async def process_request(
     if cache_hit:
         log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
             extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
-        return openAI_nonstream_response(cached_response)
+        return openAI_from_Gemini(cached_response,stream=False)
     
     # 重置已尝试的密钥
     key_manager.reset_tried_keys_for_request()
@@ -241,7 +241,7 @@ async def process_request(
                         log('info', f"非流式请求成功", 
                             extra={'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-                        return openAI_nonstream_response(cached_response)
+                        return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":
                         # 增加空响应计数
                         empty_response_count += 1

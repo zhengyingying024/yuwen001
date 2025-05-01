@@ -215,11 +215,9 @@ class GeminiClient:
                     config["allowed_function_names"] = allowed_functions
                 tool_config = {"function_calling_config": config}
         
-        # 3. 添加 tool_config 到 data，并处理依赖关系
+        # 3. 添加 tool_config 到 data
         if tool_config:
             data["tool_config"] = tool_config
-            if tool_config["function_calling_config"]["mode"] != "NONE" and "tools" not in data:
-                data["tools"] = [{"function_declarations": []}]
         
         # 联网模式
         if settings.search["search_mode"] and model.endswith("-search"):

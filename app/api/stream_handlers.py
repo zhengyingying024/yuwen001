@@ -5,8 +5,9 @@ import random
 # from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
-from app.services import GeminiClient
+from app.services import GeminiClient,OpenAIClient
 from app.utils import handle_gemini_error, update_api_call_stats,log,openAI_stream_chunk
+from app.utils.response import openAI_from_Gemini
 from app.utils.stats import get_api_key_usage
 import app.config.settings as settings
 
@@ -173,10 +174,10 @@ async def process_stream_request(
             
             success = False
             try:            
-                gemini_client = GeminiClient(api_key)
+                client = GeminiClient(api_key)
                 
                 # 获取流式响应
-                stream_generator = gemini_client.stream_chat(
+                stream_generator = client.stream_chat(
                     chat_request,
                     contents,
                     safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
@@ -184,11 +185,15 @@ async def process_stream_request(
                 )
                 token=0
                 # 处理流式响应
-                async for chunk,token_count in stream_generator:
-                    if chunk or success:
-                        token=token_count
+                async for chunk in stream_generator:
+                    if chunk :
+                        
+                        if chunk.total_token_count:
+                            token += int(chunk.total_token_count)
                         success = True
-                        yield openAI_stream_chunk(model=chat_request.model,content=chunk)
+                        data = openAI_from_Gemini(chunk,stream=True)
+                        # log('info', f"流式响应发送数据: {data}")
+                        yield data
                     
                     else:
                         log('warning', f"流式响应: API密钥 {api_key[:8]}... 返回空响应",
@@ -231,7 +236,7 @@ async def process_stream_request(
     # 处理假流式模式
     async def handle_fake_streaming(api_key,chat_request, contents, response_cache_manager,system_instruction, safety_settings, safety_settings_g2, cache_key):
         
-        # 使用非流式方式请求内容
+        # 使用非流式请求内容
         gemini_client = GeminiClient(api_key)
         
         api_call_future = asyncio.create_task(
@@ -267,7 +272,7 @@ async def process_stream_request(
             return "success"
         
         except Exception as e:
-            error_detail = handle_gemini_error(e, api_key)
+            handle_gemini_error(e, api_key)
             # log('error', f"假流式模式: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
             #     extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
             return "error"

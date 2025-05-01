@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 
 class Message(BaseModel):
     role: str
-    content: Union[str, List[Dict[str, Any]]]
+    content: Union[str, List[Dict[str, Any]], None] = None 
+    tool_call_id: Optional[str] = None # Used when role is 'tool'
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -12,7 +13,6 @@ class ChatCompletionRequest(BaseModel):
     top_p: Optional[float] = 1.0
     top_k: Optional[float] = 40.0
     n: int = 1
-    thinking_budget: Optional[int] = None
     stream: bool = False
     stop: Optional[Union[str, List[str]]] = None
     max_tokens: Optional[int] = None
@@ -21,6 +21,11 @@ class ChatCompletionRequest(BaseModel):
     seed: Optional[int] = None
     logprobs: Optional[int] = None
     response_logprobs: Optional[bool] = None
+    thinking_budget: Optional[int] = None
+    reasoning_effort : Optional[str] = None
+    # 函数调用
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[Literal["none", "auto"], Dict[str, Any]]] = "auto"
 
 class Choice(BaseModel):
     index: int

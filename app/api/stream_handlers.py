@@ -33,27 +33,27 @@ async def process_stream_request(
         # 重置已尝试的密钥
         key_manager.reset_tried_keys_for_request()
         
-        # 获取所有可用的API密钥
-        all_keys = key_manager.api_keys.copy()
-        random.shuffle(all_keys)  # 随机打乱密钥顺序
-        
-        # 检查每个API密钥的调用次数，过滤掉超过限制的密钥
+        # 获取有效的API密钥
         valid_keys = []
-        for api_key in all_keys:
-            # 获取API密钥的调用次数
-            usage = await get_api_key_usage(settings.api_call_stats, api_key)
-            # 如果调用次数小于限制，则添加到有效密钥列表
-            if usage < settings.API_KEY_DAILY_LIMIT:
-                valid_keys.append(api_key)
-            else:
-                log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
-                    extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
+        for _ in range(len(key_manager.api_keys)):
+            api_key = key_manager.get_available_key()
+            if api_key:
+                # 获取API密钥的调用次数
+                usage = await get_api_key_usage(settings.api_call_stats, api_key)
+                # 如果调用次数小于限制，则添加到有效密钥列表
+                if usage < settings.API_KEY_DAILY_LIMIT:
+                    valid_keys.append(api_key)
+                else:
+                    log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
+                        extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
         
         # 如果没有有效密钥，则随机使用一个密钥
         if not valid_keys:
             log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
                 extra={'request_type': 'stream', 'model': chat_request.model})
-            valid_keys = [random.choice(all_keys)]
+            # 重置密钥栈并获取一个密钥
+            key_manager._reset_key_stack()
+            valid_keys = [key_manager.get_available_key()]
         
         # 设置初始并发数
         current_concurrent = settings.CONCURRENT_REQUESTS
@@ -131,7 +131,7 @@ async def process_stream_request(
                             if status == "success" :  
                                 success = True
                                 log('info', f"假流式请求成功", 
-                                    extra={'request_type': "fake-stream", 'model': chat_request.model})
+                                    extra={'key': api_key[:8],'request_type': "fake-stream", 'model': chat_request.model})
                                 
                                 cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                                 

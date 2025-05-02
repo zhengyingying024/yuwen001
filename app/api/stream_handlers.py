@@ -131,7 +131,7 @@ async def process_stream_request(
                             if status == "success" :  
                                 success = True
                                 log('info', f"假流式请求成功", 
-                                    extra={'request_type': "fake-stream", 'model': chat_request.model})
+                                    extra={'key': api_key[:8],'request_type': "fake-stream", 'model': chat_request.model})
                                 
                                 cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                                 

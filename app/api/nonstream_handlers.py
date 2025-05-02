@@ -243,7 +243,7 @@ async def process_request(
                     if status == "success" :  
                         success = True
                         log('info', f"非流式请求成功", 
-                            extra={'request_type': request_type, 'model': chat_request.model})
+                            extra={'key': api_key[:8],'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                         return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":

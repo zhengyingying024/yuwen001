@@ -60,7 +60,7 @@ git clone https://github.com/wyeeeee/hajimi && cd hajimi && pip install tzdata -
 ### 使用 **MT 管理器** 编辑 `.bashrc`
 
 路径为：`ubuntu22-fs/root/.bashrc`  
-在文件末尾添加如下环境变量配置，并根据实际需要修改值：
+在文件末尾添加如下环境变量配置，并根据实际需要修改值（配置后请务必重启 Termux）：
 
 ```bash
 # 必填项

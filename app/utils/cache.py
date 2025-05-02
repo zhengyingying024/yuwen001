@@ -1,11 +1,11 @@
 import time
 import xxhash 
-import json
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, Tuple
 import logging
 from collections import deque
 from app.utils.logging import log
 logger = logging.getLogger("my_logger")
+import heapq
 
 # 定义缓存项的结构
 CacheItem = Dict[str, Any]
@@ -113,46 +113,64 @@ class ResponseCacheManager:
         if self.cur_cache_num <= self.max_entries:
             return
 
-        items_to_remove_count = self.cur_cache_num - self.max_entries
-        log('info', f"缓存总数 {self.cur_cache_num} 超过限制 {self.max_entries}，需要清理 {items_to_remove_count} 个最旧项。")
+        # 计算目标大小和需要移除的数量
+        target_size = max(self.max_entries - 5, 10)
+        if self.cur_cache_num <= target_size: # 可能在并发场景下已经被清理
+             return
+             
+        items_to_remove_count = self.cur_cache_num - target_size
+        log('info', f"缓存总数 {self.cur_cache_num} 超过限制 {self.max_entries}，需要清理 {items_to_remove_count} 个")
 
         # 收集所有缓存项及其元数据（键、创建时间、项本身）
         all_items_meta = []
         for key, cache_deque in self.cache.items():
             for item in cache_deque:
+                # 存储足够的信息以供查找和删除
                 all_items_meta.append({'key': key, 'created_at': item.get('created_at', 0), 'item': item})
 
-        # 按创建时间排序（升序，最旧的在前）
-        all_items_meta.sort(key=lambda x: x['created_at'])
+        # 使用 heapq.nsmallest 高效找出最旧的 N 项
+        
+        # 确保移除数量不超过实际存在的项目数
+        actual_remove_count = min(items_to_remove_count, len(all_items_meta))
+        if actual_remove_count <= 0:
+            return # 没有项目可移除或无需移除
 
-        # 确定要删除的最旧项
+        items_to_remove = heapq.nsmallest(actual_remove_count, all_items_meta, key=lambda x: x['created_at'])
+
+        # 执行移除
         items_actually_removed = 0
         keys_potentially_empty = set()
-        for i in range(min(items_to_remove_count, len(all_items_meta))):
-            item_meta = all_items_meta[i]
+        for item_meta in items_to_remove:
             key_to_clean = item_meta['key']
             item_to_clean = item_meta['item']
-            
+
             if key_to_clean in self.cache:
                 try:
+                    # 直接从 deque 中移除指定的 item 对象
                     self.cache[key_to_clean].remove(item_to_clean)
                     items_actually_removed += 1
+                    # 成功移除后才更新计数器
                     self.cur_cache_num = max(0, self.cur_cache_num - 1)
-                    log('debug', f"因容量限制，删除键 {key_to_clean[:8]}... 的旧缓存项 (创建于 {item_meta['created_at']})。")
+                    log('info', f"因容量限制，删除键 {key_to_clean[:8]}... 的旧缓存项 (创建于 {item_meta['created_at']})。")
                     keys_potentially_empty.add(key_to_clean)
                 except ValueError:
-                     # 可能在处理过程中已被其他操作删除，忽略
-                     log('warning', f"尝试因容量限制删除缓存项时未找到: {key_to_clean[:8]}...")
-                     pass
+                    # 如果项已被其他操作（如 get_and_remove 或 clean_expired）移除，
+                    # remove 会抛出 ValueError，这是正常的，忽略即可。
+                    log('warning', f"尝试因容量限制删除缓存项时未找到 (可能已被提前移除): {key_to_clean[:8]}...")
+                    pass
+                except KeyError:
+                     # 如果键本身已被移除（例如，其 deque 变空并被删除），则忽略
+                     log('warning', f"尝试因容量限制删除缓存项时键未找到: {key_to_clean[:8]}...")
+                     pass # Key already gone
 
-        # 检查是否有deque变空
+        # 检查是否有 deque 因本次清理变空
         for key in keys_potentially_empty:
              if key in self.cache and not self.cache[key]:
                  del self.cache[key]
                  log('info', f"因容量限制清理后，键 {key[:8]}... 的deque已空，移除该键。")
-        
+
         if items_actually_removed > 0:
-             log('info', f"因容量限制，共清理了 {items_actually_removed} 个旧缓存项。")
+             log('info', f"因容量限制，共清理了 {items_actually_removed} 个旧缓存项。当前缓存数: {self.cur_cache_num}")
 
 
 # 根据模型名称和全部消息，生成请求的唯一缓存键。

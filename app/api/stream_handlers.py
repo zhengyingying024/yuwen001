@@ -1,8 +1,4 @@
 import asyncio
-import json
-import time
-import random
-# from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
@@ -183,7 +179,7 @@ async def process_stream_request(
                 stream_generator = client.stream_chat(
                     chat_request,
                     contents,
-                    safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
+                    safety_settings_g2 if 'gemini-2.5' in chat_request.model else safety_settings,
                     system_instruction
                 )
                 token=0
@@ -250,7 +246,7 @@ async def process_stream_request(
                 gemini_client.complete_chat,
                 chat_request,
                 contents,
-                safety_settings_g2 if 'gemini-2.5-pro' in chat_request.model else safety_settings,
+                safety_settings_g2 if 'gemini-2.5' in chat_request.model else safety_settings,
                 system_instruction
             )
         )

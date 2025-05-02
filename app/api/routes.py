@@ -7,7 +7,7 @@ from app.utils import protect_from_abuse,generate_cache_key_all,generate_cache_k
 from app.utils.response import openAI_from_Gemini
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_request
-from app.models.schemas import ChatCompletionResponse, Choice, Message 
+from app.models.schemas import ChatCompletionResponse
 from app.vertex.vertex import list_models as list_models_vertex
 import app.config.settings as settings
 import asyncio

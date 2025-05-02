@@ -84,7 +84,7 @@ def get_cached(cache_key,is_stream: bool):
     return None
 
 @router.get("/aistudio/models",response_model=ModelList)
-async def aistudio_list_models():
+async def aistudio_list_models(_: None = Depends(custom_verify_password)):
     # 使用原有的Gemini实现
     if settings.PUBLIC_MODE:
         filtered_models = ["gemini-2.5-pro-exp-03-25","gemini-2.5-flash-preview-04-17"]
@@ -95,7 +95,7 @@ async def aistudio_list_models():
     return ModelList(data=[{"id": model, "object": "model", "created": 1678888888, "owned_by": "organization-owner"} for model in filtered_models])
 
 @router.get("/vertex/models",response_model=ModelList)
-async def vertex_list_models():
+async def vertex_list_models(_: None = Depends(custom_verify_password)):
     # 使用Vertex AI实现
     from app.vertex.vertex import list_models as vertex_list_models
     
@@ -108,10 +108,10 @@ async def vertex_list_models():
 # API路由
 @router.get("/v1/models",response_model=ModelList)
 @router.get("/models",response_model=ModelList)
-async def list_models():
+async def list_models(_: None = Depends(custom_verify_password)):
     if settings.ENABLE_VERTEX:
-        return await vertex_list_models()
-    return await aistudio_list_models()
+        return await vertex_list_models(_)
+    return await aistudio_list_models(_)
 
 @router.post("/aistudio/chat/completions", response_model=ChatCompletionResponse)
 async def aistudio_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):

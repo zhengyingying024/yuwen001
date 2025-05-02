@@ -11,7 +11,6 @@ from app.models.schemas import ChatCompletionResponse
 from app.vertex.vertex import list_models as list_models_vertex
 import app.config.settings as settings
 import asyncio
-import time
 
 # 导入拆分后的模块
 from .auth import verify_password
@@ -125,7 +124,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         cache_key = generate_cache_key(request,8)
     
     # 请求前基本检查
-    protect_from_abuse(
+    await protect_from_abuse( 
         http_request, 
         settings.MAX_REQUESTS_PER_MINUTE, 
         settings.MAX_REQUESTS_PER_DAY_PER_IP)

@@ -33,10 +33,13 @@ class ResponseCacheManager:
         now = time.time()
         if cache_key in self.cache:
             cache_deque = self.cache[cache_key]
-            # 查找第一个未过期的项
+            # 查找第一个未过期的项，且不删除
             for item in cache_deque:
                 if now < item.get('expiry_time', 0):
-                    return item['response'], True # 返回响应，不删除
+                    response = item.get('response',None)
+                    
+                    return response, True 
+
         return None, False
 
     def get_and_remove(self, cache_key: str) -> Tuple[Optional[Any], bool]:
@@ -44,35 +47,28 @@ class ResponseCacheManager:
         now = time.time()
         if cache_key in self.cache:
             cache_deque = self.cache[cache_key]
-            item_to_remove = None
-            response = None
             
-            # 查找第一个未过期的项
+            # 查找第一个未过期的项，并删除它。顺便删除所有过期的项
             for item in cache_deque:
                 if now < item.get('expiry_time', 0):
-                    item_to_remove = item
-                    response = item['response']
-                    break # 找到第一个就停止
+                    response = item.get('response',None)
+                    self.cur_cache_num = max(0, self.cur_cache_num - 1)
+                    cache_deque.remove(item)
+                    
+                    # 如果deque变空，则删除该键
+                    if not cache_deque: 
+                        del self.cache[cache_key]
+                    
+                    # 找到第一个就停止
+                    return response, True 
                 else:
                     cache_deque.remove(item)
-
-            if item_to_remove:
-                try:
-                    cache_deque.remove(item_to_remove) # 从deque中删除
-                    # log('info', f"从缓存获取并删除项: {cache_key[:8]}...")
-                    self.cur_cache_num -= 1
-                    if not cache_deque: # 如果deque变空，则删除该键
-                        del self.cache[cache_key]
-                    return response, True
-                except ValueError:
-                     #理论上不应该发生，因为我们刚从deque中找到了它
-                     log('warning', f"尝试删除缓存项时出错（未找到）: {cache_key[:8]}...")
-                     pass # 继续执行到函数末尾返回 False
+                    self.cur_cache_num = max(0, self.cur_cache_num - 1)
 
         return None, False
 
     def store(self, cache_key: str, response: Any):
-        """存储响应到缓存（追加到键对应的deque）。"""
+        """存储响应到缓存（追加到键对应的deque）"""
         now = time.time()
         new_item: CacheItem = {
             'response': response,
@@ -82,28 +78,26 @@ class ResponseCacheManager:
         
         if cache_key not in self.cache:
             self.cache[cache_key] = deque()
-        # log('info', f"开始存储响应到deque末尾，当前cache：{self.cache}")
         
-        self.cache[cache_key].append(new_item) # 追加到deque末尾
+        self.cache[cache_key].append(new_item) # 追加到deque末尾        
         
-        # log('info', f"响应已缓存: {cache_key[:8]}...")
         self.cur_cache_num += 1 
-        # 如果缓存总条目数超过限制，清理最旧的
-        self.clean_if_needed()
+        
+        if self.cur_cache_num > self.max_entries:
+            self.clean_if_needed()
     
     def clean_expired(self):
         """清理所有缓存项中已过期的项。"""
         now = time.time()
         keys_to_remove = []
         for key, cache_deque in self.cache.items():
-            # 创建一个新的deque只包含未过期的项
+            # 创建一个新的deque , 只包含未过期的项
             valid_items = deque(item for item in cache_deque if now < item.get('expiry_time', 0))
             
             if len(valid_items) < len(cache_deque):
                 clean_num =len(cache_deque) - len(valid_items)
                 log('info', f"清理键 {key[:8]}... 的过期缓存项 {clean_num} 个。")
-                self.cur_cache_num -= clean_num
-
+                self.cur_cache_num = max(0, self.cur_cache_num - 1)
             if not valid_items:
                 keys_to_remove.append(key) # 标记此键以便稍后删除
             else:
@@ -143,7 +137,7 @@ class ResponseCacheManager:
                 try:
                     self.cache[key_to_clean].remove(item_to_clean)
                     items_actually_removed += 1
-                    self.cur_cache_num -= 1
+                    self.cur_cache_num = max(0, self.cur_cache_num - 1)
                     log('debug', f"因容量限制，删除键 {key_to_clean[:8]}... 的旧缓存项 (创建于 {item_meta['created_at']})。")
                     keys_potentially_empty.add(key_to_clean)
                 except ValueError:
@@ -190,8 +184,8 @@ def generate_cache_key_all(chat_request) -> str:
                 elif item.get('type') == 'image_url':
                     image_data = item.get('image_url', {}).get('url', '')
                     if image_data.startswith('data:image/'):
-                        # 对于base64图像，使用前32字符的哈希作为标识符
-                        content_list.append({'type': 'image_url', 'hash': hashlib.md5(image_data[:32].encode()).hexdigest()})
+                        # 对于base64图像，使用前32字符作为标识符
+                        content_list.append({'type': 'image_url', 'prefix': image_data[:32]})
                     else:
                         content_list.append({'type': 'image_url', 'url': image_data})
             request_data['messages'].append({'role': msg.role, 'content': content_list})
@@ -233,14 +227,14 @@ def generate_cache_key(chat_request, last_n_user_messages: int = 4) -> str:
                     text = item.get('text', '') if hasattr(item, 'get') else ''
                     content_list.append({'type': 'text', 'text': text})
                 elif item_type == 'image_url':
-                    image_url_data = item.get('image_url', {}) if hasattr(item, 'get') else {}
-                    url = image_url_data.get('url', '') if hasattr(image_url_data, 'get') else ''
-                    if url.startswith('data:image/'):
-                        # 对于base64图像，使用前32字符的哈希作为标识符
-                        img_hash = hashlib.md5(url[:32].encode()).hexdigest()
-                        content_list.append({'type': 'image_url', 'hash': img_hash})
+                    image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
+                    
+                    image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
+                    if image_data.startswith('data:image/'):
+                        # 对于base64图像，使用前32字符作为标识符
+                        content_list.append({'type': 'image_url', 'prefix': image_data[:32]})
                     else:
-                        content_list.append({'type': 'image_url', 'url': url})
+                        content_list.append({'type': 'image_url', 'url': image_data})
             
             processed_content = content_list
         

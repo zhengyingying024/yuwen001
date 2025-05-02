@@ -261,7 +261,10 @@ app.include_router(dashboard_router)
 # 挂载静态文件目录
 app.mount("/assets", StaticFiles(directory="app/templates/assets"), name="assets")
 
-@app.get("/", response_class=HTMLResponse)
+# 设置根路由路径
+dashboard_path = f"/{settings.DASHBOARD_URL}" if settings.DASHBOARD_URL else "/"
+
+@app.get(dashboard_path, response_class=HTMLResponse)
 async def root(request: Request):
     """
     根路由 - 返回静态 HTML 文件

@@ -67,6 +67,22 @@ def init_router(
 async def custom_verify_password(request: Request):
     await verify_password(request, settings.PASSWORD)
 
+def get_cached(cache_key,is_stream: bool):
+    # 检查缓存是否存在，如果存在，返回缓存
+    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+    
+    if cache_hit and cached_response:
+        log('info', f"缓存命中: {cache_key[:8]}...", 
+            extra={'request_type': 'non-stream', 'model': cached_response.model})
+        
+        if is_stream:
+            chunk = openAI_from_Gemini(cached_response,stream=True)
+            return StreamingResponse(chunk, media_type="text/event-stream")
+        else: 
+            return openAI_from_Gemini(cached_response,stream=False)
+
+    return None
+
 @router.get("/aistudio/models",response_model=ModelList)
 async def aistudio_list_models():
     # 使用原有的Gemini实现
@@ -99,8 +115,8 @@ async def list_models():
 
 @router.post("/aistudio/chat/completions", response_model=ChatCompletionResponse)
 async def aistudio_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
+    
     global current_api_key
-    # 使用原有的Gemini实现
     
     # 生成缓存键 - 用于匹配请求内容对应缓存
     if settings.PRECISE_CACHE:
@@ -113,6 +129,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         http_request, 
         settings.MAX_REQUESTS_PER_MINUTE, 
         settings.MAX_REQUESTS_PER_DAY_PER_IP)
+    
     if request.model not in GeminiClient.AVAILABLE_MODELS:
         log('error', "无效的模型", 
             extra={'model': request.model, 'status_code': 400})
@@ -125,39 +142,29 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         extra={'request_type': 'non-stream', 'model': request.model})
     
     # 检查缓存是否存在，如果存在，返回缓存
-    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-    
-    if cache_hit and not request.stream:
-        log('info', f"缓存命中: {cache_key[:8]}...", 
-            extra={'request_type': 'non-stream', 'model': request.model})
-        return openAI_from_Gemini(cached_response,stream=False)
-
-    if cache_hit and request.stream:
-        log('info', f"缓存命中: {cache_key[:8]}...", 
-            extra={'request_type': 'non-stream', 'model': request.model})
-        
-        chunk = openAI_stream_chunk(model=cached_response.model,content=cached_response.text,finish_reason="stop")
-        
-        return StreamingResponse(chunk, media_type="text/event-stream")
-    
+    cached_response = get_cached(cache_key, is_stream = request.stream)
+    if cached_response :
+        return cached_response
     
     # 构建包含缓存键的活跃请求池键
-    pool_key = f"cache:{cache_key}"
+    pool_key = f"{cache_key}"
     
     # 查找所有使用相同缓存键的活跃任务
     active_task = active_requests_manager.get(pool_key)
     if active_task and not active_task.done():
         log('info', f"发现相同请求的进行中任务", 
-            extra={'request_type': 'non-stream', 'model': request.model})
+            extra={'request_type': 'stream' if request.stream else "non-stream", 'model': request.model})
         
         # 等待已有任务完成
         try:
             # 设置超时，避免无限等待
             await asyncio.wait_for(active_task, timeout=180)
-                
+            
             # 使用任务结果
             if active_task.done() and not active_task.cancelled():
+                
                 result = active_task.result()
+                active_requests_manager.remove(pool_key)
                 if result:
                     return result
         
@@ -196,7 +203,6 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
                 request_type = "non-stream", 
                 key_manager = key_manager,
                 response_cache_manager = response_cache_manager,
-                active_requests_manager = active_requests_manager,
                 safety_settings = safety_settings,
                 safety_settings_g2 = safety_settings_g2,
                 cache_key = cache_key
@@ -210,16 +216,15 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
     # 等待任务完成
     try:
         response = await process_task
+        active_requests_manager.remove(pool_key)
         return response
     except Exception as e:
         # 如果任务失败，从活跃请求池中移除
         active_requests_manager.remove(pool_key)
         
         # 检查是否已有缓存的结果（可能是由另一个任务创建的）
-        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-        if cache_hit:
-            log('info', f"任务失败但找到缓存，使用缓存结果: {cache_key[:8]}...", 
-                extra={'request_type': 'non-stream', 'model': request.model})
+        cached_response = get_cached(cache_key, is_stream = request.stream)
+        if cached_response : 
             return cached_response
         
         # 发送错误信息给客户端

@@ -5,7 +5,7 @@ import random
 # from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
-from app.services import GeminiClient,OpenAIClient
+from app.services import GeminiClient
 from app.utils import handle_gemini_error, update_api_call_stats,log,openAI_stream_chunk
 from app.utils.response import openAI_from_Gemini
 from app.utils.stats import get_api_key_usage
@@ -134,8 +134,7 @@ async def process_stream_request(
                                     extra={'request_type': "fake-stream", 'model': chat_request.model})
                                 
                                 cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-                                
-                                yield openAI_stream_chunk(model=chat_request.model,content=cached_response.text,finish_reason="stop")
+                                yield openAI_from_Gemini(cached_response,stream=True)
                                 
                                 break 
                             elif status == "empty":
@@ -257,7 +256,7 @@ async def process_stream_request(
         try:
             # 获取响应内容
             response_content = await gemini_task
-                
+            response_content.set_model(chat_request.model)
             log('info', f"假流式成功获取响应，进行缓存",
                 extra={'key': api_key[:8], 'request_type': 'fake-stream', 'model': chat_request.model})
 

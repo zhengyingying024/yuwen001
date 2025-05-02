@@ -132,7 +132,6 @@ async def process_request(
     request_type: Literal['stream', 'non-stream'], 
     key_manager,
     response_cache_manager,
-    active_requests_manager,
     safety_settings,
     safety_settings_g2,
     cache_key: str
@@ -251,12 +250,10 @@ async def process_request(
                         empty_response_count += 1
                         log('warning', f"空响应计数: {empty_response_count}/{settings.MAX_EMPTY_RESPONSES}",
                             extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                
                 except Exception as e:
-                    # 使用统一的API错误处理函数
                     handle_gemini_error(e, api_key)
-                    # log('error', f"请求失败: {error_result}",
-                    #     extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
-            
+                
                 # 更新任务列表，移除已完成的任务
                 tasks = [(k, t) for k, t in tasks if not t.done()]
                 

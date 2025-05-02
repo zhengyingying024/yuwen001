@@ -1,5 +1,5 @@
 import time
-import hashlib
+import xxhash 
 import json
 from typing import Dict, Any, Optional, List, Tuple
 import logging
@@ -162,101 +162,95 @@ def generate_cache_key_all(chat_request) -> str:
     Args:
         chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
     Returns:
-        一个代表该请求的唯一缓存键字符串 (MD5哈希值)。
+        一个代表该请求的唯一缓存键字符串 (xxhash64哈希值)。
     """
-    # 创建包含请求关键信息的字典
-    request_data = {
-        'model': chat_request.model, 
-        'messages': []
-    }
+    h = xxhash.xxh64()
     
-    # 添加消息内容
+    # 1. 哈希模型名称
+    h.update(chat_request.model.encode('utf-8'))
+
+    # 2. 增量哈希所有消息
     for msg in chat_request.messages:
+        # 哈希角色
+        h.update(b'role:')
+        h.update(msg.role.encode('utf-8'))
+
+        # 哈希内容
         if isinstance(msg.content, str):
-            message_data = {'role': msg.role, 'content': msg.content}
-            request_data['messages'].append(message_data)
+            h.update(b'text:')
+            h.update(msg.content.encode('utf-8'))
         elif isinstance(msg.content, list):
-            content_list = []
+            # 处理图文混合内容
             for item in msg.content:
-                if item.get('type') == 'text':
-                    content_list.append({'type': 'text', 'text': item.get('text')})
-                # 对于图像数据，只使用标识符而不是全部数据
-                elif item.get('type') == 'image_url':
-                    image_data = item.get('image_url', {}).get('url', '')
+                item_type = item.get('type') if hasattr(item, 'get') else None
+                if item_type == 'text':
+                    text = item.get('text', '') if hasattr(item, 'get') else ''
+                    h.update(b'text:') # 加入类型标识符
+                    h.update(text.encode('utf-8'))
+                elif item_type == 'image_url':
+                    image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
+                    image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
+                    
+                    h.update(b'image_url:') # 加入类型标识符
                     if image_data.startswith('data:image/'):
                         # 对于base64图像，使用前32字符作为标识符
-                        content_list.append({'type': 'image_url', 'prefix': image_data[:32]})
+                        h.update(image_data[:32].encode('utf-8'))
                     else:
-                        content_list.append({'type': 'image_url', 'url': image_data})
-            request_data['messages'].append({'role': msg.role, 'content': content_list})
-    
-    # 将字典转换为JSON字符串并计算哈希值
-    json_data = json.dumps(request_data, sort_keys=True)
-    return hashlib.md5(json_data.encode()).hexdigest()
+                        h.update(image_data.encode('utf-8'))
+            
+    return h.hexdigest()
 
-def generate_cache_key(chat_request, last_n_user_messages: int = 4) -> str:
+def generate_cache_key(chat_request, last_n_user_messages: int = 8) -> str:
     """
     根据模型名称和最后 N 条消息生成请求的唯一缓存键。
     Args:
         chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
         last_n_user_messages: 需要包含在缓存键计算中的最后消息的数量。
     Returns:
-        一个代表该请求的唯一缓存键字符串 (MD5哈希值)。
+        一个代表该请求的唯一缓存键字符串 (xxhash64哈希值)。
     """
+    h = xxhash.xxh64()
+    
+    # 1. 哈希模型名称
+    h.update(chat_request.model.encode('utf-8'))
+
     if last_n_user_messages <= 0:
-        # 如果不考虑任何消息，只基于模型生成key
-        key_data = {'model': chat_request.model}
-        json_data = json.dumps(key_data, sort_keys=True)
-        return hashlib.md5(json_data.encode()).hexdigest()
-    
-    selected_user_messages_reversed = [] # 临时存放反向找到的消息
-    user_messages_found = 0
-    
-    # 从消息列表末尾开始向前查找
+        # 如果不考虑消息，直接返回基于模型的哈希
+        return h.hexdigest()
+
+    messages_processed = 0
+    # 2. 增量哈希最后 N 条消息 (从后往前)
     for msg in reversed(chat_request.messages):
-        processed_content = None
-        
+        if messages_processed >= last_n_user_messages:
+            break
+
+        # 哈希角色
+        h.update(b'role:')
+        h.update(msg.role.encode('utf-8'))
+
+        # 哈希内容
         if isinstance(msg.content, str):
-            processed_content = msg.content
+            h.update(b'text:')
+            h.update(msg.content.encode('utf-8'))
         elif isinstance(msg.content, list):
-            # 处理图文混合内容 
-            content_list = []
+            # 处理图文混合内容
             for item in msg.content:
                 item_type = item.get('type') if hasattr(item, 'get') else None
                 if item_type == 'text':
                     text = item.get('text', '') if hasattr(item, 'get') else ''
-                    content_list.append({'type': 'text', 'text': text})
+                    h.update(b'text:') 
+                    h.update(text.encode('utf-8'))
                 elif item_type == 'image_url':
                     image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
-                    
                     image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
+                    
+                    h.update(b'image_url:') # 加入类型标识符
                     if image_data.startswith('data:image/'):
                         # 对于base64图像，使用前32字符作为标识符
-                        content_list.append({'type': 'image_url', 'prefix': image_data[:32]})
+                        h.update(image_data[:32].encode('utf-8'))
                     else:
-                        content_list.append({'type': 'image_url', 'url': image_data})
-            
-            processed_content = content_list
+                        h.update(image_data.encode('utf-8'))
+
+        messages_processed += 1
         
-        # 如果内容成功处理，则添加到列表中
-        if processed_content is not None:
-            
-            selected_user_messages_reversed.append({
-                'role': msg.role, 
-                'content': processed_content
-            })
-            user_messages_found += 1
-            # 如果已找到足够数量的消息，停止遍历
-            if user_messages_found >= last_n_user_messages:
-                break 
-   
-    
-    # 创建用于生成缓存键的数据结构，只包含模型和选定的消息（反序）
-    key_data = {
-        'model': chat_request.model,
-        'last_user_messages': selected_user_messages_reversed # 使用特定键名区分
-    }
-    # 将字典转换为排序后的JSON字符串并计算哈希值
-    # 使用 sort_keys=True 确保相同内容但顺序不同的字典能生成相同的key
-    json_data = json.dumps(key_data, sort_keys=True)
-    return hashlib.md5(json_data.encode()).hexdigest()
+    return h.hexdigest()

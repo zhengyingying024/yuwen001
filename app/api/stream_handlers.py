@@ -234,6 +234,9 @@ async def process_stream_request(
         log('error', "所有API密钥均请求失败，请稍后重试",
             extra={'key': 'ALL', 'request_type': 'stream', 'model': chat_request.model})
         
+        if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
+            yield openAI_stream_chunk(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop")
+
         # 发送错误信息给客户端
         yield openAI_stream_chunk(model=chat_request.model,content="所有API密钥均请求失败，请稍后重试",finish_reason="stop")
 

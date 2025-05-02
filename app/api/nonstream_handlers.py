@@ -276,4 +276,7 @@ async def process_request(
     # 如果所有尝试都失败
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
     
+    if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
+        raise HTTPException(status_code=400, detail="空响应次数达到限制\n请修改输入提示词或开启防截断")
+
     raise HTTPException(status_code=500, detail=f"API key 替换失败，所有API key都已尝试，请重新配置或稍后重试")

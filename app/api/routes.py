@@ -67,6 +67,12 @@ def init_router(
 async def custom_verify_password(request: Request):
     await verify_password(request, settings.PASSWORD)
 
+async def verify_user_agent(request: Request):
+    if not settings.WHITELIST_USER_AGENT:
+        return
+    if request.headers.get("User-Agent") not in settings.WHITELIST_USER_AGENT:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed client")
+
 def get_cached(cache_key,is_stream: bool):
     # 检查缓存是否存在，如果存在，返回缓存
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
@@ -84,7 +90,8 @@ def get_cached(cache_key,is_stream: bool):
     return None
 
 @router.get("/aistudio/models",response_model=ModelList)
-async def aistudio_list_models(_: None = Depends(custom_verify_password)):
+async def aistudio_list_models(_ = Depends(custom_verify_password),
+                               _2 = Depends(verify_user_agent)):
     # 使用原有的Gemini实现
     if settings.PUBLIC_MODE:
         filtered_models = ["gemini-2.5-pro-exp-03-25","gemini-2.5-flash-preview-04-17"]
@@ -95,7 +102,8 @@ async def aistudio_list_models(_: None = Depends(custom_verify_password)):
     return ModelList(data=[{"id": model, "object": "model", "created": 1678888888, "owned_by": "organization-owner"} for model in filtered_models])
 
 @router.get("/vertex/models",response_model=ModelList)
-async def vertex_list_models(_: None = Depends(custom_verify_password)):
+async def vertex_list_models(_ = Depends(custom_verify_password),
+                             _2 = Depends(verify_user_agent)):
     # 使用Vertex AI实现
     from app.vertex.vertex import list_models as vertex_list_models
     
@@ -108,13 +116,16 @@ async def vertex_list_models(_: None = Depends(custom_verify_password)):
 # API路由
 @router.get("/v1/models",response_model=ModelList)
 @router.get("/models",response_model=ModelList)
-async def list_models(_: None = Depends(custom_verify_password)):
+async def list_models(_ = Depends(custom_verify_password),
+                      _2 = Depends(verify_user_agent)):
     if settings.ENABLE_VERTEX:
-        return await vertex_list_models(_)
-    return await aistudio_list_models(_)
+        return await vertex_list_models(_, _2)
+    return await aistudio_list_models(_, _2)
 
 @router.post("/aistudio/chat/completions", response_model=ChatCompletionResponse)
-async def aistudio_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
+async def aistudio_chat_completions(request: ChatCompletionRequest, http_request: Request,
+                                    _ = Depends(custom_verify_password),
+                                    _2 = Depends(verify_user_agent)):
     
     global current_api_key
     
@@ -231,7 +242,9 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         raise HTTPException(status_code=500, detail=f" hajimi 服务器内部处理时发生错误")
 
 @router.post("/vertex/chat/completions", response_model=ChatCompletionResponse)
-async def vertex_chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
+async def vertex_chat_completions(request: ChatCompletionRequest, http_request: Request,
+                                  _ = Depends(custom_verify_password),
+                                  _2 = Depends(verify_user_agent)):
     global current_api_key
 
     # 使用Vertex AI实现
@@ -269,8 +282,10 @@ async def vertex_chat_completions(request: ChatCompletionRequest, http_request: 
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 @router.post("/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completions(request: ChatCompletionRequest, http_request: Request, _: None = Depends(custom_verify_password)):
+async def chat_completions(request: ChatCompletionRequest, http_request: Request,
+                           _ = Depends(custom_verify_password),
+                           _2 = Depends(verify_user_agent)):
     """处理API请求的主函数，根据需要处理流式或非流式请求"""
     if settings.ENABLE_VERTEX:
-        return await vertex_chat_completions(request, http_request, _)
-    return await aistudio_chat_completions(request, http_request, _)
+        return await vertex_chat_completions(request, http_request, _, _2)
+    return await aistudio_chat_completions(request, http_request, _, _2)

@@ -6,7 +6,7 @@ import random
 from fastapi.responses import StreamingResponse
 from app.models import ChatCompletionRequest
 from app.services import GeminiClient
-from app.utils import handle_gemini_error, update_api_call_stats,log,openAI_stream_chunk
+from app.utils import handle_gemini_error, update_api_call_stats,log,openAI_from_text
 from app.utils.response import openAI_from_Gemini
 from app.utils.stats import get_api_key_usage
 import app.config.settings as settings
@@ -118,7 +118,7 @@ async def process_stream_request(
                 
                 # 如果没有任务完成，发送保活消息
                 if not done : 
-                    yield openAI_stream_chunk(model=chat_request.model,content='')
+                    yield openAI_from_text(model=chat_request.model,content='',stream=True)
                     continue
                 
                 # 检查已完成的任务是否成功
@@ -234,10 +234,10 @@ async def process_stream_request(
             extra={'key': 'ALL', 'request_type': 'stream', 'model': chat_request.model})
         
         if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
-            yield openAI_stream_chunk(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop")
+            yield openAI_from_text(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop",stream=True)
 
         # 发送错误信息给客户端
-        yield openAI_stream_chunk(model=chat_request.model,content="所有API密钥均请求失败，请稍后重试",finish_reason="stop")
+        yield openAI_from_text(model=chat_request.model,content="所有API密钥均请求失败，请稍后重试",finish_reason="stop")
 
     # 处理假流式模式
     async def handle_fake_streaming(api_key,chat_request, contents, response_cache_manager,system_instruction, safety_settings, safety_settings_g2, cache_key):

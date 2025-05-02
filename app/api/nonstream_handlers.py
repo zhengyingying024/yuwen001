@@ -156,27 +156,27 @@ async def process_request(
     current_concurrent = settings.CONCURRENT_REQUESTS
     max_retry_num = settings.MAX_RETRY_NUM
     
-    # 获取所有可用的API密钥
-    all_keys = key_manager.api_keys.copy()
-    random.shuffle(all_keys)
-    
-    # 检查每个API密钥的调用次数，过滤掉超过限制的密钥
+    # 获取有效的API密钥
     valid_keys = []
-    for api_key in all_keys:
-        # 获取API密钥的调用次数
-        usage = await get_api_key_usage(settings.api_call_stats, api_key)
-        # 如果调用次数小于限制，则添加到有效密钥列表
-        if usage < settings.API_KEY_DAILY_LIMIT:
-            valid_keys.append(api_key)
-        else:
-            log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
-                extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+    for _ in range(len(key_manager.api_keys)):
+        api_key = key_manager.get_available_key()
+        if api_key:
+            # 获取API密钥的调用次数
+            usage = await get_api_key_usage(settings.api_call_stats, api_key)
+            # 如果调用次数小于限制，则添加到有效密钥列表
+            if usage < settings.API_KEY_DAILY_LIMIT:
+                valid_keys.append(api_key)
+            else:
+                log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
+                    extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
     
     # 如果没有有效密钥，则随机使用一个密钥
     if not valid_keys:
         log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
             extra={'request_type': request_type, 'model': chat_request.model})
-        valid_keys = [random.choice(all_keys)]
+        # 重置密钥栈并获取一个密钥
+        key_manager._reset_key_stack()
+        valid_keys = [key_manager.get_available_key()]
     
     # 如果可用密钥数量小于并发数，则使用所有可用密钥
     if len(valid_keys) < current_concurrent:
@@ -242,7 +242,7 @@ async def process_request(
                     if status == "success" :  
                         success = True
                         log('info', f"非流式请求成功", 
-                            extra={'request_type': request_type, 'model': chat_request.model})
+                            extra={'key': api_key[:8],'request_type': request_type, 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                         return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":

@@ -9,7 +9,7 @@ from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
-from app.utils.response import openAI_from_Gemini
+from app.utils.response import openAI_from_Gemini, openAI_from_text
 from app.utils.stats import get_api_key_usage
 
 
@@ -264,16 +264,16 @@ async def process_request(
             log('info', f"所有并发请求失败或返回空响应，增加并发数至: {current_concurrent}", 
                 extra={'request_type': request_type, 'model': chat_request.model})
         
-        # 如果空响应次数达到限制，跳出循环
+        # 如果空响应次数达到限制，跳出循环，并返回酒馆正常响应(包含错误信息)
         if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
             log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
                 extra={'request_type': request_type, 'model': chat_request.model})
-            break
+            
+            return openAI_from_text(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop",stream=False)
     
     # 如果所有尝试都失败
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
     
-    if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
-        raise HTTPException(status_code=400, detail="空响应次数达到限制\n请修改输入提示词或开启防截断")
+    return openAI_from_text(model=chat_request.model,content="所有 API 密钥均请求失败\n具体错误请查看轮询日志",finish_reason="stop",stream=False)
 
-    raise HTTPException(status_code=500, detail=f"API key 替换失败，所有API key都已尝试，请重新配置或稍后重试")
+    # raise HTTPException(status_code=500, detail=f"API key 替换失败，所有API key都已尝试，请重新配置或稍后重试")

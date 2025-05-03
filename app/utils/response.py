@@ -34,13 +34,13 @@ def openAI_from_text(model="gemini",content=None,finish_reason=None,total_token_
 
 def openAI_from_Gemini(response,stream=True):
     """
-    根据 GeminiResponseWrapper 对象创建 OpenAI 流式标准响应对象块 (SSE 格式)。
+    根据 GeminiResponseWrapper 对象创建 OpenAI 标准响应对象块。
 
     Args:
         response: GeminiResponseWrapper 对象，包含响应数据。
 
     Returns:
-        格式化后的 SSE 字符串 ("data: {...}\n\n")。
+        OpenAI 标准响应
     """
     now_time = int(time.time())
     chunk_id = f"chatcmpl-{now_time}" # 使用时间戳生成唯一 ID 

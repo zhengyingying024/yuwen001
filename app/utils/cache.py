@@ -116,7 +116,7 @@ class ResponseCacheManager:
         # 计算目标大小和需要移除的数量
         target_size = max(self.max_entries - 5, 10)
         if self.cur_cache_num <= target_size: # 可能在并发场景下已经被清理
-             return
+            return
              
         items_to_remove_count = self.cur_cache_num - target_size
         log('info', f"缓存总数 {self.cur_cache_num} 超过限制 {self.max_entries}，需要清理 {items_to_remove_count} 个")

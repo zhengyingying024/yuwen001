@@ -156,39 +156,40 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
     if cached_response :
         return cached_response
     
-    # 构建包含缓存键的活跃请求池键
-    pool_key = f"{cache_key}"
-    
-    # 查找所有使用相同缓存键的活跃任务
-    active_task = active_requests_manager.get(pool_key)
-    if active_task and not active_task.done():
-        log('info', f"发现相同请求的进行中任务", 
-            extra={'request_type': 'stream' if request.stream else "non-stream", 'model': request.model})
+    if not settings.PUBLIC_MODE:
+        # 构建包含缓存键的活跃请求池键
+        pool_key = f"{cache_key}"
         
-        # 等待已有任务完成
-        try:
-            # 设置超时，避免无限等待
-            await asyncio.wait_for(active_task, timeout=180)
+        # 查找所有使用相同缓存键的活跃任务
+        active_task = active_requests_manager.get(pool_key)
+        if active_task and not active_task.done():
+            log('info', f"发现相同请求的进行中任务", 
+                extra={'request_type': 'stream' if request.stream else "non-stream", 'model': request.model})
             
-            # 使用任务结果
-            if active_task.done() and not active_task.cancelled():
+            # 等待已有任务完成
+            try:
+                # 设置超时，避免无限等待
+                await asyncio.wait_for(active_task, timeout=180)
                 
-                result = active_task.result()
-                active_requests_manager.remove(pool_key)
-                if result:
-                    return result
-        
-        except (asyncio.TimeoutError, asyncio.CancelledError) as e:
-            # 任务超时或被取消的情况下，记录日志然后让代码继续执行
-            error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"
-            log('warning', f"等待已有任务{error_type}: {pool_key}", 
-                extra={'request_type': 'non-stream', 'model': request.model})
+                # 使用任务结果
+                if active_task.done() and not active_task.cancelled():
+                    
+                    result = active_task.result()
+                    active_requests_manager.remove(pool_key)
+                    if result:
+                        return result
             
-            # 从活跃请求池移除该任务
-            if active_task.done() or active_task.cancelled():
-                active_requests_manager.remove(pool_key)
-                log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
-                    extra={'request_type': 'non-stream'})
+            except (asyncio.TimeoutError, asyncio.CancelledError) as e:
+                # 任务超时或被取消的情况下，记录日志然后让代码继续执行
+                error_type = "超时" if isinstance(e, asyncio.TimeoutError) else "被取消"
+                log('warning', f"等待已有任务{error_type}: {pool_key}", 
+                    extra={'request_type': 'non-stream', 'model': request.model})
+                
+                # 从活跃请求池移除该任务
+                if active_task.done() or active_task.cancelled():
+                    active_requests_manager.remove(pool_key)
+                    log('info', f"已从活跃请求池移除{error_type}任务: {pool_key}", 
+                        extra={'request_type': 'non-stream'})
     
         
     if request.stream:
@@ -219,22 +220,25 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
             )
         )
 
-    
-    # 将任务添加到活跃请求池
-    active_requests_manager.add(pool_key, process_task)
+    if not settings.PUBLIC_MODE:
+        # 将任务添加到活跃请求池
+        active_requests_manager.add(pool_key, process_task)
     
     # 等待任务完成
     try:
         response = await process_task
-        active_requests_manager.remove(pool_key)
+        if not settings.PUBLIC_MODE:
+            active_requests_manager.remove(pool_key)
+        
         return response
     except Exception as e:
-        # 如果任务失败，从活跃请求池中移除
-        active_requests_manager.remove(pool_key)
+        if not settings.PUBLIC_MODE:
+            # 如果任务失败，从活跃请求池中移除
+            active_requests_manager.remove(pool_key)
         
         # 检查是否已有缓存的结果（可能是由另一个任务创建的）
         cached_response = get_cached(cache_key, is_stream = request.stream)
-        if cached_response : 
+        if cached_response :
             return cached_response
         
         # 发送错误信息给客户端

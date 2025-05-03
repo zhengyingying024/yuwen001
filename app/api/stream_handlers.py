@@ -242,16 +242,15 @@ async def handle_fake_streaming(api_key,chat_request, contents, response_cache_m
     # 使用非流式请求内容
     gemini_client = GeminiClient(api_key)
     
-    api_call_future = asyncio.create_task(
-        asyncio.to_thread(
-            gemini_client.complete_chat,
+    gemini_task = asyncio.create_task(
+        gemini_client.complete_chat( 
             chat_request,
             contents,
             safety_settings_g2 if 'gemini-2.5' in chat_request.model else safety_settings,
             system_instruction
         )
     )
-    gemini_task = asyncio.shield(api_call_future)
+    gemini_task = asyncio.shield(gemini_task)
     
     try:
         # 获取响应内容

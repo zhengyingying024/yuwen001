@@ -209,9 +209,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         # 创建非流式请求处理任务
         process_task = asyncio.create_task(
             process_request(
-                chat_request = request, 
-                http_request = http_request, 
-                request_type = "non-stream", 
+                chat_request = request,
                 key_manager = key_manager,
                 response_cache_manager = response_cache_manager,
                 safety_settings = safety_settings,

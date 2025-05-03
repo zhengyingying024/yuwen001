@@ -1,7 +1,7 @@
-import requests
 import json
 import os
 import asyncio
+import httpx # 添加 httpx 导入
 from app.models import ChatCompletionRequest, Message
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
@@ -281,7 +281,7 @@ class GeminiClient:
                     log('info', "流式请求结束")
 
     # 非流式处理
-    def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
+    async def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")
@@ -291,8 +291,9 @@ class GeminiClient:
         }
         
         try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=data, timeout=600) 
+                response.raise_for_status() # 检查 HTTP 错误状态
             
             return GeminiResponseWrapper(response.json())
         except Exception as e:

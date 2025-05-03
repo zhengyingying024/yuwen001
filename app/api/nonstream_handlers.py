@@ -5,7 +5,6 @@ from app.services import GeminiClient
 from app.utils import update_api_call_stats
 from app.utils.error_handling import handle_gemini_error
 from app.utils.logging import log
-from .client_disconnect import check_client_disconnect, handle_client_disconnect
 import app.config.settings as settings
 import random
 from typing import Literal
@@ -15,9 +14,7 @@ from app.utils.stats import get_api_key_usage
 
 # 非流式请求处理函数
 async def process_nonstream_request(
-    chat_request: ChatCompletionRequest, 
-    http_request: Request, 
-    request_type: str,
+    chat_request: ChatCompletionRequest,
     contents,
     system_instruction,
     current_api_key: str,
@@ -31,105 +28,45 @@ async def process_nonstream_request(
     if settings.PUBLIC_MODE:
         settings.MAX_RETRY_NUM = 3
     # 创建调用 Gemini API 的主任务
-    api_call_future = asyncio.create_task(
-        asyncio.to_thread(
-            gemini_client.complete_chat,
+    gemini_task = asyncio.create_task(
+        gemini_client.complete_chat(
             chat_request,
             contents,
             safety_settings_g2 if 'gemini-2.5' in chat_request.model else safety_settings,
             system_instruction
         )
     )
-    gemini_task = asyncio.shield(api_call_future)
-    
-    # 创建监控客户端连接状态的任务
-    disconnect_task = asyncio.create_task(
-        check_client_disconnect(
-            http_request,
-            current_api_key,
-            request_type,
-            chat_request.model
-        )
-    )
+    # 使用 shield 保护任务不被外部轻易取消
+    shielded_gemini_task = asyncio.shield(gemini_task)
 
-    try:        
-        # 先等待看是否API任务先完成，或者客户端先断开连接
-        done, pending = await asyncio.wait(
-            [gemini_task, disconnect_task],
-            return_when=asyncio.FIRST_COMPLETED
-        )
-
-        if disconnect_task in done:
-            # 客户端已断开连接，但我们仍继续完成API请求以便缓存结果
-            result = await handle_client_disconnect(
-                gemini_task,
-                chat_request,
-                request_type,
-                current_api_key,
-                response_cache_manager,
-                cache_key,
-                chat_request.model,
-                current_api_key
-            )
-            return ("success" if result else "empty")
-
-        else:
-            # API任务先完成，取消断开检测任务
-            disconnect_task.cancel()
-            # 获取响应内容
-            response_content = await gemini_task
-            response_content.set_model(chat_request.model)
-            
-            # 检查响应内容是否为空
-            if not response_content or not response_content.text:
-                log('warning', f"API密钥 {current_api_key[:8]}... 返回空响应",
-                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                return "empty"
-            
-            # 缓存       
-            response_cache_manager.store(cache_key, response_content)
-            
-            # log('info', f"请求成功，缓存响应: {cache_key[:8]}...",
-            #     extra={'request_type': request_type, 'model': chat_request.model})
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count) 
-            
-            return "success"
-
-    except asyncio.CancelledError:
+    try:
+        # 等待受保护的 API 调用任务完成
+        response_content = await shielded_gemini_task
+        response_content.set_model(chat_request.model)
         
-        # 尝试完成正在进行的API请求
-        if not gemini_task.done():
-            
-            # 使用shield确保任务不会被取消
-            response_content = await asyncio.shield(gemini_task)
-            response_content.set_model(chat_request.model)
-            
-            # 更新API调用统计
-            await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count)
-            
-            # 检查响应内容是否为空
-            if not response_content or not response_content.text:
-                log('warning', f"非流式请求(取消后):返回空响应",
-                    extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-                return "empty"
-            
-            # 缓存
-            response_cache_manager.store(cache_key, response_content)
-            
-            return "success"
+        # 检查响应内容是否为空
+        if not response_content or not response_content.text:
+            log('warning', f"API密钥 {current_api_key[:8]}... 返回空响应",
+                extra={'key': current_api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})
+            return "empty"
+        
+        # 缓存响应结果
+        response_cache_manager.store(cache_key, response_content)
+        
+        # 更新 API 调用统计
+        await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count)
+        
+        return "success"
 
     except Exception as e:
-        handle_gemini_error(e,current_api_key)
-        # log('error', f"非流式请求异常: {str(e)}", 
-        #     extra={'key': current_api_key[:8], 'request_type': request_type, 'model': chat_request.model})
-        return "error"
+        # 处理 API 调用过程中可能发生的任何异常
+        handle_gemini_error(e, current_api_key) 
+        return "error" 
     
     
 # 处理 route 中发起请求的函数
 async def process_request(
-    chat_request: ChatCompletionRequest, 
-    http_request: Request, 
-    request_type: Literal['stream', 'non-stream'], 
+    chat_request: ChatCompletionRequest,
     key_manager,
     response_cache_manager,
     safety_settings,
@@ -147,7 +84,7 @@ async def process_request(
     cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
         log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
-            extra={'request_type': request_type, 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
+            extra={'request_type': 'non-stream', 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
         return openAI_from_Gemini(cached_response,stream=False)
     
     # 重置已尝试的密钥
@@ -168,12 +105,12 @@ async def process_request(
                 valid_keys.append(api_key)
             else:
                 log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
-                    extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                    extra={'key': api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})
     
     # 如果没有有效密钥，则随机使用一个密钥
     if not valid_keys:
         log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
-            extra={'request_type': request_type, 'model': chat_request.model})
+            extra={'request_type': 'non-stream', 'model': chat_request.model})
         # 重置密钥栈并获取一个密钥
         key_manager._reset_key_stack()
         valid_keys = [key_manager.get_available_key()]
@@ -205,14 +142,12 @@ async def process_request(
         for api_key in current_batch:
             # 记录当前尝试的密钥信息
             log('info', f"非流式请求开始，使用密钥: {api_key[:8]}...", 
-                extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                extra={'key': api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})
             
             # 创建任务
             task = asyncio.create_task(
                 process_nonstream_request(
                     chat_request,
-                    http_request,
-                    request_type,
                     contents,
                     system_instruction,
                     api_key,
@@ -242,14 +177,14 @@ async def process_request(
                     if status == "success" :  
                         success = True
                         log('info', f"非流式请求成功", 
-                            extra={'key': api_key[:8],'request_type': request_type, 'model': chat_request.model})
+                            extra={'key': api_key[:8],'request_type': 'non-stream', 'model': chat_request.model})
                         cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
                         return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":
                         # 增加空响应计数
                         empty_response_count += 1
                         log('warning', f"空响应计数: {empty_response_count}/{settings.MAX_EMPTY_RESPONSES}",
-                            extra={'key': api_key[:8], 'request_type': request_type, 'model': chat_request.model})
+                            extra={'key': api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})
                 
                 except Exception as e:
                     handle_gemini_error(e, api_key)
@@ -262,12 +197,12 @@ async def process_request(
             # 增加并发数，但不超过最大并发数
             current_concurrent = min(current_concurrent + settings.INCREASE_CONCURRENT_ON_FAILURE, settings.MAX_CONCURRENT_REQUESTS)
             log('info', f"所有并发请求失败或返回空响应，增加并发数至: {current_concurrent}", 
-                extra={'request_type': request_type, 'model': chat_request.model})
+                extra={'request_type': 'non-stream', 'model': chat_request.model})
         
         # 如果空响应次数达到限制，跳出循环，并返回酒馆正常响应(包含错误信息)
         if empty_response_count >= settings.MAX_EMPTY_RESPONSES:
             log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
-                extra={'request_type': request_type, 'model': chat_request.model})
+                extra={'request_type': 'non-stream', 'model': chat_request.model})
             
             return openAI_from_text(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop",stream=False)
     

@@ -23,7 +23,8 @@ const configExplanations = {
   localVersion: '当前系统版本号',
   remoteVersion: '远程仓库最新版本号',
   hasUpdate: '是否有可用更新',
-  searchMode: '是否启用联网搜索功能'
+  searchMode: '是否启用联网搜索功能',
+  searchPrompt: '联网搜索提示'
 }
 
 // 显示解释的工具提示
@@ -242,6 +243,25 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
             min="1"
             class="edit-input"
           >
+          
+          <!-- 字符串输入 -->
+          <template v-else-if="getConfigType(editingConfig) === 'string'">
+            <!-- 特殊处理searchPrompt，使用textarea -->
+            <textarea
+              v-if="editingConfig === 'searchPrompt'"
+              v-model="editValue"
+              class="edit-input text-area"
+              rows="4"
+              placeholder="请输入联网搜索提示"
+            ></textarea>
+            <!-- 其他字符串使用普通input -->
+            <input 
+              v-else
+              type="text" 
+              v-model="editValue"
+              class="edit-input"
+            >
+          </template>
           
           <!-- 密码输入 -->
           <div v-if="showPasswordInput" class="password-field">
@@ -528,6 +548,13 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
   outline: none;
   border-color: var(--button-primary);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.text-area {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  line-height: 1.5;
 }
 
 .boolean-selector {

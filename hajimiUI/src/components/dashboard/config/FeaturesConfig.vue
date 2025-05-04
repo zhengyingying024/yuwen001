@@ -31,7 +31,7 @@ const props = defineProps({
         </button>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ dashboardStore.config.searchPrompt ? '已设置' : '未设置' }}</div>
+        <div class="stat-value">{{ dashboardStore.config.searchPrompt ? (dashboardStore.config.searchPrompt.length > 10 ? dashboardStore.config.searchPrompt.substring(0, 10) + '...' : dashboardStore.config.searchPrompt) : '未设置' }}</div>
         <div class="stat-label">联网搜索提示</div>
         <button class="edit-btn" @click="props.openEditDialog('searchPrompt', dashboardStore.config.searchPrompt)">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -74,18 +74,36 @@ async def check_key(key):
     return key if is_valid else None
 
 def check_key_in_thread(key):
-    """在线程中运行异步检查密钥函数"""
+    """在线程中检查单个API密钥的有效性"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        valid_key = loop.run_until_complete(check_key(key))
-        if valid_key:
-            # 如果密钥有效，立即添加到可用列表中
-            key_manager.api_keys.append(valid_key)
-            # 重置密钥栈以包含新的有效密钥
+        is_valid = loop.run_until_complete(test_api_key(key))
+        if is_valid:
+            # 密钥有效，添加到可用列表
+            key_manager.api_keys.append(key)
             key_manager._reset_key_stack()
-            log('info', f"API Key {valid_key[:8]}... 已添加到可用列表")
-        return valid_key
+            log('info', f"API Key {key[:8]}... 有效，已添加到可用列表")
+        else:
+            log('warning', f"API Key {key[:8]}... 无效")
+    finally:
+        loop.close()
+
+def check_key_in_thread_with_invalid(key, invalid_keys_list):
+    """在线程中检查单个API密钥的有效性并收集无效密钥"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        is_valid = loop.run_until_complete(test_api_key(key))
+        if is_valid:
+            # 密钥有效，添加到可用列表
+            key_manager.api_keys.append(key)
+            key_manager._reset_key_stack()
+            log('info', f"API Key {key[:8]}... 有效，已添加到可用列表")
+        else:
+            # 密钥无效，添加到无效列表
+            invalid_keys_list.append(key)
+            log('warning', f"API Key {key[:8]}... 无效，已添加到无效列表")
     finally:
         loop.close()
 
@@ -133,10 +151,13 @@ async def startup_event():
     # 检查版本
     await check_version()
     load_settings()
-    save_settings()
+    
     # 先同步检查一个密钥，用于加载可用模型
     all_keys = key_manager.api_keys.copy()
     key_manager.api_keys = []  # 清空当前密钥列表
+    
+    # 无效密钥列表
+    invalid_keys = []
     
     # 尝试找到一个有效的密钥
     valid_key_found = False
@@ -158,26 +179,48 @@ async def startup_event():
                 log('warning', f"无法加载可用模型: {str(e)}")
             
             break  # 找到一个有效密钥后就跳出循环
+        else:
+            # 将无效密钥添加到无效列表
+            invalid_keys.append(key)
+            log('warning', f"初始检查: API Key {key[:8]}... 无效，已添加到无效列表")
     
     if not valid_key_found:
         log('warning', "初始检查未找到有效密钥，将在后台继续检查")
     
     if not SKIP_CHECK_API_KEY:
         # 在后台线程中检查剩余的密钥
-        remaining_keys = [k for k in all_keys if k not in key_manager.api_keys]
+        remaining_keys = [k for k in all_keys if k not in key_manager.api_keys and k not in invalid_keys]
         if remaining_keys:
             def check_remaining_keys():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
+                    # 创建收集无效密钥的列表
+                    thread_invalid_keys = []
+                    
                     # 创建线程池检查剩余密钥
                     with ThreadPoolExecutor(max_workers=min(10, len(remaining_keys))) as executor:
-                        future_to_key = {executor.submit(check_key_in_thread, key): key for key in remaining_keys}
+                        # 修改为使用自定义函数处理无效密钥
+                        future_to_key = {executor.submit(check_key_in_thread_with_invalid, key, thread_invalid_keys): key for key in remaining_keys}
                         for future in future_to_key:
                             try:
                                 future.result()
                             except Exception as exc:
                                 log('error', f"检查密钥时发生错误: {exc}")
+                    
+                    # 合并所有无效密钥
+                    if thread_invalid_keys:
+                        # 将已有的无效密钥添加进来
+                        current_invalid_keys = settings.INVALID_API_KEYS.split(',') if settings.INVALID_API_KEYS else []
+                        current_invalid_keys = [k.strip() for k in current_invalid_keys if k.strip()]
+                        
+                        # 合并无效密钥列表
+                        all_invalid_keys = list(set(current_invalid_keys + invalid_keys + thread_invalid_keys))
+                        settings.INVALID_API_KEYS = ','.join(all_invalid_keys)
+                        
+                        # 保存设置
+                        save_settings()
+                        log('info', f"更新无效密钥列表，共有 {len(all_invalid_keys)} 个无效密钥")
                 finally:
                     loop.close()
                     log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
@@ -189,6 +232,20 @@ async def startup_event():
     elif valid_key_found:
         idx = all_keys.index(key_manager.api_keys[-1])
         key_manager.api_keys += all_keys[idx+1:]
+    
+    # 将初始检查发现的无效密钥添加到INVALID_API_KEYS
+    if invalid_keys:
+        # 获取现有无效密钥
+        current_invalid_keys = settings.INVALID_API_KEYS.split(',') if settings.INVALID_API_KEYS else []
+        current_invalid_keys = [k.strip() for k in current_invalid_keys if k.strip()]
+        
+        # 合并无效密钥列表并去重
+        all_invalid_keys = list(set(current_invalid_keys + invalid_keys))
+        settings.INVALID_API_KEYS = ','.join(all_invalid_keys)
+        log('info', f"更新无效密钥列表，共有 {len(all_invalid_keys)} 个无效密钥")
+    
+    # 保存设置
+    save_settings()
     
     if settings.PUBLIC_MODE:
         settings.MAX_RETRY_NUM = 3

@@ -7,7 +7,7 @@
 ### 0.2 构建镜像
 - 点击 Action。<br>![action](./img/action.png)
 - 点击绿色按钮 **I understand my workflows, go ahead and enable them**。
-- 在左侧选择 **Docker Image CI for GHCR**。<br>![image](./img/image.png)
+- 在左侧选择 **GHCR CI**。<br>![image](./img/image.png)
 - 点击右侧的 **Run workflow** 按钮。
 - 直接点击弹出的 **Run workflow**，开始构建镜像。
 - 镜像地址为：`ghcr.io/你的github用户名/hajimi:latest`，例如：`ghcr.io/wyeeeee/hajimi:latest`。

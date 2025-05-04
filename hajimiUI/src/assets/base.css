@@ -88,22 +88,22 @@
   --color-border-hover: var(--vt-c-divider-dark-1);
 
   --color-heading: var(--vt-c-text-dark-1);
-  --color-text: var(--vt-c-text-dark-2);
+  --color-text: rgba(255, 255, 255, 0.85);
   
   /* 自定义夜间模式颜色 */
   --card-background: #1a1a1a;
   --card-border: #2a2a2a;
-  --button-primary: #7c3aed;
-  --button-primary-hover: #6d28d9;
+  --button-primary: #8b5cf6;
+  --button-primary-hover: #7c3aed;
   --button-secondary: #2a2a2a;
   --button-secondary-hover: #3a3a3a;
-  --button-secondary-text: #cdd6f4;
+  --button-secondary-text: #f1f5f9;
   --button-text: #ffffff;
   --stats-item-bg: #151515;
   --log-entry-bg: #151515;
   --log-entry-border: #2a2a2a;
   --toggle-bg: #3a3a3a;
-  --toggle-active: #7c3aed;
+  --toggle-active: #8b5cf6;
   
   /* 深色模式渐变色 */
   --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
@@ -131,22 +131,22 @@
     --color-border-hover: var(--vt-c-divider-dark-1);
 
     --color-heading: var(--vt-c-text-dark-1);
-    --color-text: var(--vt-c-text-dark-2);
+    --color-text: rgba(255, 255, 255, 0.85);
     
     /* 自定义夜间模式颜色 */
     --card-background: #1a1a1a;
     --card-border: #2a2a2a;
-    --button-primary: #7c3aed;
-    --button-primary-hover: #6d28d9;
+    --button-primary: #8b5cf6;
+    --button-primary-hover: #7c3aed;
     --button-secondary: #2a2a2a;
     --button-secondary-hover: #3a3a3a;
-    --button-secondary-text: #cdd6f4;
+    --button-secondary-text: #f1f5f9;
     --button-text: #ffffff;
     --stats-item-bg: #151515;
     --log-entry-bg: #151515;
     --log-entry-border: #2a2a2a;
     --toggle-bg: #3a3a3a;
-    --toggle-active: #7c3aed;
+    --toggle-active: #8b5cf6;
     
     /* 深色模式渐变色 */
     --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);

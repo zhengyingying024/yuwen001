@@ -31,13 +31,18 @@ function initChart() {
   // 创建图表实例
   chart = echarts.init(chartContainer.value)
   
+  // 获取当前主题模式
+  const isDark = dashboardStore.isDarkMode
+  const textColor = isDark ? '#e0e0e0' : '#666'
+  const axisLineColor = isDark ? '#555' : '#ccc'
+  
   // 图表配置
   const option = {
     title: {
       text: 'API实时调用统计',
       left: 'center',
       textStyle: {
-        color: '#666'
+        color: textColor
       }
     },
     tooltip: {
@@ -51,7 +56,10 @@ function initChart() {
     },
     legend: {
       data: ['API调用次数', 'Token使用量'],
-      top: 30
+      top: 30,
+      textStyle: {
+        color: textColor
+      }
     },
     grid: {
       left: '3%',
@@ -64,7 +72,18 @@ function initChart() {
       boundaryGap: false,
       data: chartData.value.timestamps,
       axisLabel: {
-        rotate: 45
+        rotate: 45,
+        color: textColor
+      },
+      axisLine: {
+        lineStyle: {
+          color: axisLineColor
+        }
+      },
+      splitLine: {
+        lineStyle: {
+          color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+        }
       }
     },
     yAxis: [
@@ -79,7 +98,13 @@ function initChart() {
           }
         },
         axisLabel: {
-          formatter: '{value}'
+          formatter: '{value}',
+          color: textColor
+        },
+        splitLine: {
+          lineStyle: {
+            color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+          }
         }
       },
       {
@@ -93,7 +118,13 @@ function initChart() {
           }
         },
         axisLabel: {
-          formatter: '{value}'
+          formatter: '{value}',
+          color: textColor
+        },
+        splitLine: {
+          lineStyle: {
+            color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+          }
         }
       }
     ],

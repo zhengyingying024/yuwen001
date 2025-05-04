@@ -52,6 +52,17 @@ def openAI_from_Gemini(response,stream=True):
         "choices": [{"index": 0 , "finish_reason": response.finish_reason}] 
     }
 
+    # 准备 usage 数据，使用 getattr 获取并提供默认值 0 ( API 返回 None 时使用)
+    prompt_tokens = getattr(response, 'prompt_token_count', 0)
+    candidates_tokens = getattr(response, 'candidates_token_count', 0)
+    total_tokens = getattr(response, 'total_token_count', 0)
+
+    usage_data = {
+        "prompt_tokens": int(prompt_tokens), 
+        "completion_tokens": int(candidates_tokens),
+        "total_tokens": int(total_tokens)
+    }
+
     if response.function_call:
         tool_calls=[]
         # 处理函数调用的每一部分
@@ -79,18 +90,19 @@ def openAI_from_Gemini(response,stream=True):
         # 处理普通文本响应
         content_chunk = {"role": "assistant", "content": response.text}
     
-    if response.finish_reason == 'STOP':
-        formatted_chunk["usage"] ={
-            "prompt_tokens": response.prompt_token_count,
-            "completion_tokens": response.candidates_token_count,
-            "total_tokens": response.total_token_count
-        }    
-        
     if stream:
         formatted_chunk["choices"][0]["delta"] = content_chunk
         formatted_chunk["object"] = "chat.completion.chunk"
-        return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
+        # 仅在流结束时添加 usage 字段
+        if response.finish_reason:
+            formatted_chunk["usage"] = usage_data
     else:
         formatted_chunk["choices"][0]["message"] = content_chunk
         formatted_chunk["object"] = "chat.completion"
+        # 非流式响应总是包含 usage 字段，以满足 response_model 验证
+        formatted_chunk["usage"] = usage_data
+
+    if stream:
+        return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
+    else:
         return formatted_chunk

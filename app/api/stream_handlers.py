@@ -15,8 +15,6 @@ async def stream_response_generator(
     safety_settings_g2,
     cache_key: str
 ):
-    if settings.PUBLIC_MODE:
-        settings.MAX_RETRY_NUM = 3
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
     GeminiClient, chat_request.messages,model=chat_request.model)
@@ -48,7 +46,7 @@ async def stream_response_generator(
     
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
-    max_retry_num = settings.MAX_RETRY_NUM
+    max_retry_num = 3 if settings.PUBLIC_MODE else settings.MAX_RETRY_NUM
     
     
     # 如果可用密钥数量小于并发数，则使用所有可用密钥
@@ -186,7 +184,7 @@ async def stream_response_generator(
                 if chunk :
                     
                     if chunk.total_token_count:
-                        token += int(chunk.total_token_count)
+                        token = int(chunk.total_token_count)
                     success = True
                     data = openAI_from_Gemini(chunk,stream=True)
                     # log('info', f"流式响应发送数据: {data}")

@@ -11,7 +11,8 @@
 - 点击右侧的 **Run workflow** 按钮。
 - 直接点击弹出的 **Run workflow**，开始构建镜像。
 - 镜像地址为：`ghcr.io/你的github用户名/hajimi:latest`，例如：`ghcr.io/wyeeeee/hajimi:latest`。
-
+### 0.3 更新
+- 在你Fork的项目中点击**sync fork**，等待镜像自动构建完成后，在huggingface的settings中点击rebuild
 ## 1. 安装
 ### 1.1 配置
 ```Dockerfile

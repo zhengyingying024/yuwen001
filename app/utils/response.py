@@ -52,15 +52,15 @@ def openAI_from_Gemini(response,stream=True):
         "choices": [{"index": 0 , "finish_reason": response.finish_reason}] 
     }
 
-    # 准备 usage 数据，使用 getattr 获取并提供默认值 0 ( API 返回 None 时使用)
-    prompt_tokens = getattr(response, 'prompt_token_count', 0)
-    candidates_tokens = getattr(response, 'candidates_token_count', 0)
-    total_tokens = getattr(response, 'total_token_count', 0)
+    # 准备 usage 数据，处理属性缺失或为 None 的情况
+    prompt_tokens_raw = getattr(response, 'prompt_token_count', None)
+    candidates_tokens_raw = getattr(response, 'candidates_token_count', None)
+    total_tokens_raw = getattr(response, 'total_token_count', None)
 
     usage_data = {
-        "prompt_tokens": int(prompt_tokens), 
-        "completion_tokens": int(candidates_tokens),
-        "total_tokens": int(total_tokens)
+        "prompt_tokens": int(prompt_tokens_raw) if prompt_tokens_raw is not None else 0,
+        "completion_tokens": int(candidates_tokens_raw) if candidates_tokens_raw is not None else 0,
+        "total_tokens": int(total_tokens_raw) if total_tokens_raw is not None else 0
     }
 
     if response.function_call:

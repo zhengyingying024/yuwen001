@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timedelta
 import asyncio 
 GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS", "")
+#失效的API密钥
+INVALID_API_KEYS = os.environ.get("INVALID_API_KEYS", "")
 # 基础目录设置
 BASE_DIR = pathlib.Path(__file__).parent.parent
 # 存储目录

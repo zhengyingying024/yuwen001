@@ -16,6 +16,15 @@ const apiKeyError = ref('')
 const apiKeySuccess = ref('')
 const isSubmitting = ref(false)
 
+// 检测API密钥相关状态
+const showApiKeyTestDialog = ref(false)
+const apiKeyTestPassword = ref('')
+const apiKeyTestError = ref('')
+const apiKeyTestSuccess = ref('')
+const isTestingKeys = ref(false)
+const testingProgress = ref(0)
+const testingTotal = ref(0)
+
 // 分页相关
 const currentPage = ref(1)
 const itemsPerPage = 20
@@ -23,6 +32,17 @@ const itemsPerPage = 20
 // 切换API密钥统计显示/隐藏
 function toggleApiKeyStats() {
   apiKeyStatsVisible.value = !apiKeyStatsVisible.value
+}
+
+// 切换API密钥测试对话框显示/隐藏
+function toggleApiKeyTestDialog() {
+  showApiKeyTestDialog.value = !showApiKeyTestDialog.value
+  if (!showApiKeyTestDialog.value) {
+    // 重置表单
+    apiKeyTestPassword.value = ''
+    apiKeyTestError.value = ''
+    apiKeyTestSuccess.value = ''
+  }
 }
 
 // 切换API密钥输入表单显示/隐藏
@@ -91,6 +111,73 @@ async function submitApiKeys() {
     apiKeyError.value = error.message || '添加API密钥失败'
   } finally {
     isSubmitting.value = false
+  }
+}
+
+// 提交API密钥检测
+async function submitApiKeyTest() {
+  // 重置消息
+  apiKeyTestError.value = ''
+  apiKeyTestSuccess.value = ''
+  
+  // 表单验证
+  if (!apiKeyTestPassword.value.trim()) {
+    apiKeyTestError.value = '请输入密码'
+    return
+  }
+  
+  isTestingKeys.value = true
+  testingProgress.value = 0
+  
+  try {
+    // 调用API进行密钥检测
+    const response = await fetch('/api/test-api-keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        password: apiKeyTestPassword.value
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || '测试API密钥失败')
+    }
+    
+    // 开始轮询检测进度
+    const pollInterval = setInterval(async () => {
+      try {
+        const progressResponse = await fetch('/api/test-api-keys/progress')
+        const progressData = await progressResponse.json()
+        
+        testingProgress.value = progressData.completed
+        testingTotal.value = progressData.total
+        
+        if (progressData.is_completed) {
+          clearInterval(pollInterval)
+          apiKeyTestSuccess.value = `检测完成！有效密钥: ${progressData.valid} 个，无效密钥: ${progressData.invalid} 个`
+          
+          // 刷新数据
+          await dashboardStore.fetchDashboardData()
+          isTestingKeys.value = false
+          
+          // 如果成功，5秒后自动关闭对话框
+          setTimeout(() => {
+            if (showApiKeyTestDialog.value) {
+              showApiKeyTestDialog.value = false
+            }
+          }, 5000)
+        }
+      } catch (error) {
+        console.error('轮询进度时出错:', error)
+      }
+    }, 1000)
+    
+  } catch (error) {
+    apiKeyTestError.value = error.message || '测试API密钥失败'
+    isTestingKeys.value = false
   }
 }
 
@@ -186,14 +273,26 @@ const totalTokens = computed(() => {
         </span>
       </h3>
       
-      <!-- 添加API密钥按钮 -->
-      <button class="add-api-key-button" @click="toggleApiKeyInput">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        添加API密钥
-      </button>
+      <div class="header-buttons">
+        <!-- 添加API密钥按钮 -->
+        <button class="add-api-key-button" @click="toggleApiKeyInput">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          添加API密钥
+        </button>
+        
+        <!-- 添加检测API密钥按钮 -->
+        <button class="test-api-key-button" @click="toggleApiKeyTestDialog">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path>
+            <line x1="16" y1="8" x2="2" y2="22"></line>
+            <line x1="17.5" y1="15" x2="9" y2="15"></line>
+          </svg>
+          检测API密钥
+        </button>
+      </div>
     </div>
     
     <!-- API密钥输入表单 -->
@@ -247,6 +346,68 @@ const totalTokens = computed(() => {
             :disabled="isSubmitting"
           >
             取消
+          </button>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- API密钥测试对话框 -->
+    <transition name="slide">
+      <div v-if="showApiKeyTestDialog" class="api-key-test-form">
+        <div class="form-title">
+          <h4>API密钥检测</h4>
+          <p class="form-description">
+            此操作将同时检测所有有效和无效API密钥的状态，有效密钥将保存在GEMINI_API_KEYS中，
+            而无效密钥将移至INVALID_API_KEYS。该过程在后台异步进行，不会阻塞服务运行。
+          </p>
+        </div>
+        
+        <div v-if="isTestingKeys" class="testing-progress">
+          <div class="progress-bar-container">
+            <div 
+              class="progress-bar-fill" 
+              :style="{ width: testingTotal ? `${(testingProgress / testingTotal) * 100}%` : '0%' }"
+            ></div>
+          </div>
+          <div class="progress-text">
+            正在检测: {{ testingProgress }} / {{ testingTotal }} ({{ Math.round((testingProgress / (testingTotal || 1)) * 100) }}%)
+          </div>
+        </div>
+        
+        <div v-else class="form-group">
+          <label for="apiKeyTestPassword">管理密码</label>
+          <input 
+            id="apiKeyTestPassword" 
+            v-model="apiKeyTestPassword" 
+            type="password" 
+            placeholder="请输入管理密码以确认操作"
+            class="api-key-password"
+          />
+        </div>
+        
+        <div v-if="apiKeyTestError" class="api-key-error">
+          {{ apiKeyTestError }}
+        </div>
+        
+        <div v-if="apiKeyTestSuccess" class="api-key-success">
+          {{ apiKeyTestSuccess }}
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            v-if="!isTestingKeys"
+            class="submit-api-key" 
+            @click="submitApiKeyTest" 
+          >
+            开始检测
+          </button>
+          
+          <button 
+            class="cancel-api-key" 
+            @click="toggleApiKeyTestDialog" 
+            :disabled="isTestingKeys"
+          >
+            {{ isTestingKeys ? '检测中...' : '取消' }}
           </button>
         </div>
       </div>
@@ -397,6 +558,12 @@ const totalTokens = computed(() => {
   margin-bottom: 15px;
 }
 
+/* 头部按钮容器样式 */
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
 /* API密钥添加按钮样式 */
 .add-api-key-button {
   display: flex;
@@ -430,8 +597,40 @@ const totalTokens = computed(() => {
   stroke: white;
 }
 
-/* API密钥输入表单样式 */
-.api-key-input-form {
+/* API密钥检测按钮样式 */
+.test-api-key-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.test-api-key-button svg {
+  transition: transform 0.3s ease;
+  stroke: var(--button-secondary-text);
+}
+
+.test-api-key-button:hover {
+  background-color: var(--button-secondary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.test-api-key-button:hover svg {
+  transform: rotate(15deg);
+}
+
+/* API密钥测试表单样式 */
+.api-key-test-form {
   background-color: var(--color-background-mute);
   border-radius: var(--radius-lg);
   padding: 20px;
@@ -440,122 +639,61 @@ const totalTokens = computed(() => {
   box-shadow: var(--shadow-md);
 }
 
-.form-group {
+.form-title {
   margin-bottom: 15px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 500;
+.form-title h4 {
+  font-size: 16px;
+  font-weight: 600;
   color: var(--color-heading);
+  margin-bottom: 8px;
 }
 
-.api-key-textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-background);
+.form-description {
+  font-size: 14px;
   color: var(--color-text);
-  font-family: inherit;
-  font-size: 14px;
-  resize: vertical;
-  transition: all 0.3s ease;
+  line-height: 1.5;
+  opacity: 0.8;
 }
 
-.api-key-textarea:focus {
-  outline: none;
-  border-color: var(--button-primary);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+/* 进度条样式 */
+.testing-progress {
+  margin: 15px 0;
 }
 
-.api-key-password {
+.progress-bar-container {
+  height: 10px;
+  background-color: var(--color-background-soft);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  padding: 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-background);
-  color: var(--color-text);
-  font-family: inherit;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transform: translateX(-100%);
+  animation: progressShine 2s infinite;
+}
+
+.progress-text {
   font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.api-key-password:focus {
-  outline: none;
-  border-color: var(--button-primary);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
-}
-
-.api-key-error {
-  color: var(--color-danger);
-  font-size: 14px;
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: rgba(239, 68, 68, 0.1);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-danger);
-}
-
-.api-key-success {
-  color: var(--color-success);
-  font-size: 14px;
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: rgba(34, 197, 94, 0.1);
-  border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-success);
-}
-
-.form-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.submit-api-key {
-  padding: 8px 20px;
-  background-color: var(--button-primary);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.submit-api-key:hover:not(:disabled) {
-  background-color: var(--button-primary-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-}
-
-.submit-api-key:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cancel-api-key {
-  padding: 8px 20px;
-  background-color: var(--button-secondary);
-  color: var(--button-secondary-text);
-  border: none;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.cancel-api-key:hover:not(:disabled) {
-  background-color: var(--button-secondary-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-}
-
-.cancel-api-key:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  text-align: center;
+  color: var(--color-heading);
 }
 
 /* 滑动动画 */
@@ -1059,21 +1197,32 @@ const totalTokens = computed(() => {
     gap: 10px;
   }
   
+  .header-buttons {
+    gap: 8px;
+    flex-direction: row;
+  }
+  
   .fold-header {
     margin-right: 0;
   }
   
-  .add-api-key-button {
+  .add-api-key-button, .test-api-key-button {
     width: 100%;
     justify-content: center;
+    padding: 8px 12px;
+    font-size: 12px;
   }
   
-  .api-key-input-form {
+  .api-key-input-form, .api-key-test-form {
     padding: 15px;
   }
   
-  .form-actions {
-    flex-direction: column;
+  .form-title h4 {
+    font-size: 15px;
+  }
+  
+  .form-description {
+    font-size: 12px;
   }
   
   .stats-grid {
@@ -1119,15 +1268,23 @@ const totalTokens = computed(() => {
   
   .api-key-header {
     margin-bottom: 6px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
   }
   
   .api-key-name {
-    font-size: 12px;
+    font-size: 13px;
+    max-width: 100%;
+    margin-bottom: 3px;
+    color: var(--button-primary);
   }
   
   .api-key-usage {
     font-size: 12px;
     gap: 5px;
+    width: 100%;
+    justify-content: space-between;
   }
   
   .model-stats-container {
@@ -1144,6 +1301,31 @@ const totalTokens = computed(() => {
     padding: 8px;
   }
   
+  .model-info {
+    gap: 5px;
+  }
+  
+  .model-name {
+    font-size: 12px;
+    color: var(--button-primary);
+  }
+  
+  .model-count {
+    font-size: 11px;
+  }
+  
+  .model-usage-text {
+    font-size: 10px;
+    color: var(--color-heading);
+    opacity: 0.9;
+  }
+  
+  .model-tokens {
+    font-size: 10px;
+    color: var(--color-heading);
+    opacity: 0.9;
+  }
+  
   .total-tokens {
     margin-top: 4px;
     padding: 6px 8px;
@@ -1151,6 +1333,8 @@ const totalTokens = computed(() => {
   
   .total-tokens-label {
     font-size: 10px;
+    color: var(--color-heading);
+    opacity: 0.9;
   }
   
   .total-tokens-value {
@@ -1164,6 +1348,10 @@ const totalTokens = computed(() => {
   
   .pagination-button {
     width: 100%;
+  }
+  
+  .form-actions {
+    flex-direction: column;
   }
 }
 
@@ -1187,17 +1375,57 @@ const totalTokens = computed(() => {
   }
   
   .api-key-item {
-    padding: 6px;
+    padding: 10px;
   }
   
   .api-key-name {
-    font-size: 11px;
-    max-width: 45%;
+    font-size: 13px;
+    max-width: 100%;
+    color: var(--button-primary);
   }
   
   .api-key-usage {
-    font-size: 11px;
+    font-size: 12px;
+    gap: 5px;
+  }
+  
+  .model-stats-container {
+    margin-top: 10px;
+  }
+  
+  .model-info {
     gap: 3px;
+  }
+  
+  .total-tokens-label {
+    color: var(--color-heading);
+    opacity: 0.9;
+  }
+  
+  .add-api-key-button, .test-api-key-button {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  .add-api-key-button svg, .test-api-key-button svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .api-key-test-form {
+    padding: 12px;
+  }
+  
+  .form-title h4 {
+    font-size: 14px;
+  }
+  
+  .form-description {
+    font-size: 11px;
+  }
+  
+  .progress-text {
+    font-size: 12px;
   }
 }
 
@@ -1213,5 +1441,133 @@ const totalTokens = computed(() => {
   .api-key-stats-list {
     grid-template-columns: 1fr;
   }
+}
+
+/* API密钥输入表单样式 */
+.api-key-input-form {
+  background-color: var(--color-background-mute);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-md);
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-heading);
+}
+
+.api-key-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  transition: all 0.3s ease;
+}
+
+.api-key-textarea:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.api-key-password {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.api-key-password:focus {
+  outline: none;
+  border-color: var(--button-primary);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
+.api-key-error {
+  color: var(--color-danger);
+  font-size: 14px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-danger);
+}
+
+.api-key-success {
+  color: var(--color-success);
+  font-size: 14px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(34, 197, 94, 0.1);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-success);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.submit-api-key {
+  padding: 8px 20px;
+  background-color: var(--button-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.submit-api-key:hover:not(:disabled) {
+  background-color: var(--button-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.submit-api-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancel-api-key {
+  padding: 8px 20px;
+  background-color: var(--button-secondary);
+  color: var(--button-secondary-text);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-api-key:hover:not(:disabled) {
+  background-color: var(--button-secondary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cancel-api-key:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style> 

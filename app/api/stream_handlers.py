@@ -15,8 +15,6 @@ async def stream_response_generator(
     safety_settings_g2,
     cache_key: str
 ):
-    if settings.PUBLIC_MODE:
-        settings.MAX_RETRY_NUM = 3
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
     GeminiClient, chat_request.messages,model=chat_request.model)
@@ -48,7 +46,7 @@ async def stream_response_generator(
     
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
-    max_retry_num = settings.MAX_RETRY_NUM
+    max_retry_num = 3 if settings.PUBLIC_MODE else settings.MAX_RETRY_NUM
     
     
     # 如果可用密钥数量小于并发数，则使用所有可用密钥
@@ -186,7 +184,7 @@ async def stream_response_generator(
                 if chunk :
                     
                     if chunk.total_token_count:
-                        token += int(chunk.total_token_count)
+                        token = int(chunk.total_token_count)
                     success = True
                     data = openAI_from_Gemini(chunk,stream=True)
                     # log('info', f"流式响应发送数据: {data}")
@@ -242,16 +240,15 @@ async def handle_fake_streaming(api_key,chat_request, contents, response_cache_m
     # 使用非流式请求内容
     gemini_client = GeminiClient(api_key)
     
-    api_call_future = asyncio.create_task(
-        asyncio.to_thread(
-            gemini_client.complete_chat,
+    gemini_task = asyncio.create_task(
+        gemini_client.complete_chat( 
             chat_request,
             contents,
             safety_settings_g2 if 'gemini-2.5' in chat_request.model else safety_settings,
             system_instruction
         )
     )
-    gemini_task = asyncio.shield(api_call_future)
+    gemini_task = asyncio.shield(gemini_task)
     
     try:
         # 获取响应内容

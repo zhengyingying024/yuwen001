@@ -15,7 +15,7 @@ const dashboardStore = useDashboardStore()
       <div class="stat-label">可用模型数量</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">{{ dashboardStore.status.retryCount }}</div>
+      <div class="stat-value">{{ dashboardStore.config.maxRetryNum }}</div>
       <div class="stat-label">最大重试次数</div>
     </div>
   </div>

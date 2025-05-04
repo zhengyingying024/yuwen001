@@ -16,7 +16,8 @@ EXCLUDED_SETTINGS = [
     "BLOCKED_MODELS", 
     "DEFAULT_BLOCKED_MODELS", 
     "PUBLIC_MODE", 
-    "DASHBOARD_URL"
+    "DASHBOARD_URL",
+    "version"
 ]
 
 def save_settings():

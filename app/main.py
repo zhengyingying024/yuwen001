@@ -7,12 +7,8 @@ from app.services import GeminiClient
 from app.utils import (
     APIKeyManager, 
     test_api_key, 
-    format_log_message, 
-    log_manager,
     ResponseCacheManager,
     ActiveRequestsManager,
-    clean_expired_stats,
-    update_api_call_stats,
     check_version,
     schedule_cache_cleanup,
     handle_exception,
@@ -20,12 +16,10 @@ from app.utils import (
 )
 from app.config.persistence import save_settings, load_settings
 from app.api import router, init_router, dashboard_router, init_dashboard_router
-from app.vertex.vertex import router as vertex_router
 from app.vertex.vertex import init_vertex_ai
 import app.config.settings as settings
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 import asyncio
-from datetime import datetime, timedelta
 import sys
 import pathlib
 import threading
@@ -60,7 +54,6 @@ active_requests_pool = {}
 active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_pool)
 
 SKIP_CHECK_API_KEY = os.environ.get("SKIP_CHECK_API_KEY", "").lower() == "true"
-MAX_RETRY_NUM = os.environ.get("MAX_RETRY_NUM", "65535")
 
 # --------------- 工具函数 ---------------
 
@@ -153,7 +146,6 @@ async def startup_event():
             key_manager.api_keys.append(key)
             key_manager._reset_key_stack()
             log('info', f"初始检查: API Key {key[:8]}... 有效，已添加到可用列表")
-            settings.MAX_RETRY_NUM = 1
             valid_key_found = True
             
             # 使用这个有效密钥加载可用模型
@@ -188,23 +180,23 @@ async def startup_event():
                                 log('error', f"检查密钥时发生错误: {exc}")
                 finally:
                     loop.close()
-                    settings.MAX_RETRY_NUM = len(key_manager.api_keys)
                     log('info', f"后台密钥检查完成，当前可用密钥数量: {len(key_manager.api_keys)}")
             
             # 启动后台线程检查剩余密钥
             threading.Thread(target=check_remaining_keys, daemon=True).start()
             log('info', f"后台线程已启动，正在检查剩余的 {len(remaining_keys)} 个API密钥...")
+    
     elif valid_key_found:
         idx = all_keys.index(key_manager.api_keys[-1])
         key_manager.api_keys += all_keys[idx+1:]
-        settings.MAX_RETRY_NUM = len(key_manager.api_keys)
-    settings.MAX_RETRY_NUM = min(settings.MAX_RETRY_NUM, int(MAX_RETRY_NUM) if MAX_RETRY_NUM.isdigit() else settings.MAX_RETRY_NUM)
+    
     if settings.PUBLIC_MODE:
         settings.MAX_RETRY_NUM = 3
+    
     # 显示当前可用密钥
     key_manager.show_all_keys()
     log('info', f"当前可用 API 密钥数量：{len(key_manager.api_keys)}")
-    log('info', f"最大重试次数设置为：{len(key_manager.api_keys)}")
+    log('info', f"最大重试次数设置为：{settings.MAX_RETRY_NUM}")
     
     # 初始化路由器
     init_router(
@@ -221,26 +213,11 @@ async def startup_event():
         settings.MAX_REQUESTS_PER_DAY_PER_IP
     )
         
-        # 初始化仪表盘路由器
+    # 初始化仪表盘路由器
     init_dashboard_router(
         key_manager,
         response_cache_manager,
         active_requests_manager
-    )
-    
-    # 初始化路由器
-    init_router(
-        key_manager,
-        response_cache_manager,
-        active_requests_manager,
-        SAFETY_SETTINGS,
-        SAFETY_SETTINGS_G2,
-        current_api_key,
-        settings.FAKE_STREAMING,
-        settings.FAKE_STREAMING_INTERVAL,
-        settings.PASSWORD,
-        settings.MAX_REQUESTS_PER_MINUTE,
-        settings.MAX_REQUESTS_PER_DAY_PER_IP
     )
 
 # --------------- 异常处理 ---------------

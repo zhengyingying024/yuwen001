@@ -81,10 +81,12 @@ DEFAULT_BLOCKED_MODELS = []
 # 环境变量格式应为逗号分隔的模型名称字符串
 BLOCKED_MODELS = os.environ.get("BLOCKED_MODELS", ",".join(DEFAULT_BLOCKED_MODELS))
 # 将字符串转换为列表
-BLOCKED_MODELS = [model.strip() for model in BLOCKED_MODELS.split(",") if model.strip()]
+BLOCKED_MODELS = { model.strip() for model in BLOCKED_MODELS.split(",") if model.strip() }
 #公益站模式
 PUBLIC_MODE = os.environ.get("PUBLIC_MODE", "false").lower() in ["true", "1", "yes"]
 #前端地址
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "")
 # 白名单模式
-WHITELIST_MODELS = [x.strip() for x in os.environ.get("WHITELIST_MODELS", "").split(",") if x.strip()]
+WHITELIST_MODELS = { x.strip() for x in os.environ.get("WHITELIST_MODELS", "").split(",") if x.strip() }
+# 白名单User-Agent
+WHITELIST_USER_AGENT = { x.strip().lower() for x in os.environ.get("WHITELIST_USER_AGENT", "").split(",") if x.strip() }

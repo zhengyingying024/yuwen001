@@ -424,11 +424,6 @@ async def update_config(config_data: dict):
                     key_manager.api_keys.append(key)
                     added_key_count += 1
             
-            # 更新MAX_RETRY_NUM
-            if added_key_count > 0:
-                settings.MAX_RETRY_NUM += added_key_count
-                log('info', f"MAX_RETRY_NUM已更新为：{settings.MAX_RETRY_NUM}")
-            
             # 重置密钥栈
             key_manager._reset_key_stack()
             

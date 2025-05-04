@@ -1,7 +1,7 @@
-import requests
 import json
 import os
 import asyncio
+import httpx # 添加 httpx 导入
 from app.models import ChatCompletionRequest, Message
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
@@ -231,7 +231,7 @@ class GeminiClient:
         return api_version, data
     
 
-    # 真流式处理
+    # 流式请求
     async def stream_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         # 真流式请求处理逻辑
         extra_log = {'key': self.api_key[:8], 'request_type': 'stream', 'model': request.model}
@@ -281,7 +281,7 @@ class GeminiClient:
                     log('info', "流式请求结束")
 
     # 非流式处理
-    def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
+    async def complete_chat(self, request: ChatCompletionRequest, contents, safety_settings, system_instruction):
         
         api_version, data = self._prepare_request_data(request, contents, safety_settings, system_instruction,request.model)
         model= request.model.removesuffix("-search")
@@ -291,8 +291,9 @@ class GeminiClient:
         }
         
         try:
-            response = requests.post(url, headers=headers, json=data)
-            response.raise_for_status()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, headers=headers, json=data, timeout=600) 
+                response.raise_for_status() # 检查 HTTP 错误状态
             
             return GeminiResponseWrapper(response.json())
         except Exception as e:
@@ -304,7 +305,6 @@ class GeminiClient:
         errors = []
         
         system_instruction_text = ""
-        is_system_phase = use_system_prompt
         system_instruction_parts = [] # 用于收集系统指令文本
         
         # 处理系统指令 
@@ -410,11 +410,12 @@ class GeminiClient:
         if settings.search["search_mode"] and model and model.endswith("-search"):
             gemini_history.insert(len(gemini_history)-2,{'role': 'user', 'parts': [{'text':settings.search["search_prompt"]}]})
         
-        # 注入随机字符串 
+        # 注入随机字符串
         if settings.RANDOM_STRING:
             gemini_history.insert(1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
             gemini_history.insert(len(gemini_history)-1,{'role': 'user', 'parts': [{'text': generate_secure_random_string(settings.RANDOM_STRING_LENGTH)}]})
-            log_msg = format_log_message('INFO', "伪装消息成功")
+            log('INFO', "伪装消息成功")
+        
         return gemini_history, system_instruction
 
     @staticmethod

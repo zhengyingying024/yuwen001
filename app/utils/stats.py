@@ -1,7 +1,7 @@
 import asyncio 
 from datetime import datetime, timedelta
 from app.utils.logging import log
-from app.config.settings import stats_lock 
+from app.config.settings import stats_lock,settings
 
 def clean_expired_stats(api_call_stats):
     """清理过期统计数据的函数"""
@@ -14,6 +14,8 @@ def clean_expired_stats(api_call_stats):
     ]
 
 async def update_api_call_stats(api_call_stats, endpoint=None, model=None, token=None): 
+    if settings.PUBLIC_MODE:
+        return
     """
     更新API调用统计的函数
     

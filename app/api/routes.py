@@ -91,10 +91,7 @@ async def get_cached(cache_key,is_stream: bool):
 @router.get("/aistudio/models",response_model=ModelList)
 async def aistudio_list_models(_ = Depends(custom_verify_password),
                                _2 = Depends(verify_user_agent)):
-    # 使用原有的Gemini实现
-    if settings.PUBLIC_MODE:
-        filtered_models = ["gemini-2.5-pro-exp-03-25","gemini-2.5-flash-preview-04-17"]
-    elif settings.WHITELIST_MODELS:
+    if settings.WHITELIST_MODELS:
         filtered_models = [model for model in GeminiClient.AVAILABLE_MODELS if model in settings.WHITELIST_MODELS]
     else:
         filtered_models = [model for model in GeminiClient.AVAILABLE_MODELS if model not in settings.BLOCKED_MODELS]

@@ -47,7 +47,7 @@ async def stream_response_generator(
 
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
-    max_retry_num = 3 if settings.PUBLIC_MODE else settings.MAX_RETRY_NUM
+    max_retry_num =  settings.MAX_RETRY_NUM
     
     
     # 如果可用密钥数量小于并发数，则使用所有可用密钥

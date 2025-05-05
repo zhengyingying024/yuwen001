@@ -1,8 +1,8 @@
 import asyncio 
 from datetime import datetime, timedelta
 from app.utils.logging import log
-from app.config.settings import stats_lock,settings
-
+from app.config.settings import stats_lock
+import app.config.settings as settings
 def clean_expired_stats(api_call_stats):
     """清理过期统计数据的函数"""
     now = datetime.now()

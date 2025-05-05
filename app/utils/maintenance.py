@@ -39,7 +39,10 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])
     scheduler.add_job(clean_expired_stats, 'interval', minutes=5, args=[settings.api_call_stats])
     scheduler.add_job(check_version, 'interval', hours=4)
-    scheduler.add_job(api_call_stats_clean, 'cron', hour=15,minute=0) 
+    if settings.PUBLIC_MODE:
+        scheduler.add_job(api_call_stats_clean, 'cron',minute=1) 
+    else:
+        scheduler.add_job(api_call_stats_clean, 'cron', hour=15,minute=0) 
     scheduler.start()
     return scheduler
 
@@ -53,7 +56,8 @@ async def api_call_stats_clean():
     
     try:
         # 记录重置前的状态
-        log('info', "开始重置API调用统计数据")
+        if not settings.PUBLIC_MODE:
+            log('info', "开始重置API调用统计数据")
         
         # 创建一个全新的空结构
         new_stats = {

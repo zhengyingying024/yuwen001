@@ -35,7 +35,7 @@ app = FastAPI(limit="50M")
 load_settings()
 # 初始化API密钥管理器
 key_manager = APIKeyManager()
-current_api_key = key_manager.get_available_key()
+current_api_key = None # 初始化为 None，将在 startup 事件中设置
 
 # 创建全局缓存字典，将作为缓存管理器的内部存储
 response_cache = {}
@@ -56,15 +56,6 @@ active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_po
 SKIP_CHECK_API_KEY = os.environ.get("SKIP_CHECK_API_KEY", "").lower() == "true"
 
 # --------------- 工具函数 ---------------
-
-def switch_api_key():
-    global current_api_key
-    key = key_manager.get_available_key() # get_available_key 会处理栈的逻辑
-    if key:
-        current_api_key = key
-        log('info', f"API key 替换为 → {current_api_key[:8]}...", extra={'key': current_api_key[:8], 'request_type': 'switch_key'})
-    else:
-        log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'key': 'N/A', 'request_type': 'switch_key', 'status_code': 'N/A'})
 
 async def check_key(key):
     """检查单个API密钥是否有效"""
@@ -250,6 +241,12 @@ async def startup_event():
     if settings.PUBLIC_MODE:
         settings.MAX_RETRY_NUM = 3
     
+    # 获取初始 API 密钥
+    global current_api_key
+    current_api_key = await key_manager.get_available_key()
+    if not current_api_key:
+         log('error', "启动时未能获取到任何有效的 API 密钥！")
+
     # 显示当前可用密钥
     key_manager.show_all_keys()
     log('info', f"当前可用 API 密钥数量：{len(key_manager.api_keys)}")

@@ -51,8 +51,7 @@ async def process_nonstream_request(
             return "empty"
         
         # 缓存响应结果
-        response_cache_manager.store(cache_key, response_content)
-        
+        await response_cache_manager.store(cache_key, response_content)
         # 更新 API 调用统计
         await update_api_call_stats(settings.api_call_stats, endpoint=current_api_key, model=chat_request.model,token=response_content.total_token_count)
         
@@ -79,16 +78,16 @@ async def process_request(
     # 转换消息格式
     contents, system_instruction = GeminiClient.convert_messages(
         GeminiClient, chat_request.messages,model=chat_request.model)
-    
+
     # --- 在开始处理前检查缓存 ---
-    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+    cached_response, cache_hit = await response_cache_manager.get_and_remove(cache_key)
     if cache_hit:
         log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
             extra={'request_type': 'non-stream', 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
         return openAI_from_Gemini(cached_response,stream=False)
-    
+
     # 重置已尝试的密钥
-    key_manager.reset_tried_keys_for_request()
+    await key_manager.reset_tried_keys_for_request()
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
     max_retry_num = settings.MAX_RETRY_NUM
@@ -96,7 +95,7 @@ async def process_request(
     # 获取有效的API密钥
     valid_keys = []
     for _ in range(len(key_manager.api_keys)):
-        api_key = key_manager.get_available_key()
+        api_key = await key_manager.get_available_key()
         if api_key:
             # 获取API密钥的调用次数
             usage = await get_api_key_usage(settings.api_call_stats, api_key)
@@ -113,7 +112,8 @@ async def process_request(
             extra={'request_type': 'non-stream', 'model': chat_request.model})
         # 重置密钥栈并获取一个密钥
         key_manager._reset_key_stack()
-        valid_keys = [key_manager.get_available_key()]
+        get_key = await key_manager.get_available_key()
+        valid_keys = [get_key] if get_key else []
     
     # 如果可用密钥数量小于并发数，则使用所有可用密钥
     if len(valid_keys) < current_concurrent:
@@ -178,7 +178,7 @@ async def process_request(
                         success = True
                         log('info', f"非流式请求成功", 
                             extra={'key': api_key[:8],'request_type': 'non-stream', 'model': chat_request.model})
-                        cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+                        cached_response, cache_hit = await  response_cache_manager.get_and_remove(cache_key)
                         return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":
                         # 增加空响应计数

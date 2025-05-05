@@ -58,9 +58,9 @@ def openAI_from_Gemini(response,stream=True):
     total_tokens_raw = getattr(response, 'total_token_count', None)
 
     usage_data = {
-        "prompt_tokens": int(prompt_tokens_raw) if prompt_tokens_raw is not None else 0,
-        "completion_tokens": int(candidates_tokens_raw) if candidates_tokens_raw is not None else 0,
-        "total_tokens": int(total_tokens_raw) if total_tokens_raw is not None else 0
+        "prompt_tokens": int(prompt_tokens_raw) if prompt_tokens_raw else 0,
+        "completion_tokens": int(candidates_tokens_raw) if candidates_tokens_raw else 0,
+        "total_tokens": int(total_tokens_raw) if total_tokens_raw else 0
     }
 
     if response.function_call:
@@ -96,13 +96,11 @@ def openAI_from_Gemini(response,stream=True):
         # 仅在流结束时添加 usage 字段
         if response.finish_reason:
             formatted_chunk["usage"] = usage_data
+        return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
+    
     else:
         formatted_chunk["choices"][0]["message"] = content_chunk
         formatted_chunk["object"] = "chat.completion"
         # 非流式响应总是包含 usage 字段，以满足 response_model 验证
         formatted_chunk["usage"] = usage_data
-
-    if stream:
-        return f"data: {json.dumps(formatted_chunk, ensure_ascii=False)}\n\n"
-    else:
         return formatted_chunk

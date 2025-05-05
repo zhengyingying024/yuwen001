@@ -20,12 +20,12 @@ async def stream_response_generator(
     GeminiClient, chat_request.messages,model=chat_request.model)
 
     # 重置已尝试的密钥
-    key_manager.reset_tried_keys_for_request()
-    
+    await key_manager.reset_tried_keys_for_request()
+
     # 获取有效的API密钥
     valid_keys = []
     for _ in range(len(key_manager.api_keys)):
-        api_key = key_manager.get_available_key()
+        api_key = await key_manager.get_available_key()
         if api_key:
             # 获取API密钥的调用次数
             usage = await get_api_key_usage(settings.api_call_stats, api_key)
@@ -41,9 +41,10 @@ async def stream_response_generator(
         log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
             extra={'request_type': 'stream', 'model': chat_request.model})
         # 重置密钥栈并获取一个密钥
-        key_manager._reset_key_stack()
-        valid_keys = [key_manager.get_available_key()]
-    
+        key_manager._reset_key_stack() 
+        get_key = await key_manager.get_available_key()
+        valid_keys = [get_key] if get_key else []
+
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
     max_retry_num = 3 if settings.PUBLIC_MODE else settings.MAX_RETRY_NUM
@@ -122,11 +123,12 @@ async def stream_response_generator(
                             success = True
                             log('info', f"假流式请求成功", 
                                 extra={'key': api_key[:8],'request_type': "fake-stream", 'model': chat_request.model})
-                            
-                            cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
-                            yield openAI_from_Gemini(cached_response,stream=True)
-                            
-                            break 
+                            cached_response, cache_hit = await response_cache_manager.get_and_remove(cache_key)
+                            if cache_hit and cached_response: 
+                                yield openAI_from_Gemini(cached_response,stream=True)
+                            else:
+                                success = False
+                            break
                         elif status == "empty":
                             # 增加空响应计数
                             empty_response_count += 1
@@ -267,8 +269,7 @@ async def handle_fake_streaming(api_key,chat_request, contents, response_cache_m
             return "empty"
 
         # 缓存
-        response_cache_manager.store(cache_key, response_content)
-        
+        await response_cache_manager.store(cache_key, response_content)
         return "success"
     
     except Exception as e:

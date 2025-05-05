@@ -51,7 +51,7 @@ async def get_dashboard_data():
     """获取仪表盘数据的API端点，用于动态刷新"""
     # 先清理过期数据，确保统计数据是最新的
     clean_expired_stats(settings.api_call_stats)
-    response_cache_manager.clean_expired()  # 使用管理器清理缓存
+    await response_cache_manager.clean_expired()  # 使用管理器清理缓存
     active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
     
     # 获取当前统计数据

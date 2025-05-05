@@ -1,14 +1,12 @@
 import json
 import os
-import asyncio
 import httpx # 添加 httpx 导入
-from app.models import ChatCompletionRequest, Message
+from app.models import ChatCompletionRequest
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 import httpx
 import secrets
 import string
-from app.utils import format_log_message
 import app.config.settings as settings
 
 from app.utils.logging import log
@@ -181,8 +179,15 @@ class GeminiClient:
                         declaration = {
                             "name": func_def.get("name"),
                             "description": func_def.get("description"),
-                            "parameters": func_def.get("parameters")
                         }
+                        # 获取 parameters 并移除可能存在的 $schema 字段
+                        parameters = func_def.get("parameters")
+                        if isinstance(parameters, dict) and "$schema" in parameters:
+                            parameters = parameters.copy() 
+                            del parameters["$schema"]
+                        if parameters is not None:
+                            declaration["parameters"] = parameters
+
                         # 移除值为 None 的键，以保持 payload 清洁
                         declaration = {k: v for k, v in declaration.items() if v is not None}
                         if declaration.get("name"): # 确保 name 存在
@@ -334,7 +339,7 @@ class GeminiClient:
 
                     prefix = "call_"
                     if tool_call_id.startswith(prefix):
-                        # 假设 tool_call_id = f"call_{function_name}" 
+                        # 假设 tool_call_id = f"call_{function_name}" (response.py中的处理)
                         function_name = tool_call_id[len(prefix):]
                     else:
                         continue
@@ -347,7 +352,7 @@ class GeminiClient:
                     }
                     
                     gemini_history.append({"role": role_to_use, "parts": [function_response_part]})
-                    # Skip the normal text appending logic below for 'tool' role
+                    
                     continue
                 elif role in ['user', 'system']:
                     role_to_use = 'user'

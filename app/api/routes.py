@@ -72,9 +72,9 @@ async def verify_user_agent(request: Request):
     if request.headers.get("User-Agent") not in settings.WHITELIST_USER_AGENT:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed client")
 
-def get_cached(cache_key,is_stream: bool):
+async def get_cached(cache_key,is_stream: bool):
     # 检查缓存是否存在，如果存在，返回缓存
-    cached_response, cache_hit = response_cache_manager.get_and_remove(cache_key)
+    cached_response, cache_hit = await response_cache_manager.get_and_remove(cache_key)
     
     if cache_hit and cached_response:
         log('info', f"缓存命中: {cache_key[:8]}...", 
@@ -152,7 +152,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
         extra={'request_type': 'non-stream', 'model': request.model})
     
     # 检查缓存是否存在，如果存在，返回缓存
-    cached_response = get_cached(cache_key, is_stream = request.stream)
+    cached_response = await  get_cached(cache_key, is_stream = request.stream)
     if cached_response :
         return cached_response
     
@@ -235,7 +235,7 @@ async def aistudio_chat_completions(request: ChatCompletionRequest, http_request
             active_requests_manager.remove(pool_key)
         
         # 检查是否已有缓存的结果（可能是由另一个任务创建的）
-        cached_response = get_cached(cache_key, is_stream = request.stream)
+        cached_response = await get_cached(cache_key, is_stream = request.stream)
         if cached_response :
             return cached_response
         

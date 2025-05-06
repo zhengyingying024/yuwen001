@@ -971,6 +971,15 @@ async def list_models(api_key: Optional[str] = None):
               "parent": None,
          },
         {
+              "id": "gemini-2.5-pro-preview-05-06",
+              "object": "model",
+              "created": int(time.time()),
+              "owned_by": "google",
+              "permission": [],
+              "root": "gemini-2.5-pro-preview-05-06",
+              "parent": None,
+         },
+        {
             "id": "gemini-1.5-flash",
             "object": "model",
             "created": int(time.time()),

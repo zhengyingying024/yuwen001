@@ -38,8 +38,13 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     scheduler.add_job(active_requests_manager.clean_completed, 'interval', seconds=30)
     scheduler.add_job(active_requests_manager.clean_long_running, 'interval', minutes=5, args=[300])
     
-    # 使用新的统计系统清理任务
-    scheduler.add_job(lambda: asyncio.create_task(api_stats_manager.cleanup()), 'interval', minutes=5)
+    # 使用同步包装器调用异步函数
+    def run_cleanup():
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(api_stats_manager.cleanup())
+    
+    # 添加同步的清理任务
+    scheduler.add_job(run_cleanup, 'interval', minutes=5)
     
     scheduler.add_job(check_version, 'interval', hours=4)
     scheduler.add_job(api_call_stats_clean, 'cron', hour=15,minute=0) 

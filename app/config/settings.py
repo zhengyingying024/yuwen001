@@ -66,8 +66,10 @@ version={
 }
 
 # API调用统计
+# 这个对象保留为空结构以保持向后兼容性
+# 实际统计数据已迁移到 app/utils/stats.py 中的 ApiStatsManager 类
 api_call_stats = {
-    'calls': []  # 存储每次调用的记录，每个记录包含 api_key, model, timestamp, tokens
+    'calls': []  # 兼容旧版代码结构
 }
 
 # 用于保护 api_call_stats 并发访问的锁

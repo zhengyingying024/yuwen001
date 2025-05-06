@@ -57,10 +57,11 @@ class APIKeyManager:
                     self.tried_keys_for_request.add(key)
                     return key
 
+            # 如果没有可用的API密钥，记录错误并返回None
             if not self.api_keys:
                 log_msg = format_log_message('ERROR', "没有配置任何 API 密钥！")
-            logger.error(log_msg)
-            return None
+                logger.error(log_msg)
+                return None
         
         return None
 

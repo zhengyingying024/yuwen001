@@ -157,6 +157,13 @@ class ApiStatsManager:
         
         self.last_cleanup = time.time()
     
+    async def maybe_cleanup(self, force=False):
+        """根据需要清理旧数据"""
+        now = time.time()
+        if force or (now - self.last_cleanup > self.cleanup_interval * 3600):
+            await self.cleanup()
+            self.last_cleanup = now
+    
     async def get_api_key_usage(self, api_key, model=None):
         """获取API密钥的使用统计"""
         with self._counters_lock:

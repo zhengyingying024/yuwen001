@@ -238,9 +238,6 @@ async def startup_event():
     # 保存设置
     save_settings()
     
-    if settings.PUBLIC_MODE:
-        settings.MAX_RETRY_NUM = 3
-    
     # 获取初始 API 密钥
     global current_api_key
     current_api_key = await key_manager.get_available_key()

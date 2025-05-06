@@ -40,14 +40,35 @@ def schedule_cache_cleanup(response_cache_manager, active_requests_manager):
     
     # 使用同步包装器调用异步函数
     def run_cleanup():
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(api_stats_manager.cleanup())
+        try:
+            # 创建新的事件循环而不是获取现有的
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # 在这个新循环中运行清理操作
+            loop.run_until_complete(api_stats_manager.cleanup())
+        except Exception as e:
+            log('error', f"清理统计数据时出错: {str(e)}")
+        finally:
+            # 确保关闭循环以释放资源
+            loop.close()
     
     # 添加同步的清理任务
     scheduler.add_job(run_cleanup, 'interval', minutes=5)
     
+    # 同样修改定时重置函数
+    def run_reset():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(api_call_stats_clean())
+        except Exception as e:
+            log('error', f"重置统计数据时出错: {str(e)}")
+        finally:
+            loop.close()
+    
     scheduler.add_job(check_version, 'interval', hours=4)
-    scheduler.add_job(api_call_stats_clean, 'cron', hour=15,minute=0) 
+    scheduler.add_job(run_reset, 'cron', hour=15, minute=0)
     scheduler.start()
     return scheduler
 

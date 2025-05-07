@@ -126,6 +126,9 @@ async def get_dashboard_data():
         "max_concurrent_requests": settings.MAX_CONCURRENT_REQUESTS,
         # 启用vertex
         "enable_vertex": settings.ENABLE_VERTEX,
+        # 添加Vertex Express配置
+        "enable_vertex_express": settings.ENABLE_VERTEX_EXPRESS,
+        "vertex_express_api_key": bool(settings.VERTEX_EXPRESS_API_KEY),  # 只返回是否设置的状态
         # 添加最大重试次数
         "max_retry_num": settings.MAX_RETRY_NUM,
     }
@@ -222,6 +225,19 @@ async def update_config(config_data: dict):
                 raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
             settings.FAKE_STREAMING = config_value
             log('info', f"假流式请求已更新为：{config_value}")
+            
+        elif config_key == "enable_vertex_express":
+            if not isinstance(config_value, bool):
+                raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
+            settings.ENABLE_VERTEX_EXPRESS = config_value
+            log('info', f"Vertex Express已更新为：{config_value}")
+            
+        elif config_key == "vertex_express_api_key":
+            if not isinstance(config_value, str):
+                raise HTTPException(status_code=422, detail="参数类型错误：应为字符串")
+            settings.VERTEX_EXPRESS_API_KEY = config_value
+            log('info', f"Vertex Express API Key已更新")
+            
         elif config_key == "fake_streaming_interval":
             try:
                 value = float(config_value)

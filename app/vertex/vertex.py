@@ -1885,9 +1885,9 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
         # --- Determine which client to use (Express, Rotation, or Fallback) ---
         client_to_use = None
-        express_api_key = os.environ.get(VERTEX_EXPRESS_API_KEY)
+        express_api_key =settings.VERTEX_EXPRESS_API_KEY
 
-        if express_api_key and base_model_name in VERTEX_EXPRESS_MODELS:
+        if settings.ENABLE_VERTEX_EXPRESS and express_api_key and base_model_name in VERTEX_EXPRESS_MODELS:
             vertex_log("INFO", f"Attempting to use Vertex Express Mode for model {base_model_name} with API Key.")
             try:
                 client_to_use = genai.Client(vertexai=True, api_key=express_api_key)
@@ -1953,7 +1953,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
             if request.stream:
                 # Check if fake streaming is enabled (directly from environment variable)
-                fake_streaming = os.environ.get("FAKE_STREAMING", "false").lower() == "true"
+                fake_streaming = settings.FAKE_STREAMING
                 if fake_streaming:
                     return await fake_stream_generator(client_instance, model_name, prompt, current_gen_config, request) # Pass client_instance
                 
@@ -2292,7 +2292,7 @@ async def fake_stream_generator(client_instance, model_name, prompt, current_gen
             
             # Wait before sending the next keep-alive message
             # Get interval from environment variable directly
-            fake_streaming_interval = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1.0"))
+            fake_streaming_interval = float(settings.FAKE_STREAMING_INTERVAL)
             await asyncio.sleep(fake_streaming_interval)
         
         try:

@@ -33,6 +33,11 @@
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
+* v0.2.4beta
+   * 警告，此版本为beta测试版，仅进行初步适配，配置成功后，网页前端vertex模式的系统日志功能会被禁用，请在服务器后端查看日志
+   * 警告，本次新增了openai依赖库，非容器部署请拉取安装依赖库
+   * 首发适配vertex快速模式，在配置key后，访问支持快速模式的模型时，将首先使用快速模式的key访问
+   * 新增环境变量`VERTEX_EXPRESS_API_KEY_ENV_VAR`，为快速模式key
 * v0.2.4
    * 为vertex模式适配gemini-2.5-pro-preview-05-06
    * 修复负载均衡模式bug

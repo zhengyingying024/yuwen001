@@ -54,7 +54,8 @@ class APIKeyManager:
             if not self.api_keys:
                 log_msg = format_log_message('ERROR', "没有配置任何 API 密钥！")
                 logger.error(log_msg)
-            
+            log_msg = format_log_message('ERROR', "没有可用的API密钥！")
+            logger.error(log_msg)
             return None
 
     def show_all_keys(self):

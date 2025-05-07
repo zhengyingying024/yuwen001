@@ -101,7 +101,6 @@ services:
       - WATCHTOWER_LABEL_ENABLE=true  # 只监控带有 "com.centurylinklabs.watchtower.enable=true" 标签的容器
       - WATCHTOWER_POLL_INTERVAL=3600  # 检查间隔秒数（3600秒 = 1小时）
       - WATCHTOWER_CLEANUP=true  # 更新后自动删除旧镜像
-    # command: --interval 3600 # 与 WATCHTOWER_POLL_INTERVAL 效果相同，通常使用环境变量即可
     restart: unless-stopped
 ```
 配置完成后，请保存文件。

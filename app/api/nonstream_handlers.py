@@ -84,8 +84,6 @@ async def process_request(
             extra={'request_type': 'non-stream', 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
         return openAI_from_Gemini(cached_response,stream=False)
 
-    # 重置已尝试的密钥
-    await key_manager.reset_tried_keys_for_request()
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
     max_retry_num = settings.MAX_RETRY_NUM

@@ -123,6 +123,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       increaseConcurrentOnFailure: data.increase_concurrent_on_failure || 0,
       maxConcurrentRequests: data.max_concurrent_requests || 0,
       enableVertex: data.enable_vertex || false,
+      enableVertexExpress: data.enable_vertex_express || false,
+      vertexExpressApiKey: data.vertex_express_api_key || false,
       maxRetryNum: data.max_retry_num || 0
     }
 

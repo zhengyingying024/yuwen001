@@ -26,7 +26,8 @@ RANDOM_STRING_LENGTH = int(os.environ.get("RANDOM_STRING_LENGTH", "5"))
 # 是否启用Vertex AI
 ENABLE_VERTEX = os.environ.get("ENABLE_VERTEX", "false").lower() in ["true", "1", "yes"]
 GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON", "")
-
+ENABLE_VERTEX_EXPRESS = os.environ.get("ENABLE_VERTEX_EXPRESS", "false").lower() in ["true", "1", "yes"]
+VERTEX_EXPRESS_API_KEY = os.environ.get("VERTEX_EXPRESS_API_KEY", None)
 # 日志配置
 logging.getLogger("uvicorn").disabled = True
 logging.getLogger("uvicorn.access").disabled = True
@@ -66,8 +67,10 @@ version={
 }
 
 # API调用统计
+# 这个对象保留为空结构以保持向后兼容性
+# 实际统计数据已迁移到 app/utils/stats.py 中的 ApiStatsManager 类
 api_call_stats = {
-    'calls': []  # 存储每次调用的记录，每个记录包含 api_key, model, timestamp, tokens
+    'calls': []  # 兼容旧版代码结构
 }
 
 # 用于保护 api_call_stats 并发访问的锁

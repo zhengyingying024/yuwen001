@@ -19,8 +19,6 @@ async def stream_response_generator(
     contents, system_instruction = GeminiClient.convert_messages(
     GeminiClient, chat_request.messages,model=chat_request.model)
 
-    # 重置已尝试的密钥
-    await key_manager.reset_tried_keys_for_request()
 
     # 获取有效的API密钥
     valid_keys = []

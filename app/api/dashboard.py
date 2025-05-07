@@ -16,6 +16,7 @@ from app.utils.auth import verify_web_password
 from app.utils.maintenance import api_call_stats_clean
 from app.utils.logging import log, vertex_log_manager
 from app.config.persistence import save_settings
+from app.utils.stats import api_stats_manager
 # 创建路由器
 dashboard_router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -50,101 +51,23 @@ def init_dashboard_router(
 async def get_dashboard_data():
     """获取仪表盘数据的API端点，用于动态刷新"""
     # 先清理过期数据，确保统计数据是最新的
-    clean_expired_stats(settings.api_call_stats)
+    await api_stats_manager.maybe_cleanup()
     await response_cache_manager.clean_expired()  # 使用管理器清理缓存
     active_requests_manager.clean_completed()  # 使用管理器清理活跃请求
     
     # 获取当前统计数据
     now = datetime.now()
     
-    # 计算过去24小时的调用总数
-    last_24h_calls = len(settings.api_call_stats['calls'])
+    # 使用新的统计系统获取调用数据
+    last_24h_calls = api_stats_manager.get_calls_last_24h()
+    hourly_calls = api_stats_manager.get_calls_last_hour(now)
+    minute_calls = api_stats_manager.get_calls_last_minute(now)
     
-    # 计算过去一小时内的调用总数
-    one_hour_ago = now - timedelta(hours=1)
-    hourly_calls = sum(1 for call in settings.api_call_stats['calls'] 
-                      if call['timestamp'] >= one_hour_ago)
-    
-    # 计算过去一分钟内的调用总数
-    one_minute_ago = now - timedelta(minutes=1)
-    minute_calls = sum(1 for call in settings.api_call_stats['calls'] 
-                      if call['timestamp'] >= one_minute_ago)
-    
-    # 计算时间序列数据（过去30分钟，每分钟一个数据点）
-    time_series_data = []
-    tokens_time_series = []
-    
-    # 过去30分钟的每分钟API调用统计
-    for i in range(30, -1, -1):
-        minute_start = now - timedelta(minutes=i)
-        minute_end = now - timedelta(minutes=i-1) if i > 0 else now
-        
-        # 这一分钟的调用次数
-        calls_in_minute = sum(1 for call in settings.api_call_stats['calls'] 
-                            if minute_start <= call['timestamp'] < minute_end)
-        
-        # 这一分钟的token使用量
-        tokens_in_minute = sum(call['tokens'] for call in settings.api_call_stats['calls'] 
-                             if minute_start <= call['timestamp'] < minute_end)
-        
-        # 添加到时间序列
-        time_series_data.append({
-            'time': minute_start.strftime('%H:%M'),
-            'value': calls_in_minute
-        })
-        
-        tokens_time_series.append({
-            'time': minute_start.strftime('%H:%M'),
-            'value': tokens_in_minute
-        })
+    # 获取时间序列数据
+    time_series_data, tokens_time_series = api_stats_manager.get_time_series_data(30, now)
     
     # 获取API密钥使用统计
-    api_key_stats = []
-    for api_key in key_manager.api_keys:
-        # 获取API密钥前8位作为标识
-        api_key_id = api_key[:8]
-        
-        # 计算24小时内的调用次数、token数和按模型分类的统计
-        calls_24h = 0
-        total_tokens = 0
-        model_stats = {}
-        
-        # 筛选该API密钥的调用记录
-        api_key_calls = [call for call in settings.api_call_stats['calls'] 
-                        if call['api_key'] == api_key]
-        
-        # 按模型分类统计
-        for call in api_key_calls:
-            model = call['model']
-            tokens = call['tokens']
-            
-            calls_24h += 1
-            total_tokens += tokens
-            
-            if model not in model_stats:
-                model_stats[model] = {
-                    'calls': 0,
-                    'tokens': 0
-                }
-            
-            model_stats[model]['calls'] += 1
-            model_stats[model]['tokens'] += tokens
-        
-        # 计算使用百分比
-        usage_percent = (calls_24h / settings.API_KEY_DAILY_LIMIT) * 100 if settings.API_KEY_DAILY_LIMIT > 0 else 0
-        
-        # 添加到结果列表
-        api_key_stats.append({
-            'api_key': api_key_id,
-            'calls_24h': calls_24h,
-            'total_tokens': total_tokens,
-            'limit': settings.API_KEY_DAILY_LIMIT,
-            'usage_percent': round(usage_percent, 2),
-            'model_stats': model_stats  # 现在包含调用次数和token数
-        })
-    
-    # 按使用百分比降序排序
-    api_key_stats.sort(key=lambda x: x['usage_percent'], reverse=True)
+    api_key_stats = api_stats_manager.get_api_key_stats(key_manager.api_keys)
     
     # 根据ENABLE_VERTEX设置决定返回哪种日志
     if settings.ENABLE_VERTEX:
@@ -203,6 +126,9 @@ async def get_dashboard_data():
         "max_concurrent_requests": settings.MAX_CONCURRENT_REQUESTS,
         # 启用vertex
         "enable_vertex": settings.ENABLE_VERTEX,
+        # 添加Vertex Express配置
+        "enable_vertex_express": settings.ENABLE_VERTEX_EXPRESS,
+        "vertex_express_api_key": bool(settings.VERTEX_EXPRESS_API_KEY),  # 只返回是否设置的状态
         # 添加最大重试次数
         "max_retry_num": settings.MAX_RETRY_NUM,
     }
@@ -233,7 +159,7 @@ async def reset_stats(password_data: dict):
             raise HTTPException(status_code=401, detail="密码错误")
         
         # 调用重置函数
-        await api_call_stats_clean()
+        await api_stats_manager.reset()
         
         return {"status": "success", "message": "API调用统计数据已重置"}
     except HTTPException:
@@ -299,6 +225,19 @@ async def update_config(config_data: dict):
                 raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
             settings.FAKE_STREAMING = config_value
             log('info', f"假流式请求已更新为：{config_value}")
+            
+        elif config_key == "enable_vertex_express":
+            if not isinstance(config_value, bool):
+                raise HTTPException(status_code=422, detail="参数类型错误：应为布尔值")
+            settings.ENABLE_VERTEX_EXPRESS = config_value
+            log('info', f"Vertex Express已更新为：{config_value}")
+            
+        elif config_key == "vertex_express_api_key":
+            if not isinstance(config_value, str):
+                raise HTTPException(status_code=422, detail="参数类型错误：应为字符串")
+            settings.VERTEX_EXPRESS_API_KEY = config_value
+            log('info', f"Vertex Express API Key已更新")
+            
         elif config_key == "fake_streaming_interval":
             try:
                 value = float(config_value)

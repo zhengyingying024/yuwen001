@@ -4,6 +4,7 @@ import { ref, computed, watch } from 'vue'
 import BasicConfig from './config/BasicConfig.vue'
 import FeaturesConfig from './config/FeaturesConfig.vue'
 import VersionInfo from './config/VersionInfo.vue'
+import VertexConfig from './config/VertexConfig.vue'
 
 const dashboardStore = useDashboardStore()
 const isExpanded = ref(true)
@@ -24,7 +25,9 @@ const configExplanations = {
   remoteVersion: '远程仓库最新版本号',
   hasUpdate: '是否有可用更新',
   searchMode: '是否启用联网搜索功能',
-  searchPrompt: '联网搜索提示'
+  searchPrompt: '联网搜索提示',
+  enableVertexExpress: '是否启用Vertex Express模式',
+  vertexExpressApiKey: 'Vertex Express API密钥'
 }
 
 // 显示解释的工具提示
@@ -96,7 +99,10 @@ async function saveConfig() {
     
     // 根据配置项类型进行类型转换
     let value = editValue.value
-    if (typeof dashboardStore.config[editingConfig.value] === 'boolean') {
+    if (editingConfig.value === 'vertexExpressApiKey') {
+      // API Key 保持为字符串类型
+      value = String(editValue.value)
+    } else if (typeof dashboardStore.config[editingConfig.value] === 'boolean') {
       value = editValue.value === 'true' || editValue.value === true
     } else if (typeof dashboardStore.config[editingConfig.value] === 'number') {
       value = Number(editValue.value)
@@ -140,6 +146,14 @@ function getConfigDisplayValue(key) {
 // 获取配置项类型
 function getConfigType(key) {
   const value = dashboardStore.config[key]
+  // 特殊处理布尔值配置项
+  if (key === 'fakeStreaming' || key === 'enableVertexExpress' || key === 'randomString' || key === 'searchMode') {
+    return 'boolean'
+  }
+  // 特殊处理 API Key 配置项
+  if (key === 'vertexExpressApiKey') {
+    return 'string'
+  }
   return typeof value
 }
 
@@ -154,8 +168,9 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
 
 <template>
   <div class="info-box">
-    <!-- Vertex模式只显示版本信息 -->
+    <!-- Vertex模式只显示版本信息和Vertex配置 -->
     <div v-if="dashboardStore.status.enableVertex">
+      <VertexConfig :openEditDialog="openEditDialog" :getConfigDisplayValue="getConfigDisplayValue" />
       <VersionInfo />
     </div>
     
@@ -254,6 +269,14 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
               rows="4"
               placeholder="请输入联网搜索提示"
             ></textarea>
+            <!-- API Key输入使用password类型 -->
+            <input 
+              v-else-if="editingConfig === 'vertexExpressApiKey'"
+              type="password" 
+              v-model="editValue"
+              class="edit-input"
+              placeholder="请输入新的 Vertex Express API Key"
+            >
             <!-- 其他字符串使用普通input -->
             <input 
               v-else

@@ -308,6 +308,12 @@ WHITELIST_USER_AGENT=
 # 切换缓存计算方法，默认为 false (使用快速但不精确的缓存键)，true 表示使用精确但稍慢的缓存键
 PRECISE_CACHE=false
 
+# 📦 持久化配置（已集成在compose文件里）
+# 持久化存储目录，默认为 /hajimi/settings/
+STORAGE_DIR=/hajimi/settings/
+# 是否启用持久化，默认为 false
+ENABLE_STORAGE=false
+
 # --- 🔑 Vertex高级配置 ---
 # 是否启用vertex，决定是否使用Vertex AI服务，默认关闭
 ENABLE_VERTEX=false

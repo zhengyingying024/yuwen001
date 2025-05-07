@@ -27,7 +27,8 @@ const configExplanations = {
   searchMode: '是否启用联网搜索功能',
   searchPrompt: '联网搜索提示',
   enableVertexExpress: '是否启用Vertex Express模式',
-  vertexExpressApiKey: 'Vertex Express API密钥'
+  vertexExpressApiKey: 'Vertex Express API密钥',
+  googleCredentialsJson: 'Google Credentials JSON'
 }
 
 // 显示解释的工具提示
@@ -102,6 +103,15 @@ async function saveConfig() {
     if (editingConfig.value === 'vertexExpressApiKey') {
       // API Key 保持为字符串类型
       value = String(editValue.value)
+    } else if (editingConfig.value === 'googleCredentialsJson') {
+      try {
+        // 尝试解析 JSON 并压缩
+        const jsonObj = JSON.parse(editValue.value)
+        value = JSON.stringify(jsonObj)
+      } catch (e) {
+        editError.value = '请输入有效的 JSON 格式'
+        return
+      }
     } else if (typeof dashboardStore.config[editingConfig.value] === 'boolean') {
       value = editValue.value === 'true' || editValue.value === true
     } else if (typeof dashboardStore.config[editingConfig.value] === 'number') {
@@ -150,8 +160,8 @@ function getConfigType(key) {
   if (key === 'fakeStreaming' || key === 'enableVertexExpress' || key === 'randomString' || key === 'searchMode') {
     return 'boolean'
   }
-  // 特殊处理 API Key 配置项
-  if (key === 'vertexExpressApiKey') {
+  // 特殊处理 API Key 和 JSON 配置项
+  if (key === 'vertexExpressApiKey' || key === 'googleCredentialsJson') {
     return 'string'
   }
   return typeof value
@@ -277,6 +287,14 @@ watch(() => dashboardStore.isRefreshing, (newValue, oldValue) => {
               class="edit-input"
               placeholder="请输入新的 Vertex Express API Key"
             >
+            <!-- Google Credentials JSON 使用 textarea -->
+            <textarea
+              v-else-if="editingConfig === 'googleCredentialsJson'"
+              v-model="editValue"
+              class="edit-input text-area"
+              rows="8"
+              placeholder="请输入 Google Credentials JSON"
+            ></textarea>
             <!-- 其他字符串使用普通input -->
             <input 
               v-else

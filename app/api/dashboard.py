@@ -129,6 +129,7 @@ async def get_dashboard_data():
         # 添加Vertex Express配置
         "enable_vertex_express": settings.ENABLE_VERTEX_EXPRESS,
         "vertex_express_api_key": bool(settings.VERTEX_EXPRESS_API_KEY),  # 只返回是否设置的状态
+        "google_credentials_json": bool(settings.GOOGLE_CREDENTIALS_JSON),  # 只返回是否设置的状态
         # 添加最大重试次数
         "max_retry_num": settings.MAX_RETRY_NUM,
     }

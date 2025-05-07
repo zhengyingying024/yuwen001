@@ -19,10 +19,10 @@ import openai # Added import
 from google.auth.transport.requests import Request as AuthRequest # Added import
 from app.config import settings
 from google.genai import types
-
+from app.utils.logging import vertex_log
 from google import genai
 import math
-VERTEX_EXPRESS_API_KEY_ENV_VAR = "VERTEX_EXPRESS_API_KEY"
+VERTEX_EXPRESS_API_KEY = "VERTEX_EXPRESS_API_KEY"
 VERTEX_EXPRESS_MODELS = [
     "gemini-2.0-flash-001",
     "gemini-2.0-flash-lite-001",
@@ -80,21 +80,21 @@ def parse_multiple_json_credentials(json_str: str) -> List[Dict[str, Any]]:
                         required_fields = ["type", "project_id", "private_key_id", "private_key", "client_email"]
                         if all(field in credentials_info for field in required_fields):
                              credentials_list.append(credentials_info)
-                             print(f"DEBUG: Successfully parsed a JSON credential object.")
+                             vertex_log("DEBUG", f"Successfully parsed a JSON credential object.")
                         else:
-                             print(f"WARNING: Parsed JSON object missing required fields: {json_object_str[:100]}...")
+                             vertex_log("WARNING", f"Parsed JSON object missing required fields: {json_object_str[:100]}...")
                     except json.JSONDecodeError as e:
-                        print(f"ERROR: Failed to parse JSON object segment: {json_object_str[:100]}... Error: {e}")
+                        vertex_log("ERROR", f"Failed to parse JSON object segment: {json_object_str[:100]}... Error: {e}")
                     current_object_start = -1 # Reset for the next object
             else:
                 # Found a closing brace without a matching open brace in scope, might indicate malformed input
-                 print(f"WARNING: Encountered unexpected '}}' at index {i}. Input might be malformed.")
+                 vertex_log("WARNING", f"Encountered unexpected '}}' at index {i}. Input might be malformed.")
 
 
     if nesting_level != 0:
-        print(f"WARNING: JSON string parsing ended with non-zero nesting level ({nesting_level}). Check for unbalanced braces.")
+        vertex_log("WARNING", f"JSON string parsing ended with non-zero nesting level ({nesting_level}). Check for unbalanced braces.")
 
-    print(f"DEBUG: Parsed {len(credentials_list)} credential objects from the input string.")
+    vertex_log("DEBUG", f"Parsed {len(credentials_list)} credential objects from the input string.")
     return credentials_list
 
 
@@ -125,7 +125,7 @@ class CredentialManager:
             # Validate structure again before creating credentials object
             required_fields = ["type", "project_id", "private_key_id", "private_key", "client_email"]
             if not all(field in credentials_info for field in required_fields):
-                 print(f"WARNING: Skipping JSON credential due to missing required fields.")
+                 vertex_log("WARNING", f"Skipping JSON credential due to missing required fields.")
                  return False
 
             credentials = service_account.Credentials.from_service_account_info(
@@ -133,7 +133,7 @@ class CredentialManager:
                 scopes=['https://www.googleapis.com/auth/cloud-platform']
             )
             project_id = credentials.project_id
-            print(f"DEBUG: Successfully created credentials object from JSON for project: {project_id}")
+            vertex_log("DEBUG", f"Successfully created credentials object from JSON for project: {project_id}")
 
             # Store the credentials object and project ID
             self.in_memory_credentials.append({
@@ -141,10 +141,10 @@ class CredentialManager:
                 'project_id': project_id,
                  'source': 'json_string' # Add source for clarity
             })
-            print(f"INFO: Added credential for project {project_id} from JSON string to Credential Manager.")
+            vertex_log("INFO", f"Added credential for project {project_id} from JSON string to Credential Manager.")
             return True
         except Exception as e:
-            print(f"ERROR: Failed to create credentials from parsed JSON object: {e}")
+            vertex_log("ERROR", f"Failed to create credentials from parsed JSON object: {e}")
             return False
 
     def load_credentials_from_json_list(self, json_list: List[Dict[str, Any]]) -> int:
@@ -173,11 +173,11 @@ class CredentialManager:
                      success_count += 1
                      newly_added_projects.add(project_id)
              elif project_id:
-                  print(f"DEBUG: Skipping duplicate credential for project {project_id} from JSON list.")
+                  vertex_log("DEBUG", f"Skipping duplicate credential for project {project_id} from JSON list.")
 
 
         if success_count > 0:
-             print(f"INFO: Loaded {success_count} new credentials from JSON list into memory.")
+             vertex_log("INFO", f"Loaded {success_count} new credentials from JSON list into memory.")
         return success_count
 
     def load_credentials_list(self):
@@ -190,7 +190,7 @@ class CredentialManager:
             # print(f"No credential files found in {self.credentials_dir}")
             pass # Don't return False yet, might have in-memory creds
         else:
-             print(f"Found {len(self.credentials_files)} credential files: {[os.path.basename(f) for f in self.credentials_files]}")
+             vertex_log("INFO", f"Found {len(self.credentials_files)} credential files: {[os.path.basename(f) for f in self.credentials_files]}")
 
         # Check total credentials
         return self.get_total_credentials() > 0
@@ -202,11 +202,11 @@ class CredentialManager:
         new_file_count = len(self.credentials_files)
 
         if old_file_count != new_file_count:
-            print(f"Credential files updated: {old_file_count} -> {new_file_count}")
+            vertex_log("INFO", f"Credential files updated: {old_file_count} -> {new_file_count}")
 
         # Total credentials = files + in-memory
         total_credentials = self.get_total_credentials()
-        print(f"DEBUG: Refresh check - Total credentials available: {total_credentials}")
+        vertex_log("DEBUG", f"Refresh check - Total credentials available: {total_credentials}")
         return total_credentials > 0
 
     def get_total_credentials(self):
@@ -220,7 +220,7 @@ class CredentialManager:
         total_credentials = self.get_total_credentials()
 
         if total_credentials == 0:
-            print("WARNING: No credentials available in Credential Manager (files or in-memory).")
+            vertex_log("WARNING", "No credentials available in Credential Manager (files or in-memory).")
             return None, None
 
         # Determine which credential (file or in-memory) to use based on the current index
@@ -234,29 +234,29 @@ class CredentialManager:
         if effective_index_to_use < num_files:
             # It's a file-based credential
             file_path = self.credentials_files[effective_index_to_use]
-            print(f"DEBUG: Attempting to load credential from file: {os.path.basename(file_path)} (Index {effective_index_to_use})")
+            vertex_log("DEBUG", f"Attempting to load credential from file: {os.path.basename(file_path)} (Index {effective_index_to_use})")
             try:
                 credentials = service_account.Credentials.from_service_account_file(
                     file_path,
                     scopes=['https://www.googleapis.com/auth/cloud-platform']
                 )
                 project_id = credentials.project_id
-                print(f"INFO: Rotated to credential file: {os.path.basename(file_path)} for project: {project_id}")
+                vertex_log("INFO", f"Rotated to credential file: {os.path.basename(file_path)} for project: {project_id}")
                 self.credentials = credentials # Cache last used
                 self.project_id = project_id   # Cache last used
                 return credentials, project_id
             except Exception as e:
-                print(f"ERROR: Failed loading credentials from file {os.path.basename(file_path)}: {e}. Skipping.")
+                vertex_log("ERROR", f"Failed loading credentials from file {os.path.basename(file_path)}: {e}. Skipping.")
                 # Try the next available credential recursively IF there are others available
                 if total_credentials > 1:
-                     print("DEBUG: Attempting to get next credential after file load error...")
+                     vertex_log("DEBUG", "Attempting to get next credential after file load error...")
                      # The index is already advanced, so calling again should try the next one
                      # Need to ensure we don't get stuck in infinite loop if all fail
                      # Let's limit recursion depth or track failed indices (simpler: rely on index advance)
                      # The index was already advanced, so calling again will try the next one
                      return self.get_next_credentials()
                 else:
-                     print("ERROR: Only one credential (file) available and it failed to load.")
+                     vertex_log("ERROR", "Only one credential (file) available and it failed to load.")
                      return None, None # No more credentials to try
         else:
             # It's an in-memory credential
@@ -265,7 +265,7 @@ class CredentialManager:
                 cred_info = self.in_memory_credentials[in_memory_index]
                 credentials = cred_info['credentials']
                 project_id = cred_info['project_id']
-                print(f"INFO: Rotated to in-memory credential for project: {project_id} (Index {in_memory_index})")
+                vertex_log("INFO", f"Rotated to in-memory credential for project: {project_id} (Index {in_memory_index})")
                 # TODO: Add handling for expired in-memory credentials if needed (refresh?)
                 # For now, assume they are valid when loaded
                 self.credentials = credentials # Cache last used
@@ -273,7 +273,7 @@ class CredentialManager:
                 return credentials, project_id
             else:
                  # This case should not happen with correct modulo arithmetic, but added defensively
-                 print(f"ERROR: Calculated in-memory index {in_memory_index} is out of bounds.")
+                 vertex_log("ERROR", f"Calculated in-memory index {in_memory_index} is out of bounds.")
                  return None, None
 
 
@@ -281,7 +281,7 @@ class CredentialManager:
         """Get a random credential (file or in-memory) and load it"""
         total_credentials = self.get_total_credentials()
         if total_credentials == 0:
-            print("WARNING: No credentials available for random selection.")
+            vertex_log("WARNING", "No credentials available for random selection.")
             return None, None
 
         random_index = random.randrange(total_credentials)
@@ -290,24 +290,24 @@ class CredentialManager:
         if random_index < num_files:
             # Selected a file-based credential
             file_path = self.credentials_files[random_index]
-            print(f"DEBUG: Randomly selected file: {os.path.basename(file_path)}")
+            vertex_log("DEBUG", f"Randomly selected file: {os.path.basename(file_path)}")
             try:
                 credentials = service_account.Credentials.from_service_account_file(
                     file_path,
                     scopes=['https://www.googleapis.com/auth/cloud-platform']
                 )
                 project_id = credentials.project_id
-                print(f"INFO: Loaded random credential from file {os.path.basename(file_path)} for project: {project_id}")
+                vertex_log("INFO", f"Loaded random credential from file {os.path.basename(file_path)} for project: {project_id}")
                 self.credentials = credentials # Cache last used
                 self.project_id = project_id   # Cache last used
                 return credentials, project_id
             except Exception as e:
-                print(f"ERROR: Failed loading random credentials file {os.path.basename(file_path)}: {e}. Trying again.")
+                vertex_log("ERROR", f"Failed loading random credentials file {os.path.basename(file_path)}: {e}. Trying again.")
                 # Try another random credential if this one fails and others exist
                 if total_credentials > 1:
                     return self.get_random_credentials() # Recursive call
                 else:
-                    print("ERROR: Only one credential (file) available and it failed to load.")
+                    vertex_log("ERROR", "Only one credential (file) available and it failed to load.")
                     return None, None
         else:
             # Selected an in-memory credential
@@ -316,13 +316,13 @@ class CredentialManager:
                 cred_info = self.in_memory_credentials[in_memory_index]
                 credentials = cred_info['credentials']
                 project_id = cred_info['project_id']
-                print(f"INFO: Loaded random in-memory credential for project: {project_id}")
+                vertex_log("INFO", f"Loaded random in-memory credential for project: {project_id}")
                 self.credentials = credentials # Cache last used
                 self.project_id = project_id   # Cache last used
                 return credentials, project_id
             else:
                  # Defensive case
-                 print(f"ERROR: Calculated random in-memory index {in_memory_index} is out of bounds.")
+                 vertex_log("ERROR", f"Calculated random in-memory index {in_memory_index} is out of bounds.")
                  return None, None
 
 # Initialize the credential manager
@@ -372,18 +372,18 @@ def init_vertex_ai():
         json_loaded_successfully = False # Flag to track if we succeed via JSON string(s)
 
         if credentials_json_str:
-            print("INFO: Found GOOGLE_CREDENTIALS_JSON environment variable. Attempting to load.")
+            vertex_log("INFO", "Found GOOGLE_CREDENTIALS_JSON environment variable. Attempting to load.")
             try:
                 # --- Attempt 1: Parse as multiple JSON objects ---
                 json_objects = parse_multiple_json_credentials(credentials_json_str)
 
                 if json_objects:
-                    print(f"DEBUG: Parsed {len(json_objects)} potential credential objects from GOOGLE_CREDENTIALS_JSON.")
+                    vertex_log("DEBUG", f"Parsed {len(json_objects)} potential credential objects from GOOGLE_CREDENTIALS_JSON.")
                     # Add all valid credentials to the credential manager's in-memory list
                     success_count = credential_manager.load_credentials_from_json_list(json_objects)
 
                     if success_count > 0:
-                        print(f"INFO: Successfully loaded {success_count} credentials from GOOGLE_CREDENTIALS_JSON into manager.")
+                        vertex_log("INFO", f"Successfully loaded {success_count} credentials from GOOGLE_CREDENTIALS_JSON into manager.")
                         # Initialize the fallback client with the first *successfully loaded* in-memory credential if needed
                         if client is None and credential_manager.in_memory_credentials:
                              try:
@@ -396,13 +396,13 @@ def init_vertex_ai():
                                      project=first_project_id,
                                      location="us-central1"
                                  )
-                                 print(f"INFO: Initialized fallback Vertex AI client using first credential from GOOGLE_CREDENTIALS_JSON (Project: {first_project_id})")
+                                 vertex_log("INFO", f"Initialized fallback Vertex AI client using first credential from GOOGLE_CREDENTIALS_JSON (Project: {first_project_id})")
                                  json_loaded_successfully = True
                              except Exception as client_init_err:
-                                  print(f"ERROR: Failed to initialize genai.Client from first GOOGLE_CREDENTIALS_JSON object: {client_init_err}")
+                                  vertex_log("ERROR", f"Failed to initialize genai.Client from first GOOGLE_CREDENTIALS_JSON object: {client_init_err}")
                                   # Don't return yet, let it fall through to other methods if client init failed
                         elif client is not None:
-                             print("INFO: Fallback client already initialized. GOOGLE_CREDENTIALS_JSON validated.")
+                             vertex_log("INFO", "Fallback client already initialized. GOOGLE_CREDENTIALS_JSON validated.")
                              json_loaded_successfully = True
                         # If client is None but loading failed to add any to manager, json_loaded_successfully remains False
 
@@ -412,7 +412,7 @@ def init_vertex_ai():
 
                 # --- Attempt 2: If multiple parsing didn't yield results, try parsing as a single JSON object ---
                 if not json_loaded_successfully: # Or if json_objects was empty
-                    print("DEBUG: Multi-JSON parsing did not yield usable credentials or failed client init. Attempting single JSON parse...")
+                    vertex_log("DEBUG", "Multi-JSON parsing did not yield usable credentials or failed client init. Attempting single JSON parse...")
                     try:
                         credentials_info = json.loads(credentials_json_str)
                         # Check structure (redundant with add_credential_from_json, but good defense)
@@ -424,7 +424,7 @@ def init_vertex_ai():
 
                         # Add this single credential to the manager
                         if credential_manager.add_credential_from_json(credentials_info):
-                             print("INFO: Successfully loaded single credential from GOOGLE_CREDENTIALS_JSON into manager.")
+                             vertex_log("INFO", "Successfully loaded single credential from GOOGLE_CREDENTIALS_JSON into manager.")
                              # Initialize client if needed, using the newly added credential
                              if client is None and credential_manager.in_memory_credentials: # Should have 1 now
                                  try:
@@ -438,12 +438,12 @@ def init_vertex_ai():
                                          project=single_project_id,
                                          location="us-central1"
                                      )
-                                     print(f"INFO: Initialized fallback Vertex AI client using single credential from GOOGLE_CREDENTIALS_JSON (Project: {single_project_id})")
+                                     vertex_log("INFO", f"Initialized fallback Vertex AI client using single credential from GOOGLE_CREDENTIALS_JSON (Project: {single_project_id})")
                                      json_loaded_successfully = True
                                  except Exception as client_init_err:
-                                     print(f"ERROR: Failed to initialize genai.Client from single GOOGLE_CREDENTIALS_JSON object: {client_init_err}")
+                                     vertex_log("ERROR", f"Failed to initialize genai.Client from single GOOGLE_CREDENTIALS_JSON object: {client_init_err}")
                              elif client is not None:
-                                  print("INFO: Fallback client already initialized. Single GOOGLE_CREDENTIALS_JSON validated.")
+                                  vertex_log("INFO", "Fallback client already initialized. Single GOOGLE_CREDENTIALS_JSON validated.")
                                   json_loaded_successfully = True
 
                              # If successful, exit
@@ -451,16 +451,16 @@ def init_vertex_ai():
                                   return True # Exit early, Priority 1 succeeded (as single JSON)
 
                     except Exception as single_json_err:
-                        print(f"WARNING: GOOGLE_CREDENTIALS_JSON could not be parsed as single valid JSON: {single_json_err}. Proceeding to other methods.")
+                        vertex_log("WARNING", f"GOOGLE_CREDENTIALS_JSON could not be parsed as single valid JSON: {single_json_err}. Proceeding to other methods.")
 
             except Exception as e:
                 # Catch errors during multi-JSON parsing or loading
-                print(f"WARNING: Error processing GOOGLE_CREDENTIALS_JSON (multi-parse/load attempt): {e}. Will try other methods.")
+                vertex_log("WARNING", f"Error processing GOOGLE_CREDENTIALS_JSON (multi-parse/load attempt): {e}. Will try other methods.")
                 # Ensure flag is False and fall through
 
         # If GOOGLE_CREDENTIALS_JSON didn't exist or failed to yield a usable client...
         if not json_loaded_successfully:
-             print(f"INFO: GOOGLE_CREDENTIALS_JSON did not provide usable credentials. Checking filesystem via Credential Manager (directory: {credential_manager.credentials_dir}).")
+             vertex_log("INFO", f"GOOGLE_CREDENTIALS_JSON did not provide usable credentials. Checking filesystem via Credential Manager (directory: {credential_manager.credentials_dir}).")
 
         # Priority 2: Try Credential Manager (files from directory)
         # Refresh file list AND check if *any* credentials (file or pre-loaded JSON) exist
@@ -475,26 +475,26 @@ def init_vertex_ai():
                     # Initialize global client ONLY if it hasn't been set by Priority 1
                     if client is None:
                         client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="us-central1")
-                        print(f"INFO: Initialized fallback Vertex AI client using Credential Manager (Source: {'File' if credential_manager.current_index <= len(credential_manager.credentials_files) else 'JSON'}) for project: {cm_project_id}")
+                        vertex_log("INFO", f"Initialized fallback Vertex AI client using Credential Manager (Source: {'File' if credential_manager.current_index <= len(credential_manager.credentials_files) else 'JSON'}) for project: {cm_project_id}")
                         return True # Successfully initialized global client via Cred Manager
                     else:
                         # Client was already initialized (likely by JSON string), but we validated CM works too.
-                        print(f"INFO: Fallback client already initialized. Credential Manager source validated for project: {cm_project_id}")
+                        vertex_log("INFO", f"Fallback client already initialized. Credential Manager source validated for project: {cm_project_id}")
                         # Don't return True here if client was already set, let it fall through to check GAC if needed (though unlikely needed now)
                 except Exception as e:
-                    print(f"ERROR: Failed to initialize client with credentials from Credential Manager source: {e}")
+                    vertex_log("ERROR", f"Failed to initialize client with credentials from Credential Manager source: {e}")
             else:
                  # This might happen if get_next_credentials itself failed internally
-                 print(f"INFO: Credential Manager get_next_credentials() returned None.")
+                 vertex_log("INFO", "Credential Manager get_next_credentials() returned None.")
         else:
-             print("INFO: No credentials found via Credential Manager (files or JSON string).")
+             vertex_log("INFO", "No credentials found via Credential Manager (files or JSON string).")
 
         # Priority 3: Fall back to GOOGLE_APPLICATION_CREDENTIALS environment variable (file path)
         # This should only run if client is STILL None after JSON and CM attempts
         # Priority 2: Try to use the credential manager to get credentials from files
         # We call get_next_credentials here mainly to validate it works and log the first file found
         # The actual rotation happens per-request
-        print(f"INFO: Checking Credential Manager (directory: {credential_manager.credentials_dir})")
+        vertex_log("INFO", f"Checking Credential Manager (directory: {credential_manager.credentials_dir})")
         cm_credentials, cm_project_id = credential_manager.get_next_credentials() # Use temp vars
 
         if cm_credentials and cm_project_id:
@@ -502,65 +502,65 @@ def init_vertex_ai():
                 # Initialize the global client ONLY if it hasn't been set yet
                 if client is None:
                     client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="us-central1")
-                    print(f"INFO: Initialized fallback Vertex AI client using Credential Manager for project: {cm_project_id}")
+                    vertex_log("INFO", f"Initialized fallback Vertex AI client using Credential Manager for project: {cm_project_id}")
                     return True # Successfully initialized global client
                 else:
-                    print(f"INFO: Fallback client already initialized. Credential Manager validated for project: {cm_project_id}")
+                    vertex_log("INFO", f"Fallback client already initialized. Credential Manager validated for project: {cm_project_id}")
                     # Don't return True here if client was already set, let it fall through to check GAC
             except Exception as e:
-                print(f"ERROR: Failed to initialize client with credentials from Credential Manager file ({credential_manager.credentials_dir}): {e}")
+                vertex_log("ERROR", f"Failed to initialize client with credentials from Credential Manager file ({credential_manager.credentials_dir}): {e}")
         else:
-             print(f"INFO: No credentials loaded via Credential Manager.")
+             vertex_log("INFO", f"No credentials loaded via Credential Manager.")
 
         # Priority 3: Fall back to GOOGLE_APPLICATION_CREDENTIALS environment variable (file path)
         file_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if file_path:
-            print(f"INFO: Checking GOOGLE_APPLICATION_CREDENTIALS file path: {file_path}")
+            vertex_log("INFO", f"Checking GOOGLE_APPLICATION_CREDENTIALS file path: {file_path}")
             if os.path.exists(file_path):
                 try:
-                    print(f"INFO: File exists, attempting to load credentials")
+                    vertex_log("INFO", f"File exists, attempting to load credentials")
                     credentials = service_account.Credentials.from_service_account_file(
                         file_path,
                         scopes=['https://www.googleapis.com/auth/cloud-platform']
                     )
                     project_id = credentials.project_id
-                    print(f"Successfully loaded credentials from file for project: {project_id}")
+                    vertex_log("INFO", f"Successfully loaded credentials from file for project: {project_id}")
                     
                     try:
                         # Initialize the global client ONLY if it hasn't been set yet
                         if client is None:
                             client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
-                            print(f"INFO: Initialized fallback Vertex AI client using GOOGLE_APPLICATION_CREDENTIALS file path for project: {project_id}")
+                            vertex_log("INFO", f"Initialized fallback Vertex AI client using GOOGLE_APPLICATION_CREDENTIALS file path for project: {project_id}")
                             return True # Successfully initialized global client
                         else:
-                            print(f"INFO: Fallback client already initialized. GOOGLE_APPLICATION_CREDENTIALS validated for project: {project_id}")
+                            vertex_log("INFO", f"Fallback client already initialized. GOOGLE_APPLICATION_CREDENTIALS validated for project: {project_id}")
                             # If client was already set, we don't need to return True, just let it finish
                     except Exception as client_err:
-                        print(f"ERROR: Failed to initialize client with credentials from GOOGLE_APPLICATION_CREDENTIALS file ({file_path}): {client_err}")
+                        vertex_log("ERROR", f"Failed to initialize client with credentials from GOOGLE_APPLICATION_CREDENTIALS file ({file_path}): {client_err}")
                 except Exception as e:
-                    print(f"ERROR: Failed to load credentials from GOOGLE_APPLICATION_CREDENTIALS path ({file_path}): {e}") # Added context
+                    vertex_log("ERROR", f"Failed to load credentials from GOOGLE_APPLICATION_CREDENTIALS path ({file_path}): {e}") # Added context
             else:
-                print(f"ERROR: GOOGLE_APPLICATION_CREDENTIALS file does not exist at path: {file_path}")
+                vertex_log("ERROR", f"GOOGLE_APPLICATION_CREDENTIALS file does not exist at path: {file_path}")
         
         # If none of the methods worked, this error is still useful
         # If we reach here, either no method worked, or a prior method already initialized the client
         if client is not None:
-             print("INFO: Fallback client initialization check complete.")
+             vertex_log("INFO", "Fallback client initialization check complete.")
              return True # A fallback client exists
         else:
-             print(f"ERROR: No valid credentials found or failed to initialize client. Tried GOOGLE_CREDENTIALS_JSON, Credential Manager ({credential_manager.credentials_dir}), and GOOGLE_APPLICATION_CREDENTIALS.")
+             vertex_log(f"ERROR: No valid credentials found or failed to initialize client. Tried GOOGLE_CREDENTIALS_JSON, Credential Manager ({credential_manager.credentials_dir}), and GOOGLE_APPLICATION_CREDENTIALS.")
              return False
     except Exception as e:
-        print(f"Error initializing authentication: {e}")
+        vertex_log("ERROR", f"Error initializing authentication: {e}")
         return False
 
 # Initialize Vertex AI at startup
 @app.on_event("startup")
 async def startup_event():
     if init_vertex_ai():
-        print("INFO: Fallback Vertex AI client initialization check completed successfully.")
+        vertex_log("INFO", "Fallback Vertex AI client initialization check completed successfully.")
     else:
-        print("ERROR: Failed to initialize a fallback Vertex AI client. API will likely fail. Please check credential configuration (GOOGLE_CREDENTIALS_JSON, /app/credentials/*.json, or GOOGLE_APPLICATION_CREDENTIALS) and logs for details.")
+        vertex_log("ERROR", "Failed to initialize a fallback Vertex AI client. API will likely fail. Please check credential configuration (GOOGLE_CREDENTIALS_JSON, /app/credentials/*.json, or GOOGLE_APPLICATION_CREDENTIALS) and logs for details.")
 
 # Conversion functions
 # Define supported roles for Gemini API
@@ -689,7 +689,7 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
     Convert OpenAI messages to Gemini format.
     Returns a Content object or list of Content objects as required by the Gemini API.
     """
-    print("Converting OpenAI messages to Gemini format...")
+    vertex_log("INFO", "Converting OpenAI messages to Gemini format...")
     
     # Create a list to hold the Gemini-formatted messages
     gemini_messages = []
@@ -698,7 +698,7 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
     for idx, message in enumerate(messages):
         # Skip messages with empty content
         if not message.content:
-            print(f"Skipping message {idx} due to empty content (Role: {message.role})")
+            vertex_log("INFO", f"Skipping message {idx} due to empty content (Role: {message.role})")
             continue
 
         # Map OpenAI roles to Gemini roles
@@ -734,7 +734,7 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
             for part in message.content:
                 if isinstance(part, dict):
                     if part.get('type') == 'text':
-                        print("Empty message detected. Auto fill in.")
+                        vertex_log("INFO", "Empty message detected. Auto fill in.")
                         parts.append(types.Part(text=part.get('text', '\n')))
                     elif part.get('type') == 'image_url':
                         image_url = part.get('image_url', {}).get('url', '')
@@ -769,7 +769,7 @@ def create_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types.Content, 
         # Add to our list
         gemini_messages.append(content)
     
-    print(f"Converted to {len(gemini_messages)} Gemini messages")
+    vertex_log("INFO", f"Converted to {len(gemini_messages)} Gemini messages")
     
     # If there's only one message, return it directly
     if len(gemini_messages) == 1:
@@ -785,7 +785,7 @@ def create_encrypted_gemini_prompt(messages: List[OpenAIMessage]) -> Union[types
     Convert OpenAI messages to Gemini format with special encoding for the encrypt model.
     This function URL-encodes user messages and adds specific system instructions.
     """
-    print("Creating encrypted Gemini prompt...")
+    vertex_log("INFO", "Creating encrypted Gemini prompt...")
     
     # Check if any message contains image content
     has_images = False
@@ -908,10 +908,10 @@ Ready for your request."""
                 ))
             else:
                 # For non-string/list content, keep as is (shouldn't be encoded)
-                print(f"DEBUG: Passing through non-string/list content for message index {i} without encoding")
+                vertex_log("INFO", f"Passing through non-string/list content for message index {i} without encoding")
                 new_messages.append(message)
     
-    print(f"Created encrypted prompt with {len(new_messages)} messages")
+    vertex_log("INFO", f"Created encrypted prompt with {len(new_messages)} messages")
     # Now use the standard function to convert to Gemini format
     return create_gemini_prompt(new_messages)
 
@@ -977,7 +977,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
         # Found a potential closing tag at index i, position current_close_pos
         close_index = i
         close_pos = current_close_pos
-        print(f"DEBUG: Found potential closing tag '{current_close_tag}' in message index {close_index} at pos {close_pos}")
+        vertex_log("INFO", f"Found potential closing tag '{current_close_tag}' in message index {close_index} at pos {close_pos}")
 
         # --- Iterate backwards from closing tag to find matching opening tag ---
         for j in range(close_index, -1, -1):
@@ -1015,7 +1015,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
             open_index = j
             open_pos = current_open_pos
             open_len = current_open_len
-            print(f"DEBUG: Found potential opening tag '{current_open_tag}' in message index {open_index} at pos {open_pos} (paired with close at index {close_index})")
+            vertex_log("INFO", f"Found potential opening tag '{current_open_tag}' in message index {open_index} at pos {open_pos} (paired with close at index {close_index})")
 
             # --- Extract content and check substantiality for this pair ---
             extracted_content = ""
@@ -1043,7 +1043,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
             cleaned_content = re.sub(pattern_trivial, '', extracted_content, flags=re.IGNORECASE)
 
             if cleaned_content.strip():
-                print(f"INFO: Substantial content found for pair ({open_index}, {close_index}). Marking as target.")
+                vertex_log("INFO", f"Substantial content found for pair ({open_index}, {close_index}). Marking as target.")
                 # This is the target pair (last complete pair with substantial content found so far)
                 target_open_index = open_index
                 target_open_pos = open_pos
@@ -1054,7 +1054,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
                 # Break out of inner loop (j) and outer loop (i)
                 break # Breaks inner loop (j)
             else:
-                print(f"INFO: No substantial content for pair ({open_index}, {close_index}). Checking earlier opening tags.")
+                vertex_log("INFO", f"No substantial content for pair ({open_index}, {close_index}). Checking earlier opening tags.")
                 # Continue inner loop (j) to find an earlier opening tag for the *same* closing tag
 
         if injection_done: break # Breaks outer loop (i)
@@ -1062,7 +1062,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
 
     # --- Obfuscate content and Inject prompt if a target pair was found ---
     if injection_done:
-        print(f"DEBUG: Starting obfuscation between index {target_open_index} and {target_close_index}")
+        vertex_log("INFO", f"Starting obfuscation between index {target_open_index} and {target_close_index}")
         # 1. Obfuscate content between tags first
         for k in range(target_open_index, target_close_index + 1):
             msg_to_modify = original_messages_copy[k]
@@ -1093,7 +1093,7 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
             # Reconstruct and update message
             new_k_content = part_before + obfuscated_part + part_after
             original_messages_copy[k] = OpenAIMessage(role=msg_to_modify.role, content=new_k_content)
-            print(f"DEBUG: Obfuscated message index {k}")
+            vertex_log("INFO", f"Obfuscated message index {k}")
 
         # 2. Inject prompt into the (now potentially obfuscated) opening message
         msg_to_inject_into = original_messages_copy[target_open_index]
@@ -1102,22 +1102,22 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
         part_after_prompt = content_after_obfuscation[target_open_pos + target_open_len:]
         final_content = part_before_prompt + OBFUSCATION_PROMPT + part_after_prompt
         original_messages_copy[target_open_index] = OpenAIMessage(role=msg_to_inject_into.role, content=final_content)
-        print(f"INFO: Obfuscation prompt injected into message index {target_open_index}.")
+        vertex_log("INFO", f"Obfuscation prompt injected into message index {target_open_index}.")
 
         # 3. Add Debug Logging (after all modifications)
-        print(f"DEBUG: Logging context around injection point (index {target_open_index}):")
-        print(f"  - Index {target_open_index} (Injected & Obfuscated): {repr(original_messages_copy[target_open_index].content)}")
+        vertex_log("INFO", f"Logging context around injection point (index {target_open_index}):")
+        vertex_log("INFO", f"  - Index {target_open_index} (Injected & Obfuscated): {repr(original_messages_copy[target_open_index].content)}")
         log_end_index = min(target_open_index + 6, len(original_messages_copy))
         for k in range(target_open_index + 1, log_end_index):
             # Ensure content exists and use repr
             msg_content_repr = repr(original_messages_copy[k].content) if hasattr(original_messages_copy[k], 'content') else 'N/A'
-            print(f"  - Index {k}: {msg_content_repr}")
+            vertex_log("INFO", f"  - Index {k}: {msg_content_repr}")
         # --- End Debug Logging ---
 
         processed_messages = original_messages_copy
     else:
         # Fallback: Add prompt as a new user message if injection didn't happen
-        print("INFO: No complete pair with substantial content found. Using fallback.")
+        vertex_log("INFO", "No complete pair with substantial content found. Using fallback.")
         processed_messages = original_messages_copy # Start with originals
         last_user_or_system_index_overall = -1
         for i, message in enumerate(processed_messages):
@@ -1127,10 +1127,10 @@ def create_encrypted_full_gemini_prompt(messages: List[OpenAIMessage]) -> Union[
         if last_user_or_system_index_overall != -1:
              injection_index = last_user_or_system_index_overall + 1
              processed_messages.insert(injection_index, OpenAIMessage(role="user", content=OBFUSCATION_PROMPT))
-             print("INFO: Obfuscation prompt added as a new fallback message.")
+             vertex_log("INFO", "Obfuscation prompt added as a new fallback message.")
         elif not processed_messages: # If the list is empty
              processed_messages.append(OpenAIMessage(role="user", content=OBFUSCATION_PROMPT))
-             print("INFO: Obfuscation prompt added as the first message (edge case).")
+             vertex_log("INFO", "Obfuscation prompt added as the first message (edge case).")
         # If there are messages but none are user/system, the prompt is not added
 
     return create_encrypted_gemini_prompt(processed_messages)
@@ -1655,7 +1655,7 @@ def _refresh_auth(credentials):
         credentials.refresh(AuthRequest())
         return credentials.token
     except Exception as e:
-        print(f"Error refreshing GCP token: {e}")
+        vertex_log("ERROR", f"Error refreshing GCP token: {e}")
         return None
 
 @app.post("/v1/chat/completions")
@@ -1672,7 +1672,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
         # --- Handle specific OpenAI client model ---
         if request.model.endswith("-openai"): # Generalized check for suffix
-            print(f"INFO: Using OpenAI library path for model: {request.model}")
+            vertex_log("INFO", f"Using OpenAI library path for model: {request.model}")
             base_model_name = request.model.replace("-openai", "") # Extract base model name
             UNDERLYING_MODEL_ID = f"google/{base_model_name}" # Add google/ prefix
 
@@ -1683,7 +1683,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             project_id_to_use = None
             credential_source = "unknown"
 
-            print(f"INFO: [OpenAI Path] Attempting to get next credential from Credential Manager...")
+            vertex_log("INFO", f"[OpenAI Path] Attempting to get next credential from Credential Manager...")
             # This will rotate through file-based and JSON-based credentials loaded during startup
             rotated_credentials, rotated_project_id = credential_manager.get_next_credentials()
 
@@ -1693,13 +1693,13 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                 # Determine if it came from file or JSON (crude check based on structure)
                 source_type = "In-Memory JSON" if hasattr(rotated_credentials, '_service_account_email') else "File" # Heuristic
                 credential_source = f"Credential Manager ({source_type})"
-                print(f"INFO: [OpenAI Path] Using credentials from {credential_source} for project: {project_id_to_use}")
+                vertex_log("INFO", f"[OpenAI Path] Using credentials from {credential_source} for project: {project_id_to_use}")
             else:
-                print(f"INFO: [OpenAI Path] Credential Manager did not provide credentials. Checking GOOGLE_APPLICATION_CREDENTIALS fallback.")
+                vertex_log("INFO", f"[OpenAI Path] Credential Manager did not provide credentials. Checking GOOGLE_APPLICATION_CREDENTIALS fallback.")
                 # Priority 3 (Fallback): GOOGLE_APPLICATION_CREDENTIALS (File Path in Env Var)
                 file_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
                 if file_path:
-                    print(f"INFO: [OpenAI Path] Checking GOOGLE_APPLICATION_CREDENTIALS file path: {file_path}")
+                    vertex_log("INFO", f"[OpenAI Path] Checking GOOGLE_APPLICATION_CREDENTIALS file path: {file_path}")
                     if os.path.exists(file_path):
                         try:
                             credentials = service_account.Credentials.from_service_account_file(
@@ -1709,17 +1709,17 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                             credentials_to_use = credentials
                             project_id_to_use = project_id
                             credential_source = "GOOGLE_APPLICATION_CREDENTIALS file path"
-                            print(f"INFO: [OpenAI Path] Using credentials from {credential_source} for project: {project_id_to_use}")
+                            vertex_log("INFO", f"[OpenAI Path] Using credentials from {credential_source} for project: {project_id_to_use}")
                         except Exception as e:
-                            print(f"ERROR: [OpenAI Path] Failed to load credentials from GOOGLE_APPLICATION_CREDENTIALS path ({file_path}): {e}")
+                            vertex_log("ERROR", f"[OpenAI Path] Failed to load credentials from GOOGLE_APPLICATION_CREDENTIALS path ({file_path}): {e}")
                     else:
-                         print(f"ERROR: [OpenAI Path] GOOGLE_APPLICATION_CREDENTIALS file does not exist at path: {file_path}")
+                        vertex_log("ERROR", f"[OpenAI Path] GOOGLE_APPLICATION_CREDENTIALS file does not exist at path: {file_path}")
 
 
             # Error if no credentials found after all checks
             if credentials_to_use is None or project_id_to_use is None:
                 error_msg = "No valid credentials found for OpenAI client path. Checked Credential Manager (JSON/Files) and GOOGLE_APPLICATION_CREDENTIALS."
-                print(f"ERROR: {error_msg}")
+                vertex_log("ERROR", f"ERROR: {error_msg}")
                 error_response = create_openai_error_response(500, error_msg, "server_error")
                 return JSONResponse(status_code=500, content=error_response)
             # --- Credentials Determined ---
@@ -1727,14 +1727,14 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             # Get/Refresh GCP Token from the chosen credentials (credentials_to_use)
             gcp_token = None
             if credentials_to_use.expired or not credentials_to_use.token:
-                print(f"INFO: [OpenAI Path] Refreshing GCP token (Source: {credential_source})...")
+                vertex_log("INFO", f"[OpenAI Path] Refreshing GCP token (Source: {credential_source})...")
                 gcp_token = _refresh_auth(credentials_to_use)
             else:
                 gcp_token = credentials_to_use.token
 
             if not gcp_token:
                 error_msg = f"Failed to obtain valid GCP token for OpenAI client (Source: {credential_source})."
-                print(f"ERROR: {error_msg}")
+                vertex_log("ERROR", f"ERROR: {error_msg}")
                 error_response = create_openai_error_response(500, error_msg, "server_error")
                 return JSONResponse(status_code=500, content=error_response)
 
@@ -1811,12 +1811,12 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                             extra_body=openai_extra_body # Pass safety settings here
                         )
                         async for chunk in stream:
-                            print(chunk.model_dump_json())
+                            vertex_log("INFO", chunk.model_dump_json())
                             yield f"data: {chunk.model_dump_json()}\n\n"
                         yield "data: [DONE]\n\n"
                     except Exception as stream_error:
                         error_msg = f"Error during OpenAI client streaming for {request.model}: {str(stream_error)}"
-                        print(error_msg)
+                        vertex_log("ERROR", error_msg)
                         error_response_content = create_openai_error_response(500, error_msg, "server_error")
                         yield f"data: {json.dumps(error_response_content)}\n\n"
                         yield "data: [DONE]\n\n"
@@ -1831,7 +1831,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                     return JSONResponse(content=response.model_dump(exclude_unset=True))
                 except Exception as generate_error:
                     error_msg = f"Error calling OpenAI client for {request.model}: {str(generate_error)}"
-                    print(error_msg)
+                    vertex_log("ERROR", error_msg)
                     error_response = create_openai_error_response(500, error_msg, "server_error")
                     return JSONResponse(status_code=500, content=error_response)
 
@@ -1885,15 +1885,15 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
         # --- Determine which client to use (Express, Rotation, or Fallback) ---
         client_to_use = None
-        express_api_key = os.environ.get(VERTEX_EXPRESS_API_KEY_ENV_VAR)
+        express_api_key = os.environ.get(VERTEX_EXPRESS_API_KEY)
 
         if express_api_key and base_model_name in VERTEX_EXPRESS_MODELS:
-            print(f"INFO: Attempting to use Vertex Express Mode for model {base_model_name} with API Key.")
+            vertex_log("INFO", f"Attempting to use Vertex Express Mode for model {base_model_name} with API Key.")
             try:
                 client_to_use = genai.Client(vertexai=True, api_key=express_api_key)
-                print(f"INFO: Successfully initialized Vertex AI client in Express Mode for model {base_model_name}.")
+                vertex_log("INFO", f"Successfully initialized Vertex AI client in Express Mode for model {base_model_name}.")
             except Exception as e:
-                print(f"ERROR: Failed to initialize Vertex AI client in Express Mode: {e}. Falling back to other methods.")
+                vertex_log("ERROR", f"Failed to initialize Vertex AI client in Express Mode: {e}. Falling back to other methods.")
                 client_to_use = None # Ensure client_to_use is None if express mode fails
 
         if client_to_use is None: # If Express Mode was not used or failed
@@ -1902,9 +1902,9 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                 try:
                     # Create a request-specific client using the rotated credentials
                     client_to_use = genai.Client(vertexai=True, credentials=rotated_credentials, project=rotated_project_id, location="us-central1")
-                    print(f"INFO: Using rotated credential for project: {rotated_project_id} (Index: {credential_manager.current_index -1 if credential_manager.current_index > 0 else credential_manager.get_total_credentials() - 1})") # Log which credential was used
+                    vertex_log("INFO", f"Using rotated credential for project: {rotated_project_id} (Index: {credential_manager.current_index -1 if credential_manager.current_index > 0 else credential_manager.get_total_credentials() - 1})") # Log which credential was used
                 except Exception as e:
-                    print(f"ERROR: Failed to create client from rotated credential: {e}. Will attempt fallback.")
+                    vertex_log("ERROR", f"Failed to create client from rotated credential: {e}. Will attempt fallback.")
                     client_to_use = None # Ensure it's None if creation failed
 
         # If express and rotation failed or weren't possible, try the fallback client
@@ -1912,7 +1912,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             global client # Access the fallback client initialized at startup
             if client is not None:
                 client_to_use = client
-                print("INFO: Using fallback Vertex AI client.")
+                vertex_log("INFO", "Using fallback Vertex AI client.")
             else:
                 # Critical error: No express, rotated, AND no fallback client
                 error_response = create_openai_error_response(
@@ -1938,17 +1938,17 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             
             # Log prompt structure
             if isinstance(prompt, list):
-                print(f"Prompt structure: {len(prompt)} messages")
+                vertex_log("INFO", f"Prompt structure: {len(prompt)} messages")
             elif isinstance(prompt, types.Content):
-                print("Prompt structure: 1 message")
+                vertex_log("INFO", "Prompt structure: 1 message")
             else:
                 # Handle old format case (which returns str or list[Any])
                 if isinstance(prompt, str):
-                     print("Prompt structure: String (old format)")
+                     vertex_log("INFO", "Prompt structure: String (old format)")
                 elif isinstance(prompt, list):
-                     print(f"Prompt structure: List[{len(prompt)}] (old format with images)")
+                     vertex_log("INFO", f"Prompt structure: List[{len(prompt)}] (old format with images)")
                 else:
-                     print("Prompt structure: Unknown format")
+                     vertex_log("INFO", "Prompt structure: Unknown format")
 
 
             if request.stream:
@@ -1966,7 +1966,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                     first_chunk_received = False
                     try:
                         for candidate_index in range(candidate_count):
-                            print(f"Sending streaming request to Gemini API (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
+                            vertex_log("INFO", f"Sending streaming request to Gemini API (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
                             # print(prompt)
                             responses = await client_instance.aio.models.generate_content_stream( # Use client_instance
                                 model=model_name,
@@ -1994,7 +1994,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
                     except Exception as stream_error:
                         error_msg = f"Error during streaming (Model: {model_name}, Format: {prompt_func.__name__}): {str(stream_error)}"
-                        print(error_msg)
+                        vertex_log("ERROR", error_msg)
                         # Yield error in SSE format but also raise to signal failure
                         error_response_content = create_openai_error_response(500, error_msg, "server_error")
                         yield f"data: {json.dumps(error_response_content)}\n\n"
@@ -2006,7 +2006,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             else:
                 # Non-streaming call
                 try:
-                    print(f"Sending request to Gemini API (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
+                    vertex_log("INFO", f"Sending request to Gemini API (Model: {model_name}, Prompt Format: {prompt_func.__name__})")
                     response = await client_instance.aio.models.generate_content( # Use client_instance
                         model=model_name,
                         contents=prompt,
@@ -2019,7 +2019,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                     return JSONResponse(content=openai_response)
                 except Exception as generate_error:
                     error_msg = f"Error generating content (Model: {model_name}, Format: {prompt_func.__name__}): {str(generate_error)}"
-                    print(error_msg)
+                    vertex_log("ERROR", error_msg)
                     # Raise error to signal failure for retry logic
                     raise generate_error
 
@@ -2037,7 +2037,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
         is_max_thinking_model = request.model.endswith("-max")
 
         if is_auto_model: # This remains the primary check after the openai specific one
-            print(f"Processing auto model: {request.model}")
+            vertex_log("INFO", f"Processing auto model: {request.model}")
             base_model_name = request.model.replace("-auto", "") # Ensure base_model_name is set here too
             # Define encryption instructions for system_instruction
             encryption_instructions = [
@@ -2056,7 +2056,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             ]
 
             for i, attempt in enumerate(attempts):
-                print(f"Attempt {i+1}/{len(attempts)} using '{attempt['name']}' mode...")
+                vertex_log("INFO", f"Attempt {i+1}/{len(attempts)} using '{attempt['name']}' mode...")
                 current_config = attempt["config_modifier"](generation_config.copy())
                 
                 try:
@@ -2064,7 +2064,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                     
                     # For streaming, the result is StreamingResponse, success is determined inside make_gemini_call raising an error on failure
                     # For non-streaming, if make_gemini_call doesn't raise, it's successful
-                    print(f"Attempt {i+1} ('{attempt['name']}') successful.")
+                    vertex_log("INFO", f"Attempt {i+1} ('{attempt['name']}') successful.")
                     return result
                 except (Exception, ExceptionGroup) as e: # Catch ExceptionGroup as well
                     actual_error = e
@@ -2076,13 +2076,13 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                              actual_error = ValueError("Empty ExceptionGroup caught") # Fallback
 
                     last_error = actual_error # Store the original or extracted error
-                    print(f"DEBUG: Caught exception in retry loop: type={type(e)}, potentially wrapped. Using: type={type(actual_error)}, value={repr(actual_error)}") # Updated debug log
-                    print(f"Attempt {i+1} ('{attempt['name']}') failed: {actual_error}") # Log the actual error
+                    vertex_log("INFO", f"DEBUG: Caught exception in retry loop: type={type(e)}, potentially wrapped. Using: type={type(actual_error)}, value={repr(actual_error)}") # Updated debug log
+                    vertex_log("INFO", f"Attempt {i+1} ('{attempt['name']}') failed: {actual_error}") # Log the actual error
                     if i < len(attempts) - 1:
-                        print("Waiting 1 second before next attempt...")
+                        vertex_log("INFO", "Waiting 1 second before next attempt...")
                         await asyncio.sleep(1) # Use asyncio.sleep for async context
                     else:
-                        print("All attempts failed.")
+                        vertex_log("INFO", "All attempts failed.")
             
             # If all attempts failed, return the last error
             error_msg = f"All retry attempts failed for model {request.model}. Last error: {str(last_error)}"
@@ -2120,11 +2120,11 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             current_config = generation_config.copy()
 
             if is_grounded_search:
-                print(f"Using grounded search for model: {request.model}")
+                vertex_log("INFO", f"Using grounded search for model: {request.model}")
                 search_tool = types.Tool(google_search=types.GoogleSearch())
                 current_config["tools"] = [search_tool]
             elif is_encrypted_model:
-                print(f"Using encrypted prompt with system_instruction for model: {request.model}")
+                vertex_log("INFO", f"Using encrypted prompt with system_instruction for model: {request.model}")
                 # Define encryption instructions for system_instruction
                 encryption_instructions = [
                     "// AI Assistant Configuration //",
@@ -2137,7 +2137,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                 current_config["system_instruction"] = encryption_instructions
                 current_prompt_func = create_encrypted_gemini_prompt
             elif is_encrypted_full_model:
-                print(f"Using encrypted prompt with system_instruction for model: {request.model}")
+                vertex_log("INFO", f"Using encrypted prompt with system_instruction for model: {request.model}")
                 # Define encryption instructions for system_instruction
                 encryption_instructions = [
                     "// AI Assistant Configuration //",
@@ -2150,11 +2150,11 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                 current_config["system_instruction"] = encryption_instructions
                 current_prompt_func = create_encrypted_full_gemini_prompt
             elif is_nothinking_model:
-                print(f"Using no thinking budget for model: {request.model}")
+                vertex_log("INFO", f"Using no thinking budget for model: {request.model}")
                 current_config["thinking_config"] = {"thinking_budget": 0}
  
             elif is_max_thinking_model:
-                print(f"Using max thinking budget for model: {request.model}")
+                vertex_log("INFO", f"Using max thinking budget for model: {request.model}")
                 current_config["thinking_config"] = {"thinking_budget": 24576}
             
 
@@ -2164,7 +2164,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             except Exception as e:
                  # Handle potential errors for non-auto models
                  error_msg = f"Error processing model {request.model}: {str(e)}"
-                 print(error_msg)
+                 vertex_log("ERROR", error_msg)
                  error_response = create_openai_error_response(500, error_msg, "server_error")
                  # Similar to auto-fail case, handle stream vs non-stream error return
                  if not request.stream:
@@ -2182,7 +2182,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
     except Exception as e:
         # Catch-all for unexpected errors during setup or logic flow
         error_msg = f"Unexpected error processing request: {str(e)}"
-        print(error_msg)
+        vertex_log("ERROR", error_msg)
         error_response = create_openai_error_response(500, error_msg, "server_error")
         # Ensure we return a JSON response even for stream requests if error happens early
         return JSONResponse(status_code=500, content=error_response)
@@ -2196,7 +2196,7 @@ def is_response_valid(response):
     # print(f"DEBUG: Response attributes: {dir(response)}")
     
     if response is None:
-        print("DEBUG: Response is None")
+        vertex_log("INFO", "DEBUG: Response is None")
         return False
 
     # For fake streaming, we'll be more lenient and try to extract any text content
@@ -2209,34 +2209,34 @@ def is_response_valid(response):
         
     # Check if candidates exist
     if hasattr(response, 'candidates') and response.candidates:
-        print(f"DEBUG: Response has {len(response.candidates)} candidates")
+        vertex_log("INFO", f"DEBUG: Response has {len(response.candidates)} candidates")
         
         # Get the first candidate
         candidate = response.candidates[0]
-        print(f"DEBUG: Candidate attributes: {dir(candidate)}")
+        vertex_log("INFO", f"DEBUG: Candidate attributes: {dir(candidate)}")
         
         # Try to get text from the candidate
         if hasattr(candidate, 'text') and candidate.text:
-            print(f"DEBUG: Found text on candidate: {candidate.text[:50]}...")
+            vertex_log("INFO", f"DEBUG: Found text on candidate: {candidate.text[:50]}...")
             return True
             
         # Try to get text from candidate.content.parts
         if hasattr(candidate, 'content'):
-            print("DEBUG: Candidate has content")
+            vertex_log("INFO", "DEBUG: Candidate has content")
             if hasattr(candidate.content, 'parts'):
-                print(f"DEBUG: Content has {len(candidate.content.parts)} parts")
+                vertex_log("INFO", f"DEBUG: Content has {len(candidate.content.parts)} parts")
                 for part in candidate.content.parts:
                     if hasattr(part, 'text') and part.text:
-                        print(f"DEBUG: Found text in content part: {part.text[:50]}...")
+                        vertex_log("INFO", f"DEBUG: Found text in content part: {part.text[:50]}...")
                         return True
     
     # If we get here, we couldn't find any text content
-    print("DEBUG: No text content found in response")
+    vertex_log("INFO", "DEBUG: No text content found in response")
     
     # For fake streaming, let's be more lenient and try to extract any content
     # If the response has any structure at all, we'll consider it valid
     if hasattr(response, 'candidates') and response.candidates:
-        print("DEBUG: Response has candidates, considering it valid for fake streaming")
+        vertex_log("INFO", "DEBUG: Response has candidates, considering it valid for fake streaming")
         return True
         
     # Last resort: check if the response has any attributes that might contain content
@@ -2246,12 +2246,12 @@ def is_response_valid(response):
         try:
             value = getattr(response, attr)
             if isinstance(value, str) and value:
-                print(f"DEBUG: Found string content in attribute {attr}: {value[:50]}...")
+                vertex_log("INFO", f"DEBUG: Found string content in attribute {attr}: {value[:50]}...")
                 return True
         except:
             pass
     
-    print("DEBUG: Response is invalid, no usable content found")
+    vertex_log("INFO", "DEBUG: Response is invalid, no usable content found")
     return False
 
 # --- Fake streaming implementation ---
@@ -2264,7 +2264,7 @@ async def fake_stream_generator(client_instance, model_name, prompt, current_gen
     
     async def fake_stream_inner():
         # Create a task for the non-streaming API call
-        print(f"FAKE STREAMING: Making non-streaming request to Gemini API (Model: {model_name})")
+        vertex_log("INFO", f"FAKE STREAMING: Making non-streaming request to Gemini API (Model: {model_name})")
         api_call_task = asyncio.create_task(
             client_instance.aio.models.generate_content( # Use client_instance
                 model=model_name,
@@ -2300,11 +2300,11 @@ async def fake_stream_generator(client_instance, model_name, prompt, current_gen
             response = api_call_task.result()
             
             # Check if the response is valid
-            print(f"FAKE STREAMING: Checking if response is valid")
+            vertex_log("INFO", f"FAKE STREAMING: Checking if response is valid")
             if not is_response_valid(response):
-                print(f"FAKE STREAMING: Response is invalid, dumping response: {str(response)[:500]}")
+                vertex_log("INFO", f"FAKE STREAMING: Response is invalid, dumping response: {str(response)[:500]}")
                 raise ValueError("Invalid or empty response received")
-            print(f"FAKE STREAMING: Response is valid")
+            vertex_log("INFO", f"FAKE STREAMING: Response is valid")
             
             # Extract the full text content
             full_text = ""
@@ -2323,16 +2323,16 @@ async def fake_stream_generator(client_instance, model_name, prompt, current_gen
             if not full_text:
                  # If still no text, maybe raise error or yield empty completion?
                  # For now, let's proceed but log a warning. Chunking will yield nothing.
-                 print("WARNING: FAKE STREAMING: No text content found in response, stream will be empty.")
+                 vertex_log("INFO", "WARNING: FAKE STREAMING: No text content found in response, stream will be empty.")
                  # raise ValueError("No text content found in response") # Option to raise error
 
             # --- Apply Deobfuscation if needed ---
             if request.model.endswith("-encrypt-full"):
-                print(f"FAKE STREAMING: Deobfuscating full text for {request.model}")
+                vertex_log("INFO", f"FAKE STREAMING: Deobfuscating full text for {request.model}")
                 full_text = deobfuscate_text(full_text)
             # --- End Deobfuscation ---
 
-            print(f"FAKE STREAMING: Received full response ({len(full_text)} chars), chunking into smaller pieces")
+            vertex_log("INFO", f"FAKE STREAMING: Received full response ({len(full_text)} chars), chunking into smaller pieces")
 
             # Split the full text into chunks
             # Calculate a reasonable chunk size based on text length
@@ -2368,7 +2368,7 @@ async def fake_stream_generator(client_instance, model_name, prompt, current_gen
             
         except Exception as e:
             error_msg = f"Error in fake streaming (Model: {model_name}): {str(e)}"
-            print(error_msg)
+            vertex_log("ERROR", error_msg)
             error_response = create_openai_error_response(500, error_msg, "server_error")
             yield f"data: {json.dumps(error_response)}\n\n"
             yield "data: [DONE]\n\n"

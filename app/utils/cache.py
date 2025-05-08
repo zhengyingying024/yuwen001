@@ -195,58 +195,12 @@ class ResponseCacheManager:
                  self.cur_cache_num = max(0, self.cur_cache_num - items_actually_removed)
                  log('info', f"因容量限制，共清理了 {items_actually_removed} 个旧缓存项。清理后缓存数: {self.cur_cache_num}")
 
-
-# 根据模型名称和全部消息，生成请求的唯一缓存键。
-def generate_cache_key_all(chat_request) -> str:
-    """
-    根据模型名称和全部消息，生成请求的唯一缓存键。
-    Args:
-        chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
-    Returns:
-        一个代表该请求的唯一缓存键字符串 (xxhash64哈希值)。
-    """
-    h = xxhash.xxh64()
-    
-    # 1. 哈希模型名称
-    h.update(chat_request.model.encode('utf-8'))
-
-    # 2. 增量哈希所有消息
-    for msg in chat_request.messages:
-        # 哈希角色
-        h.update(b'role:')
-        h.update(msg.role.encode('utf-8'))
-
-        # 哈希内容
-        if isinstance(msg.content, str):
-            h.update(b'text:')
-            h.update(msg.content.encode('utf-8'))
-        elif isinstance(msg.content, list):
-            # 处理图文混合内容
-            for item in msg.content:
-                item_type = item.get('type') if hasattr(item, 'get') else None
-                if item_type == 'text':
-                    text = item.get('text', '') if hasattr(item, 'get') else ''
-                    h.update(b'text:') # 加入类型标识符
-                    h.update(text.encode('utf-8'))
-                elif item_type == 'image_url':
-                    image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
-                    image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
-                    
-                    h.update(b'image_url:') # 加入类型标识符
-                    if image_data.startswith('data:image/'):
-                        # 对于base64图像，使用前32字符作为标识符
-                        h.update(image_data[:32].encode('utf-8'))
-                    else:
-                        h.update(image_data.encode('utf-8'))
-            
-    return h.hexdigest()
-
-def generate_cache_key(chat_request, last_n_user_messages: int = 8) -> str:
+def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=False) -> str:
     """
     根据模型名称和最后 N 条消息生成请求的唯一缓存键。
     Args:
         chat_request: 包含模型和消息列表的请求对象 (符合OpenAI格式)。
-        last_n_user_messages: 需要包含在缓存键计算中的最后消息的数量。
+        last_n_messages: 需要包含在缓存键计算中的最后消息的数量。
     Returns:
         一个代表该请求的唯一缓存键字符串 (xxhash64哈希值)。
     """
@@ -255,43 +209,81 @@ def generate_cache_key(chat_request, last_n_user_messages: int = 8) -> str:
     # 1. 哈希模型名称
     h.update(chat_request.model.encode('utf-8'))
 
-    if last_n_user_messages <= 0:
+    if last_n_messages <= 0:
         # 如果不考虑消息，直接返回基于模型的哈希
         return h.hexdigest()
 
     messages_processed = 0
+    
     # 2. 增量哈希最后 N 条消息 (从后往前)
-    for msg in reversed(chat_request.messages):
-        if messages_processed >= last_n_user_messages:
-            break
-
-        # 哈希角色
-        h.update(b'role:')
-        h.update(msg.role.encode('utf-8'))
-
-        # 哈希内容
-        if isinstance(msg.content, str):
-            h.update(b'text:')
-            h.update(msg.content.encode('utf-8'))
-        elif isinstance(msg.content, list):
-            # 处理图文混合内容
-            for item in msg.content:
-                item_type = item.get('type') if hasattr(item, 'get') else None
-                if item_type == 'text':
-                    text = item.get('text', '') if hasattr(item, 'get') else ''
-                    h.update(b'text:') 
-                    h.update(text.encode('utf-8'))
-                elif item_type == 'image_url':
-                    image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
-                    image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
-                    
-                    h.update(b'image_url:') # 加入类型标识符
-                    if image_data.startswith('data:image/'):
-                        # 对于base64图像，使用前32字符作为标识符
-                        h.update(image_data[:32].encode('utf-8'))
+    if is_gemini:    
+        for content_item in reversed(chat_request.payload.contents):
+            if messages_processed >= last_n_messages:
+                break
+            role = getattr(content_item, 'role', None)
+            if role is not None and isinstance(role, str):
+                h.update(b'role:')
+                h.update(role.encode('utf-8'))
+            
+            parts = getattr(content_item, 'parts', [])
+            if not isinstance(parts, list):
+                parts = [] 
+            for part in parts:
+                if hasattr(part, 'text') and part.text is not None:
+                    text_content = part.text
+                    if isinstance(text_content, str):
+                        h.update(b'text:') 
+                        h.update(text_content.encode('utf-8'))
                     else:
-                        h.update(image_data.encode('utf-8'))
+                        h.update(b'text:invalid_type')
+                elif hasattr(part, 'inline_data') and part.inline_data is not None:
+                    inline_data_obj = part.inline_data
+                    h.update(b'inline_data:') 
+                    data_payload = getattr(inline_data_obj, 'data', '')
+                    if isinstance(data_payload, str):
+                        h.update(b'data_prefix:')
+                        h.update(data_payload[:32].encode('utf-8'))
+                elif hasattr(part, 'file_data') and part.file_data is not None:
+                    file_data_obj = part.file_data
+                    h.update(b'file_data:')
+                    file_uri = getattr(file_data_obj, 'file_uri', '')
+                    if isinstance(file_uri, str):
+                        h.update(b'file_uri:')
+                        h.update(file_uri.encode('utf-8'))
+            messages_processed += 1
+    
+    else :
+        for msg in reversed(chat_request.messages):
+            if messages_processed >= last_n_messages:
+                break
 
-        messages_processed += 1
-        
+            # 哈希角色
+            h.update(b'role:')
+            h.update(msg.get('role', '').encode('utf-8'))
+
+            # 哈希内容
+            content = msg.get('content')
+            if isinstance(content, str):
+                h.update(b'text:')
+                h.update(content.encode('utf-8'))
+            elif isinstance(content, list):
+                # 处理图文混合内容
+                for item in content:
+                    item_type = item.get('type') if hasattr(item, 'get') else None
+                    if item_type == 'text':
+                        text = item.get('text', '') if hasattr(item, 'get') else ''
+                        h.update(b'text:') 
+                        h.update(text.encode('utf-8'))
+                    elif item_type == 'image_url':
+                        image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
+                        image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
+                        
+                        h.update(b'image_url:') # 加入类型标识符
+                        if image_data.startswith('data:image/'):
+                            # 对于base64图像，使用前32字符作为标识符
+                            h.update(image_data[:32].encode('utf-8'))
+                        else:
+                            h.update(image_data.encode('utf-8'))
+
+            messages_processed += 1
     return h.hexdigest()

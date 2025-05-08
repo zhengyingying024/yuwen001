@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from app.models import ErrorResponse
+from app.models.schemas import ErrorResponse
 from app.services import GeminiClient
 from app.utils import (
     APIKeyManager, 
@@ -20,6 +20,7 @@ from app.vertex.vertex import init_vertex_ai
 import app.config.settings as settings
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 import asyncio
+import json
 import sys
 import pathlib
 import os
@@ -62,19 +63,15 @@ async def check_remaining_keys_async(keys_to_check: list, initial_invalid_keys: 
     found_valid_keys =False
 
     for key in keys_to_check:
-        try:
-            is_valid = await test_api_key(key)
-            if is_valid:
-                if key not in key_manager.api_keys: # 避免重复添加
-                    key_manager.api_keys.append(key)
-                    found_valid_keys = True
-                log('info', f"API Key {key[:8]}... 有效")
-            else:
-                local_invalid_keys.append(key)
-                log('warning', f" API Key {key[:8]}... 无效")
-        except Exception as e:
-            log('warning', f"检查 API Key {key[:8]}... 时出错",extra={'error_message': str(e)})
-            local_invalid_keys.append(key) # 出错也视为无效
+        is_valid = await test_api_key(key)
+        if is_valid:
+            if key not in key_manager.api_keys: # 避免重复添加
+                key_manager.api_keys.append(key)
+                found_valid_keys = True
+            # log('info', f"API Key {key[:8]}... 有效")
+        else:
+            local_invalid_keys.append(key)
+            log('warning', f" API Key {key[:8]}... 无效")
         
         await asyncio.sleep(0.05) # 短暂休眠，避免请求过于密集
 

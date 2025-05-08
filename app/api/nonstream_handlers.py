@@ -1,14 +1,13 @@
 import asyncio
 from fastapi import HTTPException, Request
-from app.models import ChatCompletionRequest
+from app.models.schemas import ChatCompletionRequest
 from app.services import GeminiClient
 from app.utils import update_api_call_stats
 from app.utils.error_handling import handle_gemini_error
 from app.utils.logging import log
 import app.config.settings as settings
-import random
 from typing import Literal
-from app.utils.response import openAI_from_Gemini, openAI_from_text
+from app.utils.response import gemini_from_text, openAI_from_Gemini, openAI_from_text
 from app.utils.stats import get_api_key_usage
 
 
@@ -63,7 +62,7 @@ async def process_nonstream_request(
     
 # 处理 route 中发起请求的函数
 async def process_request(
-    chat_request: ChatCompletionRequest,
+    chat_request,
     key_manager,
     response_cache_manager,
     safety_settings,
@@ -73,16 +72,14 @@ async def process_request(
     """处理非流式请求"""
     global current_api_key
 
-    # 转换消息格式
-    contents, system_instruction = GeminiClient.convert_messages(
-        GeminiClient, chat_request.messages,model=chat_request.model)
-
-    # --- 在开始处理前检查缓存 ---
-    cached_response, cache_hit = await response_cache_manager.get_and_remove(cache_key)
-    if cache_hit:
-        log('info', f"请求命中缓存 : {cache_key[:8]}...，直接返回缓存结果。",
-            extra={'request_type': 'non-stream', 'model': chat_request.model, 'cache_operation': 'hit_and_remove'})
-        return openAI_from_Gemini(cached_response,stream=False)
+    format_type = getattr(chat_request, 'format_type', None)
+    if format_type and (format_type == "gemini"):
+        is_gemini = True
+        contents, system_instruction = None,None
+    else:
+        is_gemini = False
+        # 转换消息格式
+        contents, system_instruction = GeminiClient.convert_messages(GeminiClient, chat_request.messages,model=chat_request.model)
 
     # 设置初始并发数
     current_concurrent = settings.CONCURRENT_REQUESTS
@@ -175,7 +172,10 @@ async def process_request(
                         log('info', f"非流式请求成功", 
                             extra={'key': api_key[:8],'request_type': 'non-stream', 'model': chat_request.model})
                         cached_response, cache_hit = await  response_cache_manager.get_and_remove(cache_key)
-                        return openAI_from_Gemini(cached_response,stream=False)
+                        if is_gemini :
+                            return cached_response.data
+                        else:
+                            return openAI_from_Gemini(cached_response,stream=False)
                     elif status == "empty":
                         # 增加空响应计数
                         empty_response_count += 1
@@ -200,11 +200,17 @@ async def process_request(
             log('warning', f"空响应次数达到限制 ({empty_response_count}/{settings.MAX_EMPTY_RESPONSES})，停止轮询",
                 extra={'request_type': 'non-stream', 'model': chat_request.model})
             
-            return openAI_from_text(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词或开启防截断",finish_reason="stop",stream=False)
+            if is_gemini :
+                return gemini_from_text(content="空响应次数达到上限\n请修改输入提示词",finish_reason="STOP",stream=False)
+            else:
+                return openAI_from_text(model=chat_request.model,content="空响应次数达到上限\n请修改输入提示词",finish_reason="stop",stream=False)
     
     # 如果所有尝试都失败
     log('error', "API key 替换失败，所有API key都已尝试，请重新配置或稍后重试", extra={'request_type': 'switch_key'})
     
-    return openAI_from_text(model=chat_request.model,content="所有 API 密钥均请求失败\n具体错误请查看轮询日志",finish_reason="stop",stream=False)
+    if is_gemini:
+        return gemini_from_text(content="所有API密钥均请求失败\n具体错误请查看轮询日志",finish_reason="STOP",stream=False)
+    else:
+        return openAI_from_text(model=chat_request.model,content="所有API密钥均请求失败\n具体错误请查看轮询日志",finish_reason="stop",stream=False)
 
     # raise HTTPException(status_code=500, detail=f"API key 替换失败，所有API key都已尝试，请重新配置或稍后重试")

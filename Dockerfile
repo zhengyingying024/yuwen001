@@ -1,13 +1,12 @@
-FROM ghcr.io/astral-sh/uv:alpine
+FROM python:3.12-slim
 
 WORKDIR /app
 
 COPY . .
 
-RUN apk add --no-cache python3
-
-RUN uv sync
+RUN pip install uv
+RUN uv pip install --system --no-cache-dir -r requirements.txt
 
 EXPOSE 7860
 
-CMD ["uv", "run", "--", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

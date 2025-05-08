@@ -22,11 +22,8 @@ class APIKeyManager:
 
         self.key_stack = [] # 初始化密钥栈
         self._reset_key_stack() # 初始化时创建随机密钥栈
-        # self.api_key_blacklist = set()
-        # self.api_key_blacklist_duration = 60
         self.scheduler = BackgroundScheduler()
         self.scheduler.start()
-        self.tried_keys_for_request = set()  # 用于跟踪当前请求尝试中已试过的 key
         self.lock = asyncio.Lock() # Added lock
 
     def _reset_key_stack(self):
@@ -34,7 +31,6 @@ class APIKeyManager:
         shuffled_keys = self.api_keys[:]  # 创建 api_keys 的副本以避免直接修改原列表
         random.shuffle(shuffled_keys)
         self.key_stack = shuffled_keys
-
 
     async def get_available_key(self):
         """从栈顶获取密钥，若栈空则重新生成
@@ -49,33 +45,18 @@ class APIKeyManager:
             # 如果栈为空，重新生成
             if not self.key_stack:
                 self._reset_key_stack()
-                # 重置已尝试的key集合
-                self.tried_keys_for_request = set()
             
             # 从栈顶取出key
-            while self.key_stack:
-                key = self.key_stack.pop()
-                if key not in self.tried_keys_for_request:
-                    self.tried_keys_for_request.add(key)
-                    return key
-            
-            # 如果所有key都已尝试过，重新生成栈并重置尝试记录
-            self._reset_key_stack()
-            self.tried_keys_for_request = set()
-            
-            # 再次尝试获取key
             if self.key_stack:
-                key = self.key_stack.pop()
-                self.tried_keys_for_request.add(key)
-                return key
+                return self.key_stack.pop()
             
             # 如果没有可用的API密钥，记录错误
             if not self.api_keys:
                 log_msg = format_log_message('ERROR', "没有配置任何 API 密钥！")
                 logger.error(log_msg)
-            
+            log_msg = format_log_message('ERROR', "没有可用的API密钥！")
+            logger.error(log_msg)
             return None
-
 
     def show_all_keys(self):
         log_msg = format_log_message('INFO', f"当前可用API key个数: {len(self.api_keys)} ")

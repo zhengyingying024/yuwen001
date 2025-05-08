@@ -85,11 +85,34 @@ async def process_request(
     current_concurrent = settings.CONCURRENT_REQUESTS
     max_retry_num = settings.MAX_RETRY_NUM
     
-    # 获取有效的API密钥
-    valid_keys = []
-    for _ in range(len(key_manager.api_keys)):
-        api_key = await key_manager.get_available_key()
-        if api_key:
+    # 当前请求次数
+    current_try_num = 0
+    
+    # 空响应计数
+    empty_response_count = 0
+    
+    # 尝试使用不同API密钥，直到达到最大重试次数或空响应限制
+    while (current_try_num < max_retry_num) and (empty_response_count < settings.MAX_EMPTY_RESPONSES):
+        # 获取当前批次的密钥数量
+        batch_num = min(max_retry_num - current_try_num, current_concurrent)
+        
+        # 获取当前批次的密钥
+        valid_keys = []
+        checked_keys = set()  # 用于记录已检查过的密钥
+        all_keys_checked = False  # 标记是否已检查所有密钥
+        
+        # 尝试获取足够数量的有效密钥
+        while len(valid_keys) < batch_num:
+            api_key = await key_manager.get_available_key()
+            if not api_key:
+                break
+                
+            # 如果这个密钥已经检查过，说明已经检查了所有密钥
+            if api_key in checked_keys:
+                all_keys_checked = True
+                break
+            
+            checked_keys.add(api_key)
             # 获取API密钥的调用次数
             usage = await get_api_key_usage(settings.api_call_stats, api_key)
             # 如果调用次数小于限制，则添加到有效密钥列表
@@ -98,41 +121,28 @@ async def process_request(
             else:
                 log('warning', f"API密钥 {api_key[:8]}... 已达到每日调用限制 ({usage}/{settings.API_KEY_DAILY_LIMIT})",
                     extra={'key': api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})
-    
-    # 如果没有有效密钥，则随机使用一个密钥
-    if not valid_keys:
-        log('warning', "所有API密钥已达到每日调用限制，将随机使用一个密钥",
-            extra={'request_type': 'non-stream', 'model': chat_request.model})
-        # 重置密钥栈并获取一个密钥
-        key_manager._reset_key_stack()
-        get_key = await key_manager.get_available_key()
-        valid_keys = [get_key] if get_key else []
-    
-    # 如果可用密钥数量小于并发数，则使用所有可用密钥
-    if len(valid_keys) < current_concurrent:
-        current_concurrent = len(valid_keys)
-
-    # 当前请求次数
-    current_try_num = 0
-    
-    # 空响应计数
-    empty_response_count = 0
-    
-    # 尝试使用不同API密钥，直到所有密钥都尝试过
-    while valid_keys and (current_try_num < max_retry_num) and (empty_response_count < settings.MAX_EMPTY_RESPONSES):
-        # 获取当前批次的密钥
-        batch_num = min(max_retry_num - current_try_num, current_concurrent)
         
-        current_batch = valid_keys[:batch_num]
-        valid_keys = valid_keys[batch_num:]
+        # 如果已经检查了所有密钥且没有找到有效密钥，则重置密钥栈
+        if all_keys_checked and not valid_keys:
+            log('warning', "所有API密钥已达到每日调用限制，重置密钥栈",
+                extra={'request_type': 'non-stream', 'model': chat_request.model})
+            key_manager._reset_key_stack()
+            # 重置后重新获取一个密钥
+            api_key = await key_manager.get_available_key()
+            if api_key:
+                valid_keys = [api_key]
         
+        # 如果没有获取到任何有效密钥，跳出循环
+        if not valid_keys:
+            break
+            
         # 更新当前尝试次数
-        current_try_num += batch_num
+        current_try_num += len(valid_keys)
         
         # 创建并发任务
         tasks = []
         tasks_map = {}
-        for api_key in current_batch:
+        for api_key in valid_keys:
             # 记录当前尝试的密钥信息
             log('info', f"非流式请求开始，使用密钥: {api_key[:8]}...", 
                 extra={'key': api_key[:8], 'request_type': 'non-stream', 'model': chat_request.model})

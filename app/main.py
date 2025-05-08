@@ -62,6 +62,7 @@ async def check_remaining_keys_async(keys_to_check: list, initial_invalid_keys: 
     local_invalid_keys = []
     found_valid_keys =False
 
+    log('info', f" 开始在后台检查剩余 API Key 是否有效")
     for key in keys_to_check:
         is_valid = await test_api_key(key)
         if is_valid:

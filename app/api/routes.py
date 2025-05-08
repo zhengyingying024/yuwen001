@@ -4,12 +4,12 @@ from fastapi.responses import StreamingResponse
 from app.services import GeminiClient
 from app.utils import protect_from_abuse,generate_cache_key,openAI_from_text,log
 from app.utils.response import openAI_from_Gemini
+from app.utils.auth import custom_verify_password
 from .stream_handlers import process_stream_request
 from .nonstream_handlers import process_request
 from app.models.schemas import ChatCompletionRequest, ChatCompletionResponse, ModelList, AIRequest, ChatRequestGemini
 import app.config.settings as settings
 import asyncio
-from .auth import custom_verify_password
 
 # 创建路由器
 router = APIRouter()

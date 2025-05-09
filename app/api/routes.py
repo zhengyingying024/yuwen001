@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Union
 from fastapi import APIRouter, Body, HTTPException, Path, Query, Request, Depends, status, Header
 from fastapi.responses import StreamingResponse
@@ -74,7 +75,12 @@ async def get_cache(cache_key,is_stream: bool,is_gemini=False):
             extra={'request_type': 'non-stream', 'model': cached_response.model})
         
         if is_gemini:
-            return cached_response.data
+            if is_stream:
+                data = f"data: {json.dumps(cached_response.data, ensure_ascii=False)}\n\n"
+                return StreamingResponse(data, media_type="text/event-stream")
+            else:
+                return cached_response.data
+            
         
         if is_stream:
             chunk = openAI_from_Gemini(cached_response,stream=True)

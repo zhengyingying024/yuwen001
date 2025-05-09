@@ -48,7 +48,7 @@ class GeminiResponseWrapper:
         try:
             text=""
             for part in self._data['candidates'][0]['content']['parts']:
-                if 'thought' not in part:
+                if 'thought' not in part and 'text' in part:
                     text += part['text']
             return text
         except (KeyError, IndexError):

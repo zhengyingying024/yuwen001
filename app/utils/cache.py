@@ -217,36 +217,38 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
     
     # 2. 增量哈希最后 N 条消息 (从后往前)
     if is_gemini:    
+        # log('INFO', f"开启增量哈希gemini格式内容")
         for content_item in reversed(chat_request.payload.contents):
             if messages_processed >= last_n_messages:
                 break
-            role = getattr(content_item, 'role', None)
+            role = content_item.get('role')
             if role is not None and isinstance(role, str):
                 h.update(b'role:')
                 h.update(role.encode('utf-8'))
-            
-            parts = getattr(content_item, 'parts', [])
+            # log('INFO', f"哈希gemini格式角色{role}")
+            parts = content_item.get('parts', [])
             if not isinstance(parts, list):
-                parts = [] 
+                parts = []
             for part in parts:
-                if hasattr(part, 'text') and part.text is not None:
-                    text_content = part.text
-                    if isinstance(text_content, str):
-                        h.update(b'text:') 
-                        h.update(text_content.encode('utf-8'))
-                    else:
-                        h.update(b'text:invalid_type')
-                elif hasattr(part, 'inline_data') and part.inline_data is not None:
-                    inline_data_obj = part.inline_data
-                    h.update(b'inline_data:') 
-                    data_payload = getattr(inline_data_obj, 'data', '')
+                text_content = part.get('text')
+                if text_content is not None and isinstance(text_content, str):
+                    h.update(b'text:')
+                    h.update(text_content.encode('utf-8'))
+                    # log('INFO', f"哈希gemini格式文本内容{text_content}")
+                
+                inline_data_obj = part.get('inline_data')
+                if inline_data_obj is not None and isinstance(inline_data_obj, dict):
+                    h.update(b'inline_data:')
+                    data_payload = inline_data_obj.get('data', '')
+                    # log('INFO', f"哈希gemini格式非文本内容{data_payload[:32]}")
                     if isinstance(data_payload, str):
                         h.update(b'data_prefix:')
                         h.update(data_payload[:32].encode('utf-8'))
-                elif hasattr(part, 'file_data') and part.file_data is not None:
-                    file_data_obj = part.file_data
+
+                file_data_obj = part.get('file_data')
+                if file_data_obj is not None and isinstance(file_data_obj, dict):
                     h.update(b'file_data:')
-                    file_uri = getattr(file_data_obj, 'file_uri', '')
+                    file_uri = file_data_obj.get('file_uri', '')
                     if isinstance(file_uri, str):
                         h.update(b'file_uri:')
                         h.update(file_uri.encode('utf-8'))

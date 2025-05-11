@@ -2,10 +2,10 @@ FROM ghcr.io/astral-sh/uv:alpine
 
 WORKDIR /app
 
-COPY . .
+COPY app app
+COPY pyproject.toml version.txt .
 
-RUN apk add --no-cache python3
-RUN uv sync
+RUN apk add --no-cache python3 && uv sync
 
 EXPOSE 7860
 

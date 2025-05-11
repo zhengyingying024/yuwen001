@@ -20,7 +20,6 @@ from app.vertex.vertex import init_vertex_ai
 import app.config.settings as settings
 from app.config.safety import SAFETY_SETTINGS, SAFETY_SETTINGS_G2
 import asyncio
-import json
 import sys
 import pathlib
 import os
@@ -119,7 +118,6 @@ sys.excepthook = handle_exception
 async def startup_event():
     
     init_vertex_ai()
-    log('info', "初始化Vertex AI")
     schedule_cache_cleanup(response_cache_manager, active_requests_manager)
     # 检查版本
     await check_version()

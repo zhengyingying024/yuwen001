@@ -54,6 +54,20 @@ active_requests_manager = ActiveRequestsManager(requests_pool=active_requests_po
 SKIP_CHECK_API_KEY = os.environ.get("SKIP_CHECK_API_KEY", "").lower() == "true"
 
 # --------------- 工具函数 ---------------
+# @app.middleware("http")
+# async def log_requests(request: Request, call_next):
+#     """
+#     DEBUG用，接收并打印请求内容
+#     """
+#     log('info', f"接收到请求: {request.method} {request.url}")
+#     try:
+#         body = await request.json()
+#         log('info', f"请求体: {body}")
+#     except Exception:
+#         log('info', "请求体不是 JSON 格式或者为空")
+    
+#     response = await call_next(request)
+#     return response
 
 async def check_remaining_keys_async(keys_to_check: list, initial_invalid_keys: list):
     """
@@ -103,8 +117,7 @@ sys.excepthook = handle_exception
 
 @app.on_event("startup")
 async def startup_event():
-    log('info', "Starting Gemini API proxy...")
-    await check_version()
+    
     init_vertex_ai()
     log('info', "初始化Vertex AI")
     schedule_cache_cleanup(response_cache_manager, active_requests_manager)

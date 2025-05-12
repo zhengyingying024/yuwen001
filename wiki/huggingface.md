@@ -1,19 +1,33 @@
 # hajimi使用教程
 
+## 0. 前置镜像构建
+### 0.1 Fork
+- 点击[Fork 本项目](https://github.com/wyeeeee/hajimi/fork)。<br>![fork](./img/fork.png)
+
+### 0.2 构建镜像
+- 点击 Action。<br>![action](./img/action.png)
+- 点击绿色按钮 **I understand my workflows, go ahead and enable them**。
+- 在左侧选择 **GHCR CI**。<br>![image](./img/image.png)
+- 点击右侧的 **Run workflow** 按钮。
+- 直接点击弹出的 **Run workflow**，开始构建镜像。
+- 镜像地址为：`ghcr.io/你的github用户名/hajimi:latest`，例如：`ghcr.io/wyeeeee/hajimi:latest`。
+### 0.3 更新
+- 在你Fork的项目中点击**sync fork**，等待镜像自动构建完成后，在huggingface的settings中点击rebuild
 ## 1. 安装
-### 1.1 下载
-- 从[releases](https://github.com/wyeeeee/hajimi/releases/tag/sp)下载单文件特别版的Dockerfile。
-- 下载后应只有一个Dockerfile文件，且名称只能为Dockerfile，不能存在任何的后缀（如.bin）。
-- 对于文件部分除了上传Dockerfile以外其他什么都别干
+### 1.1 配置
+```Dockerfile
+FROM ghcr.io/你的github用户名/hajimi:latest
+EXPOSE 7860
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+```
 
 ### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。
     * 注意：用户名不要使用任何符号
 - 注册完成后，进入[spaces](https://huggingface.co/spaces)，如图所示，点击new spaces。<br> 注意：<br>![spaces](./img/spaces.png)
 - 如图所示，填入创建选项，填写完成后，点击create space，一定要记住owner与space name，在之后的酒馆连接中要使用<br> 注意：pace name不要使用任何标点符号<br>![create_space](./img/create_space.png)
-- 如图所示，选择upload files<br>![files](./img/files.png)
-- 如图所示，将1.1下载Dockerfile拖入，上传完成后点击Commit changes to main<br>![upload_files](./img/upload_files.png)
-- 检查上传的Dockerfile有没有lfs字样，如果有，删掉文件重新上传或者重新下载后上传。<br>![LFS](./img/LFS.jpg)
+- 如图所示，选择 **Create a new file**<br>![files](./img/files.png)
+- 如图所示，将1.1配置的Dockerfile填入，上传完成后点击Commit changes to main<br>![new](./img/new.png)
 
 ## 2. 配置
 ### 2.0 什么是环境变量？

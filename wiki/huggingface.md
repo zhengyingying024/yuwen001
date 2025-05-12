@@ -16,7 +16,7 @@
 ## 1. 安装
 ### 1.1 配置
 ```Dockerfile
-FROM ghcr.io/你的github用户名/hajimi:latest
+FROM ghcr.io/你的github用户名/hajimi:latest（注意，如果你的github名中有大写字母，请将其替换为小写字母）
 EXPOSE 7860
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 ```

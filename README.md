@@ -32,18 +32,12 @@
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
-* v0.2.5
-   * 警告，本次新增了openai依赖库，非容器部署请拉取安装依赖库
-   * 首发适配vertex快速模式，在配置key后，访问支持快速模式的模型时，将首先使用快速模式的key访问
-   * 快速模式仅支持gemini-2.0-flash-001,gemini-2.0-flash-lite-001,gemini-2.5-pro-preview-03-25,gemini-2.5-flash-preview-04-17
-   * 更新vertex模式ui，前端界面现在可以开启关闭假流式，快速模式与替换快速模式key
-   * 新增环境变量`VERTEX_EXPRESS_API_KEY`，为快速模式key
-   * 修复若干bug，提高系统稳定性
-
-* v0.2.4
-   * 为vertex模式适配gemini-2.5-pro-preview-05-06
-   * 修复负载均衡模式bug
-   * 优化统计相关计算，占用性能更少
+* v0.2.6
+   * 为ai studio新增gemini原生接口支持，接口格式为/gemini
+   * 优化了负载均衡策略
+   * 修改了前端样式与配置逻辑，为前端配置选项新增`空响应重试次数`配置
+   * 新增windows一键安装脚本
+   * 解决 500/503 失败不重试问题
    * 修复若干bug，提高系统稳定性
 
 * 历史版本更新日志请查看[update](./update.md)

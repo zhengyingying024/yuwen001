@@ -84,7 +84,7 @@ FROM ghcr.io/你的github用户名/hajimi:latest（注意，如果你的github�
 
 ## 4. 更新
 ### 4.1 更新方法
-- 在单文件版本中，更新只需要在相应的huggingface space的settings中选择Factory rebuild，在rebuild完成后系统会自动更新到最新版
+- 首先参照0.3 更新，同步代码自动构建新镜像，然后更新只需要在相应的huggingface space的settings中选择Factory rebuild，在rebuild完成后系统会自动更新到最新版
 
 ## 5. 注意事项
 ### 5.1 假流式传输模式说明

@@ -252,6 +252,7 @@ class GeminiClient:
         
         async with httpx.AsyncClient() as client:
             async with client.stream("POST", url, headers=headers, json=data, timeout=600) as response:
+                response.raise_for_status()
                 buffer = b"" # 用于累积可能不完整的 JSON 数据
                 try:
                     async for line in response.aiter_lines():

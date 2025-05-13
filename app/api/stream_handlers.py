@@ -207,7 +207,6 @@ async def stream_response_generator(
             error_detail = handle_gemini_error(e, api_key)
             log('error', f"流式响应: API密钥 {api_key[:8]}... 请求失败: {error_detail}",
                 extra={'key': api_key[:8], 'request_type': 'stream', 'model': chat_request.model})
-            return
         finally: 
             # 如果成功获取相应，更新API调用统计
             if success:

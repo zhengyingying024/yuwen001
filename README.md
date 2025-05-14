@@ -33,7 +33,9 @@
 
 ###  更新日志
 * v0.2.7
-   * 支持前端配置vertex json
+   * 支持前端配置热更新vertex json
+   * 支持前端配置vertex快速模式key
+   
 * v0.2.6
    * 为ai studio新增gemini原生接口支持，接口格式为/gemini
    * 优化了负载均衡策略

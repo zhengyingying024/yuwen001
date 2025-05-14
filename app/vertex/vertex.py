@@ -1809,7 +1809,6 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
                             extra_body=openai_extra_body # Pass safety settings here
                         )
                         async for chunk in stream:
-                            vertex_log("INFO", chunk.model_dump_json())
                             yield f"data: {chunk.model_dump_json()}\n\n"
                         yield "data: [DONE]\n\n"
                     except Exception as stream_error:

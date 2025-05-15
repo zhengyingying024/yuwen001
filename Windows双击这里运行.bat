@@ -61,11 +61,10 @@ if not exist "%~dp0.venv" (
     python -m pip install --upgrade pip
     
     echo Installing uv accelerator...
-    pip install nv
+    pip install uv
     
     echo Using uv to install dependencies...
-    nv use uv
-    uv pip install -r requirements.txt
+    python -m uv pip install -r requirements.txt
     
     echo Dependencies installation complete!
 ) else (

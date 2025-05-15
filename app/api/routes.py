@@ -137,7 +137,7 @@ async def aistudio_chat_completions(
     if settings.PRECISE_CACHE:
         cache_key = generate_cache_key(request, is_gemini = is_gemini)
     else:    
-        cache_key = generate_cache_key(request, last_n_messages = 8,is_gemini = is_gemini)
+        cache_key = generate_cache_key(request, last_n_messages = settings.CALCULATE_CACHE_ENTRIES,is_gemini = is_gemini)
     
     # 请求前基本检查
     await protect_from_abuse(

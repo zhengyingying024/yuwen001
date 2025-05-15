@@ -45,15 +45,6 @@ def reset_global_fallback_client():
 
 app = FastAPI(title="OpenAI to Gemini Adapter")
 
-# Add CORS middleware to handle preflight OPTIONS requests
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods (GET, POST, OPTIONS, etc.)
-    allow_headers=["*"],  # Allows all headers
-)
-
 # API Key security scheme
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 

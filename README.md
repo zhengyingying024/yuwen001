@@ -32,6 +32,9 @@
 - [vertex模式的使用文档](./wiki/vertex.md)
 
 ###  更新日志
+* v0.2.8
+   * 修复vertex模式下0325exp无法使用的问题
+   
 * v0.2.7
    * 支持前端配置热更新vertex json
    * 支持前端配置vertex快速模式key

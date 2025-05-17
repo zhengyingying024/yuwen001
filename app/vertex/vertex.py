@@ -412,7 +412,7 @@ def init_vertex_ai():
                                      vertexai=True,
                                      credentials=first_credentials,
                                      project=first_project_id,
-                                     location="us-central1"
+                                     location="global"
                                  )
                                  vertex_log("INFO", f"Initialized fallback Vertex AI client using first credential from GOOGLE_CREDENTIALS_JSON (Project: {first_project_id})")
                                  json_loaded_successfully = True
@@ -454,7 +454,7 @@ def init_vertex_ai():
                                          vertexai=True,
                                          credentials=single_credentials,
                                          project=single_project_id,
-                                         location="us-central1"
+                                         location="global"
                                      )
                                      vertex_log("INFO", f"Initialized fallback Vertex AI client using single credential from GOOGLE_CREDENTIALS_JSON (Project: {single_project_id})")
                                      json_loaded_successfully = True
@@ -492,7 +492,7 @@ def init_vertex_ai():
                 try:
                     # Initialize global client ONLY if it hasn't been set by Priority 1
                     if client is None:
-                        client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="us-central1")
+                        client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="global")
                         vertex_log("INFO", f"Initialized fallback Vertex AI client using Credential Manager (Source: {'File' if credential_manager.current_index <= len(credential_manager.credentials_files) else 'JSON'}) for project: {cm_project_id}")
                         return True # Successfully initialized global client via Cred Manager
                     else:
@@ -519,7 +519,7 @@ def init_vertex_ai():
             try:
                 # Initialize the global client ONLY if it hasn't been set yet
                 if client is None:
-                    client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="us-central1")
+                    client = genai.Client(vertexai=True, credentials=cm_credentials, project=cm_project_id, location="global")
                     vertex_log("INFO", f"Initialized fallback Vertex AI client using Credential Manager for project: {cm_project_id}")
                     return True # Successfully initialized global client
                 else:
@@ -547,7 +547,7 @@ def init_vertex_ai():
                     try:
                         # Initialize the global client ONLY if it hasn't been set yet
                         if client is None:
-                            client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="us-central1")
+                            client = genai.Client(vertexai=True, credentials=credentials, project=project_id, location="global")
                             vertex_log("INFO", f"Initialized fallback Vertex AI client using GOOGLE_APPLICATION_CREDENTIALS file path for project: {project_id}")
                             return True # Successfully initialized global client
                         else:
@@ -1729,9 +1729,9 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
 
             # Configuration using determined Project ID
             PROJECT_ID = project_id_to_use
-            LOCATION = "us-central1" # Assuming same location as genai client
+            LOCATION = "global" # Assuming same location as genai client
             VERTEX_AI_OPENAI_ENDPOINT_URL = (
-                f"https://{LOCATION}-aiplatform.googleapis.com/v1beta1/"
+                f"https://aiplatform.googleapis.com/v1beta1/"
                 f"projects/{PROJECT_ID}/locations/{LOCATION}/endpoints/openapi"
             )
             # UNDERLYING_MODEL_ID is now set above based on the request
@@ -1889,7 +1889,7 @@ async def chat_completions(request: OpenAIRequest, api_key: str = Depends(get_ap
             if rotated_credentials and rotated_project_id:
                 try:
                     # Create a request-specific client using the rotated credentials
-                    client_to_use = genai.Client(vertexai=True, credentials=rotated_credentials, project=rotated_project_id, location="us-central1")
+                    client_to_use = genai.Client(vertexai=True, credentials=rotated_credentials, project=rotated_project_id, location="global")
                     vertex_log("INFO", f"Using rotated credential for project: {rotated_project_id} (Index: {credential_manager.current_index -1 if credential_manager.current_index > 0 else credential_manager.get_total_credentials() - 1})") # Log which credential was used
                 except Exception as e:
                     vertex_log("ERROR", f"Failed to create client from rotated credential: {e}. Will attempt fallback.")

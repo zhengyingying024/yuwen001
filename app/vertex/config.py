@@ -9,8 +9,6 @@ default_credentials_dir = os.path.join(settings.STORAGE_DIR, "credentials")
 # Get credentials directory from env var or use default
 CREDENTIALS_DIR = os.environ.get('CREDENTIALS_DIR', default_credentials_dir)
 
-# Ensure the credentials directory exists
-os.makedirs(CREDENTIALS_DIR, exist_ok=True)
 
 vertex_log('info', f"Using credentials directory: {CREDENTIALS_DIR}")
 

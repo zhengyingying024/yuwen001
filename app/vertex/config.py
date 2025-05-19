@@ -7,8 +7,6 @@ from app.utils.logging import vertex_log
 if not hasattr(settings, 'CREDENTIALS_DIR'):
     # 设置默认目录为storage_dir下的credentials
     settings.CREDENTIALS_DIR = os.path.join(settings.STORAGE_DIR, "credentials")
-    # 确保凭证目录存在
-    os.makedirs(settings.CREDENTIALS_DIR, exist_ok=True)
 
 # 使用settings中的配置，保持原有变量名
 CREDENTIALS_DIR = settings.CREDENTIALS_DIR

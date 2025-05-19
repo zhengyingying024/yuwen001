@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from typing import List, Dict, Any
 
 from app.utils.logging import vertex_log
+from app.config import settings
 
 # Google and OpenAI specific imports
 from google.genai import types
@@ -107,7 +108,16 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         generation_config = create_generation_config(request)
 
         client_to_use = None
-        express_api_keys_list = app_config.VERTEX_EXPRESS_API_KEY_VAL
+        
+        # 优先从settings获取配置，如果没有则使用app_config中的配置
+        express_api_keys_list = []
+        if hasattr(settings, 'VERTEX_EXPRESS_API_KEY') and settings.VERTEX_EXPRESS_API_KEY:
+            express_api_keys_list = [key.strip() for key in settings.VERTEX_EXPRESS_API_KEY.split(',') if key.strip()]
+            vertex_log('info', f"Using {len(express_api_keys_list)} Express API keys from settings")
+        # 如果settings中没有配置，则使用app_config中的配置
+        if not express_api_keys_list and app_config.VERTEX_EXPRESS_API_KEY_VAL:
+            express_api_keys_list = app_config.VERTEX_EXPRESS_API_KEY_VAL
+            vertex_log('info', f"Using {len(express_api_keys_list)} Express API keys from app_config")
 
         # This client initialization logic is for Gemini models.
         # OpenAI Direct models have their own client setup and will return before this.

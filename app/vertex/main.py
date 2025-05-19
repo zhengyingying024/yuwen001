@@ -11,6 +11,7 @@ from app.vertex.auth import get_api_key, validate_api_key
 from app.vertex.credentials_manager import CredentialManager
 from app.vertex.vertex_ai_init import init_vertex_ai
 from app.utils.logging import vertex_log
+from app.config import settings
 # import config as app_config # Not directly used in main.py
 
 # Routers

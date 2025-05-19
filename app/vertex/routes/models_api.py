@@ -7,6 +7,7 @@ from app.vertex.model_loader import get_vertex_models, get_vertex_express_models
 import app.vertex.config as app_config
 from app.vertex.credentials_manager import CredentialManager
 from app.utils.logging import vertex_log
+from app.config import settings
 
 router = APIRouter(prefix="/models")
 
@@ -149,7 +150,15 @@ async def list_models(fastapi_request: Request, api_key: str = Depends(get_api_k
 
     # 检查是否有SA凭证和Express Key
     has_sa_creds = credential_manager_instance.get_total_credentials() > 0
-    has_express_key = bool(app_config.VERTEX_EXPRESS_API_KEY_VAL)
+    
+    # 优先从settings中获取EXPRESS API KEY
+    has_express_key = False
+    if hasattr(settings, 'VERTEX_EXPRESS_API_KEY') and settings.VERTEX_EXPRESS_API_KEY:
+        vertex_log('info', "使用settings中的VERTEX_EXPRESS_API_KEY")
+        has_express_key = True
+    elif app_config.VERTEX_EXPRESS_API_KEY_VAL:
+        vertex_log('info', "使用app_config中的VERTEX_EXPRESS_API_KEY_VAL")
+        has_express_key = True
 
     raw_vertex_models = await get_vertex_models()
     raw_express_models = await get_vertex_express_models()

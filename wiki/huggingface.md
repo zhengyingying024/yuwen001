@@ -1,4 +1,5 @@
-# hajimi使用教程
+parse_gemini_response_for_
+reasoning_and_content# hajimi使用教程
 
 ## 0. 前置镜像构建
 ### 0.1 Fork
@@ -19,14 +20,7 @@
 FROM ghcr.io/你的github用户名/hajimi:latest（注意，如果你的github名中有大写字母，请将其替换为小写字母）
 ```
 
-### 1.2 注册huggingface token
-- 前往[huggingface token](https://huggingface.co/settings/tokens)
-- 点击create new token
-- 只输入token name，其他全部默认，点击create token
-- 记下创建的token，格式为hf_asd************Jojs
-- 之后你在酒馆中的api秘钥位置应该填写这个token
-
-### 1.3 使用huggingface space部署项目
+### 1.2 使用huggingface space部署项目
 - 在[huggingface](https://huggingface.co)注册账号。
     * 注意：用户名不要使用任何符号
 - 注册完成后，进入[spaces](https://huggingface.co/spaces)，如图所示，点击new spaces。<br> 注意：<br>![spaces](./img/spaces.png)
@@ -34,7 +28,14 @@ FROM ghcr.io/你的github用户名/hajimi:latest（注意，如果你的github�
 - 如图所示，选择 **Create a new file**<br>![files](./img/files.png)
 - 如图所示，将1.1配置的Dockerfile填入，上传完成后点击Commit changes to main<br>![new](./img/111.png)
 
+### 注意
 
+### 1.3 注册huggingface token
+- 前往[huggingface token](https://huggingface.co/settings/tokens)
+- 点击create new token
+- 只输入token name，其他全部默认，点击create token
+- 记下创建的token，格式为hf_asd************Jojs
+- 之后你在酒馆中的api秘钥位置应该填写这个token
 
 
 ## 2. 配置

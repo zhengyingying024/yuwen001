@@ -1,5 +1,4 @@
-parse_gemini_response_for_
-reasoning_and_content# hajimi使用教程
+# hajimi使用教程
 
 ## 0. 前置镜像构建
 ### 0.1 Fork

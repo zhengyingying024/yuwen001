@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from google.auth.transport.requests import Request as AuthRequest
 from google.genai import types 
 from google import genai # Needed if _execute_gemini_call uses genai.Client directly
-
+from app.vertex.message_processing import parse_gemini_response_for_reasoning_and_content
 # Local module imports
 from app.vertex.models import OpenAIRequest, OpenAIMessage # Changed from relative
 from app.vertex.message_processing import deobfuscate_text, convert_to_openai_format, convert_chunk_to_openai, create_final_chunk # Changed from relative

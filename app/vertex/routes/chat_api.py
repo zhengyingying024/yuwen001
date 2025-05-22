@@ -241,7 +241,16 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
             }
 
             if request.stream:
-                if app_config.FAKE_STREAMING_ENABLED:
+                # 每次调用时直接从settings获取最新的FAKE_STREAMING值
+                fake_streaming_enabled = False
+                if hasattr(settings, 'FAKE_STREAMING'):
+                    fake_streaming_enabled = settings.FAKE_STREAMING
+                else:
+                    fake_streaming_enabled = app_config.FAKE_STREAMING_ENABLED
+                
+                vertex_log('info', f"DEBUG: FAKE_STREAMING setting is {fake_streaming_enabled} for OpenAI model {request.model}")
+                
+                if fake_streaming_enabled:
                     vertex_log('info', f"INFO: OpenAI Fake Streaming (SSE Simulation) ENABLED for model '{request.model}'.")
                     # openai_params already has "stream": True from initial setup,
                     # but openai_fake_stream_generator will make a stream=False call internally.

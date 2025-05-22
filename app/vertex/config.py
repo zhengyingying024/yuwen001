@@ -90,6 +90,8 @@ def update_config(name, value):
         global FAKE_STREAMING_ENABLED
         FAKE_STREAMING_ENABLED = value
         vertex_log('info', f"Updated FAKE_STREAMING to {value}")
+        # 确保环境变量也被更新
+        os.environ['FAKE_STREAMING'] = str(value).lower()
     elif name == 'FAKE_STREAMING_INTERVAL':
         # 更新FAKE_STREAMING_INTERVAL配置
         settings.FAKE_STREAMING_INTERVAL = value

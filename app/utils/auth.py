@@ -33,3 +33,4 @@ async def custom_verify_password(
 def verify_web_password(password:str):
     if password != settings.WEB_PASSWORD:
         return False
+    return True

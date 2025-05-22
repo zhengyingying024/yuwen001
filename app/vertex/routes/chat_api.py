@@ -101,11 +101,18 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         elif is_nothinking_model: base_model_name = base_model_name[:-len("-nothinking")]
         elif is_max_thinking_model: base_model_name = base_model_name[:-len("-max")]
         
+        # Define supported models for these specific variants
+        supported_flash_variants = [
+            "gemini-2.5-flash-preview-04-17",
+            "gemini-2.5-flash-preview-05-20"
+        ]
+        supported_flash_variants_str = "' or '".join(supported_flash_variants)
+
         # Specific model variant checks (if any remain exclusive and not covered dynamically)
-        if is_nothinking_model and base_model_name != "gemini-2.5-flash-preview-04-17":
-            return JSONResponse(status_code=400, content=create_openai_error_response(400, f"Model '{request.model}' (-nothinking) is only supported for 'gemini-2.5-flash-preview-04-17'.", "invalid_request_error"))
-        if is_max_thinking_model and base_model_name != "gemini-2.5-flash-preview-04-17":
-            return JSONResponse(status_code=400, content=create_openai_error_response(400, f"Model '{request.model}' (-max) is only supported for 'gemini-2.5-flash-preview-04-17'.", "invalid_request_error"))
+        if is_nothinking_model and base_model_name not in supported_flash_variants:
+            return JSONResponse(status_code=400, content=create_openai_error_response(400, f"Model '{request.model}' (-nothinking) is only supported for '{supported_flash_variants_str}'.", "invalid_request_error"))
+        if is_max_thinking_model and base_model_name not in supported_flash_variants:
+            return JSONResponse(status_code=400, content=create_openai_error_response(400, f"Model '{request.model}' (-max) is only supported for '{supported_flash_variants_str}'.", "invalid_request_error"))
 
         generation_config = create_generation_config(request)
 

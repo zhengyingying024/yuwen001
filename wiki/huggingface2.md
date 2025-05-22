@@ -26,7 +26,7 @@
 	- 项目前端的“系统日志”截图
 
 # huggingface部署教程（轮询部分）
-- 完全部署你需要经历[在github构建镜像]→[在huggingface创建空间]→[获取huggingface token]→[在酒馆中连通]
+- 完全部署你需要经历[在github构建镜像]→[在huggingface创建空间]→[在酒馆中连通]
 
 # 0. 在github构建镜像
 （⬇️⬇️⬇️以下操作全部在github网站进行）
@@ -60,7 +60,7 @@
   - Owner（默认是你的用户名，别动）
   - space name（自己填写，根据网站判断会出现各种错误，比如重名、有大写，自己填一个可用的）
   - Select the Space SDK（选择“Docker”，点开后用默认的“Blank”即可，不要选别的）
-  - 最后**一定**要选择`Private`(私密)（！！！！不设置为私密，你的项目就可以让别人连走随便用！！！！）
+  - 最后**一定**要选择`public`
   - 点击`Create Space`，完成空间创建
 
 ## 1.3 部署本项目
@@ -86,21 +86,10 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 - 点击`New secrets`
 
 必须变量：
-- Name填写`HUGGINGFACE` | value填写`true` | 点击保存
 - Name填写`PASSWORD` | value填写`你的密码` (你不设置默认密码是123) | 点击保存
 - Name填写`GEMINI_API_KEYS`|  value填写`你的key` (多个key需要用“,”英文逗号隔开，不能换行) | 点击保存<br>
 `⛔️免责声明：key是你的个人资产，为了安全隐私，因此保存后变量中不会显示你输入过的key，！！请一定保存好！！`<br>
 💡更多变量，点击下载txt：[https://github.com/wyeeeee/hajimi/releases/tag/settings]
-
-## 1.5 获取huggingface token
-（⚠️这个就是你酒馆中的api秘钥，且只显示一次，必须要复制保存好）
-- 前往 [https://huggingface.co/settings/tokens] （用你的huggingface密码登录！）
-- 点击右上角`+create new token`
-- 随便填一个`token name`
-- ⚠️点击`Repositories permissions`下方的搜索框，选择你的空间
-- 点击`create token`，完成创建
-记下创建的token，格式为hf_asd.....Jojs（只显示一次，必须要复制保存好，没记住就重建）
-之后你在酒馆中的api秘钥位置应该填写这个token
 
 
 # vertex模式通用教程
@@ -111,7 +100,6 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 - 分支
   - 如果你是vertex绑卡用户：直接填写`Google Credentials JSON`和你的密码，点击保存（不要打开`Vertex Express`）
   - 如果你是vertex快速模式用户：打开`Vertex Express`，在`Vertex Express API密钥`填写你的AQ密钥和你的密码，点击保存（不要碰`Google Credentials JSON`你没有也不需要）
-  - 如果你是天选用户，两个都有，那么开了快速就默认用的是快速key
 
 
 # 项目更新
@@ -133,4 +121,4 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 - 选择`自定义（兼容OpenAI）`
 - 填写链接与密钥：
   - huggingface链接：`https://你的huggingface用户名-你的空间名.hf.space/v1`，示例：https://tt335-hiiijimi.hf.space/v1
-  - 密钥：你的`huggingface token`编码
+  - 密钥：你在1.4配置的`PASSWORD`

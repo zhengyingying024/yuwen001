@@ -88,8 +88,8 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 必须变量：
 - Name填写`HUGGINGFACE` | value填写`true` | 点击保存
 - Name填写`PASSWORD` | value填写`你的密码` (你不设置默认密码是123) | 点击保存
-- Name填写`GEMINI_API_KEYS`|  value填写`你的key` (多个key需要用“,”英文逗号隔开，不能换行) | 点击保存
-`⛔️免责声明：key是你的个人资产，为了安全隐私，因此保存后变量中不会显示你输入过的key，！！请一定保存好！！`
+- Name填写`GEMINI_API_KEYS`|  value填写`你的key` (多个key需要用“,”英文逗号隔开，不能换行) | 点击保存<br>
+`⛔️免责声明：key是你的个人资产，为了安全隐私，因此保存后变量中不会显示你输入过的key，！！请一定保存好！！`<br>
 💡更多变量，点击下载txt：[https://github.com/wyeeeee/hajimi/releases/tag/settings]
 
 ## 1.5 获取huggingface token
@@ -119,9 +119,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
   - 在github右上角你的头像，进入你的个人主页就可以看到你Fork过的所有项目
   - 在里面找到hajimi并点击
   - 点击后上方会有`Sync fork`按钮，点击
-  - 弹出界面点击绿色按钮`Update branch`进行更新
+  - 弹出界面点击绿色按钮`Update branch`进行更新<br>
 2.进入huggingface空间，进行更新（就是本项目的前端界面）
-  - 点击顶部`Files`，选择后面的“⁝”符号，点击`Restart Space`（理论上可以，不行看3）
+  - 点击顶部`Files`，选择后面的“⁝”符号，点击`Restart Space`（理论上可以，不行看3）<br>
 3.另一种更新获取
   - 如果上面方式无效点击`Dockerfile`这个文件名，进入
   - 点击`Edit`

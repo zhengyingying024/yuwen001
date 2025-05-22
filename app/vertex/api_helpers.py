@@ -13,6 +13,7 @@ from app.vertex.message_processing import parse_gemini_response_for_reasoning_an
 from app.vertex.models import OpenAIRequest, OpenAIMessage # Changed from relative
 from app.vertex.message_processing import deobfuscate_text, convert_to_openai_format, convert_chunk_to_openai, create_final_chunk # Changed from relative
 import app.vertex.config as app_config # Changed from relative
+from app.config import settings # 导入settings模块
 
 def create_openai_error_response(status_code: int, message: str, error_type: str) -> Dict[str, Any]:
     return {
@@ -252,8 +253,17 @@ async def execute_gemini_call(
     client_model_name_for_log = getattr(current_client, 'model_name', 'unknown_direct_client_object')
     print(f"INFO: execute_gemini_call for requested API model '{model_to_call}', using client object with internal name '{client_model_name_for_log}'. Original request model: '{request_obj.model}'")
 
+    # 每次调用时直接从settings获取最新的FAKE_STREAMING值
+    fake_streaming_enabled = False
+    if hasattr(settings, 'FAKE_STREAMING'):
+        fake_streaming_enabled = settings.FAKE_STREAMING
+    else:
+        fake_streaming_enabled = app_config.FAKE_STREAMING_ENABLED
+    
+    print(f"DEBUG: FAKE_STREAMING setting is {fake_streaming_enabled} for model {request_obj.model}")
+
     if request_obj.stream:
-        if app_config.FAKE_STREAMING_ENABLED:
+        if fake_streaming_enabled:
             return StreamingResponse(
                 gemini_fake_stream_generator( 
                     current_client, 

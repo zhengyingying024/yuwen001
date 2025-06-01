@@ -98,10 +98,6 @@ def load_settings():
                         setattr(settings, name, ','.join(all_keys))
                     # 特殊处理GOOGLE_CREDENTIALS_JSON，如果当前环境变量中有值，则优先使用环境变量中的值
                     elif name == "GOOGLE_CREDENTIALS_JSON":
-                        log('debug', f"处理GOOGLE_CREDENTIALS_JSON: current='{current_google_credentials_json}', loaded='{value[:100] if value else 'None'}...'")
-                        log('debug', f"current类型: {type(current_google_credentials_json)}, 长度: {len(current_google_credentials_json)}, repr: {repr(current_google_credentials_json)}")
-                        log('debug', f"条件检查: not current_google_credentials_json = {not current_google_credentials_json}")
-                        log('debug', f"条件检查: not current_google_credentials_json.strip() = {not current_google_credentials_json.strip()}")
                         # 检查当前值是否为空（None、空字符串、只有空白字符，或者是"''"这样的空引号）
                         is_empty = (not current_google_credentials_json or 
                                    not current_google_credentials_json.strip() or 

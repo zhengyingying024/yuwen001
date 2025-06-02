@@ -138,8 +138,6 @@ async def startup_event():
     import app.vertex.config as vertex_config
     vertex_config.reload_config()
     
-    # 再次检查vertex配置中的值
-    log('info', f"  vertex_config.GOOGLE_CREDENTIALS_JSON: {repr(vertex_config.GOOGLE_CREDENTIALS_JSON)}")
     
     # 初始化CredentialManager
     credential_manager_instance = CredentialManager()

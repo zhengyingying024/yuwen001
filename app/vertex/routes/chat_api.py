@@ -104,7 +104,8 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         # Define supported models for these specific variants
         supported_flash_variants = [
             "gemini-2.5-flash-preview-04-17",
-            "gemini-2.5-flash-preview-05-20"
+            "gemini-2.5-flash-preview-05-20",
+            "gemini-2.5-pro-preview-06-05"
         ]
         supported_flash_variants_str = "' or '".join(supported_flash_variants)
 

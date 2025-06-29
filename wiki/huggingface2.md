@@ -73,6 +73,10 @@
   - 在"Edit"中粘贴以下内容
 ```
 FROM ghcr.io/这里填你的github用户名/你的git仓库名:latest
+
+EXPOSE 7860
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
 ```
 *注意：“ghcr.io/这里填你的github用户名/你的git仓库名:latest”就是之前说的你的镜像，如果github用户名有大写是不识别的，改为小写*
 

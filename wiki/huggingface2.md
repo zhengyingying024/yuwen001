@@ -4,7 +4,8 @@
 
 ## Gemini主流白嫖平台
 - AI studio（Google账号注册）
-  - 目前免费：仅flash模型
+  - ~~目前免费：仅flash模型~~
+  - 喜报：Google恢复了免费key的2.5pro访问权限(rpd100,rpm5,tpm250k,tpd6M)
 - vertex AI（绑卡）
   - 目前免费：仅0325pro-exp（每分钟上下文131k）
 - vertex AI express（快速模式，无需绑卡，点击领取，有些人能领有些人不能）
@@ -31,7 +32,7 @@
 
 ## 0.1 Fork本项目
 - 点击链接：[https://github.com/wyeeeee/hajimi/fork]
-- 注意：现在Huggingface在封禁hajimi镜像，所以在fork仓库是不要使用hajimi原名，随便写点其他东西来填写`Repository name`
+- 注意：现在Huggingface在封禁hajimi镜像，所以在fork仓库时不要使用hajimi原名，随便写点其他东西来填写`Repository name`
 - 点击底部绿色按钮`Create fork`完成Fork操作
 
 ## 0.2 构建镜像

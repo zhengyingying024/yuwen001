@@ -25,6 +25,21 @@ const isTestingKeys = ref(false)
 const testingProgress = ref(0)
 const testingTotal = ref(0)
 
+// 清除失效API密钥相关状态
+const showClearInvalidKeysDialog = ref(false)
+const clearInvalidKeysPassword = ref('')
+const clearInvalidKeysError = ref('')
+const clearInvalidKeysSuccess = ref('')
+const isClearingKeys = ref(false)
+
+// 输出有效API密钥相关状态
+const showExportValidKeysDialog = ref(false)
+const exportValidKeysPassword = ref('')
+const exportValidKeysError = ref('')
+const exportValidKeysSuccess = ref('')
+const isExportingKeys = ref(false)
+const exportedKeys = ref([])
+
 // 分页相关
 const currentPage = ref(1)
 const itemsPerPage = 20
@@ -181,6 +196,153 @@ async function submitApiKeyTest() {
   }
 }
 
+// 切换清除失效API密钥对话框显示/隐藏
+function toggleClearInvalidKeysDialog() {
+  showClearInvalidKeysDialog.value = !showClearInvalidKeysDialog.value
+  if (!showClearInvalidKeysDialog.value) {
+    // 重置表单
+    clearInvalidKeysPassword.value = ''
+    clearInvalidKeysError.value = ''
+    clearInvalidKeysSuccess.value = ''
+  }
+}
+
+// 提交清除失效API密钥
+async function submitClearInvalidKeys() {
+  // 重置消息
+  clearInvalidKeysError.value = ''
+  clearInvalidKeysSuccess.value = ''
+  
+  // 表单验证
+  if (!clearInvalidKeysPassword.value.trim()) {
+    clearInvalidKeysError.value = '请输入密码'
+    return
+  }
+  
+  isClearingKeys.value = true
+  
+  try {
+    // 调用API清除失效密钥
+    const response = await fetch('/api/clear-invalid-api-keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        password: clearInvalidKeysPassword.value
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || '清除失效API密钥失败')
+    }
+    
+    const data = await response.json()
+    clearInvalidKeysSuccess.value = data.message || '清除失效API密钥成功'
+    
+    // 清空密码输入框
+    clearInvalidKeysPassword.value = ''
+    
+    // 刷新数据
+    await dashboardStore.fetchDashboardData()
+    
+    // 如果成功，3秒后自动关闭对话框
+    setTimeout(() => {
+      if (showClearInvalidKeysDialog.value) {
+        showClearInvalidKeysDialog.value = false
+      }
+    }, 3000)
+    
+  } catch (error) {
+    clearInvalidKeysError.value = error.message || '清除失效API密钥失败'
+  } finally {
+    isClearingKeys.value = false
+  }
+}
+
+// 切换输出有效API密钥对话框显示/隐藏
+function toggleExportValidKeysDialog() {
+  showExportValidKeysDialog.value = !showExportValidKeysDialog.value
+  if (!showExportValidKeysDialog.value) {
+    // 重置表单
+    exportValidKeysPassword.value = ''
+    exportValidKeysError.value = ''
+    exportValidKeysSuccess.value = ''
+    exportedKeys.value = []
+  }
+}
+
+// 提交输出有效API密钥
+async function submitExportValidKeys() {
+  // 重置消息
+  exportValidKeysError.value = ''
+  exportValidKeysSuccess.value = ''
+  exportedKeys.value = []
+  
+  // 表单验证
+  if (!exportValidKeysPassword.value.trim()) {
+    exportValidKeysError.value = '请输入密码'
+    return
+  }
+  
+  isExportingKeys.value = true
+  
+  try {
+    // 调用API获取有效密钥
+    const response = await fetch('/api/export-valid-api-keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        password: exportValidKeysPassword.value
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || '获取有效API密钥失败')
+    }
+    
+    const data = await response.json()
+    exportValidKeysSuccess.value = data.message || '获取有效API密钥成功'
+    exportedKeys.value = data.keys || []
+    
+    // 清空密码输入框
+    exportValidKeysPassword.value = ''
+    
+  } catch (error) {
+    exportValidKeysError.value = error.message || '获取有效API密钥失败'
+  } finally {
+    isExportingKeys.value = false
+  }
+}
+
+// 复制密钥到剪贴板
+async function copyKeyToClipboard(key) {
+  try {
+    await navigator.clipboard.writeText(key)
+    // 可以添加一个临时的成功提示
+    console.log('密钥已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+  }
+}
+
+// 复制所有密钥到剪贴板
+async function copyAllKeysToClipboard() {
+  if (exportedKeys.value.length === 0) return
+  
+  try {
+    const allKeys = exportedKeys.value.join('\n')
+    await navigator.clipboard.writeText(allKeys)
+    console.log('所有密钥已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+  }
+}
+
 // 切换模型详情的折叠状态
 function toggleModelFold(apiKeyId) {
   if (!modelFoldState.value[apiKeyId]) {
@@ -291,6 +453,28 @@ const totalTokens = computed(() => {
             <line x1="17.5" y1="15" x2="9" y2="15"></line>
           </svg>
           检测API密钥
+        </button>
+        
+        <!-- 添加清除失效API密钥按钮 -->
+        <button class="clear-invalid-keys-button" @click="toggleClearInvalidKeysDialog">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path>
+            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          清除失效密钥
+        </button>
+        
+        <!-- 添加输出有效API密钥按钮 -->
+        <button class="export-valid-keys-button" @click="toggleExportValidKeysDialog">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7,10 12,15 17,10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          输出有效密钥
         </button>
       </div>
     </div>
@@ -408,6 +592,136 @@ const totalTokens = computed(() => {
             :disabled="isTestingKeys"
           >
             {{ isTestingKeys ? '检测中...' : '取消' }}
+          </button>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- 清除失效API密钥对话框 -->
+    <transition name="slide">
+      <div v-if="showClearInvalidKeysDialog" class="clear-invalid-keys-form">
+        <div class="form-title">
+          <h4>清除失效API密钥</h4>
+          <p class="form-description">
+            此操作将永久清除所有存储在INVALID_API_KEYS中的失效API密钥。
+            清除后，这些密钥将无法恢复，请确认操作。
+          </p>
+        </div>
+        
+        <div class="form-group">
+          <label for="clearInvalidKeysPassword">管理密码</label>
+          <input 
+            id="clearInvalidKeysPassword" 
+            v-model="clearInvalidKeysPassword" 
+            type="password" 
+            placeholder="请输入管理密码以确认操作"
+            class="api-key-password"
+            :disabled="isClearingKeys"
+          />
+        </div>
+        
+        <div v-if="clearInvalidKeysError" class="api-key-error">
+          {{ clearInvalidKeysError }}
+        </div>
+        
+        <div v-if="clearInvalidKeysSuccess" class="api-key-success">
+          {{ clearInvalidKeysSuccess }}
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            class="submit-api-key" 
+            @click="submitClearInvalidKeys" 
+            :disabled="isClearingKeys"
+          >
+            <span v-if="isClearingKeys">清除中...</span>
+            <span v-else>确认清除</span>
+          </button>
+          
+          <button 
+            class="cancel-api-key" 
+            @click="toggleClearInvalidKeysDialog" 
+            :disabled="isClearingKeys"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </transition>
+    
+    <!-- 输出有效API密钥对话框 -->
+    <transition name="slide">
+      <div v-if="showExportValidKeysDialog" class="export-valid-keys-form">
+        <div class="form-title">
+          <h4>输出有效API密钥</h4>
+          <p class="form-description">
+            此操作将显示当前所有有效的API密钥。请注意保护您的密钥安全。
+          </p>
+        </div>
+        
+        <div v-if="exportedKeys.length === 0" class="form-group">
+          <label for="exportValidKeysPassword">管理密码</label>
+          <input 
+            id="exportValidKeysPassword" 
+            v-model="exportValidKeysPassword" 
+            type="password" 
+            placeholder="请输入管理密码以确认操作"
+            class="api-key-password"
+            :disabled="isExportingKeys"
+          />
+        </div>
+        
+        <div v-if="exportValidKeysError" class="api-key-error">
+          {{ exportValidKeysError }}
+        </div>
+        
+        <div v-if="exportValidKeysSuccess" class="api-key-success">
+          {{ exportValidKeysSuccess }}
+        </div>
+        
+        <!-- 显示导出的密钥列表 -->
+        <div v-if="exportedKeys.length > 0" class="exported-keys-container">
+          <div class="exported-keys-header">
+            <h5>有效API密钥列表 ({{ exportedKeys.length }} 个)</h5>
+            <button class="copy-all-button" @click="copyAllKeysToClipboard">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              复制全部
+            </button>
+          </div>
+          
+          <div class="exported-keys-list">
+            <div v-for="(key, index) in exportedKeys" :key="index" class="exported-key-item">
+              <div class="key-text">{{ key }}</div>
+              <button class="copy-key-button" @click="copyKeyToClipboard(key)" title="复制密钥">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-actions">
+          <button 
+            v-if="exportedKeys.length === 0"
+            class="submit-api-key" 
+            @click="submitExportValidKeys" 
+            :disabled="isExportingKeys"
+          >
+            <span v-if="isExportingKeys">获取中...</span>
+            <span v-else>获取密钥</span>
+          </button>
+          
+          <button 
+            class="cancel-api-key" 
+            @click="toggleExportValidKeysDialog" 
+            :disabled="isExportingKeys"
+          >
+            关闭
           </button>
         </div>
       </div>
@@ -629,6 +943,70 @@ const totalTokens = computed(() => {
   transform: rotate(15deg);
 }
 
+/* 清除失效API密钥按钮样式 */
+.clear-invalid-keys-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--button-danger, #dc3545);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.clear-invalid-keys-button svg {
+  transition: transform 0.3s ease;
+  stroke: white;
+}
+
+.clear-invalid-keys-button:hover {
+  background-color: var(--button-danger-hover, #c82333);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.clear-invalid-keys-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* 输出有效API密钥按钮样式 */
+.export-valid-keys-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--button-success, #28a745);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.export-valid-keys-button svg {
+  transition: transform 0.3s ease;
+  stroke: white;
+}
+
+.export-valid-keys-button:hover {
+  background-color: var(--button-success-hover, #218838);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.export-valid-keys-button:hover svg {
+  transform: translateY(-1px);
+}
+
 /* API密钥测试表单样式 */
 .api-key-test-form {
   background-color: var(--color-background-mute);
@@ -637,6 +1015,128 @@ const totalTokens = computed(() => {
   margin-bottom: 20px;
   border: 1px solid var(--card-border);
   box-shadow: var(--shadow-md);
+}
+
+/* 清除失效API密钥表单样式 */
+.clear-invalid-keys-form {
+  background-color: var(--color-background-mute);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-md);
+}
+
+/* 输出有效API密钥表单样式 */
+.export-valid-keys-form {
+  background-color: var(--color-background-mute);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-md);
+}
+
+/* 导出的密钥容器样式 */
+.exported-keys-container {
+  margin-top: 15px;
+}
+
+.exported-keys-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.exported-keys-header h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-heading);
+  margin: 0;
+}
+
+.copy-all-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--button-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.copy-all-button:hover {
+  background-color: var(--button-primary-hover);
+  transform: translateY(-1px);
+}
+
+.copy-all-button svg {
+  stroke: white;
+}
+
+.exported-keys-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+}
+
+.exported-key-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.2s ease;
+}
+
+.exported-key-item:last-child {
+  border-bottom: none;
+}
+
+.exported-key-item:hover {
+  background-color: var(--color-background-mute);
+}
+
+.key-text {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--color-text);
+  word-break: break-all;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.copy-key-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 28px;
+  height: 28px;
+}
+
+.copy-key-button:hover {
+  background-color: var(--button-primary);
+  color: white;
+  border-color: var(--button-primary);
+}
+
+.copy-key-button svg {
+  stroke: currentColor;
 }
 
 .form-title {
@@ -1189,185 +1689,39 @@ const totalTokens = computed(() => {
   color: var(--color-text);
 }
 
-/* 移动端优化 */
+/* 响应式设计 */
 @media (max-width: 768px) {
   .header-section {
     flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 15px;
   }
   
   .header-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
-    flex-direction: row;
-  }
-  
-  .fold-header {
-    margin-right: 0;
-  }
-  
-  .add-api-key-button, .test-api-key-button {
     width: 100%;
-    justify-content: center;
+  }
+  
+  .add-api-key-button, 
+  .test-api-key-button, 
+  .clear-invalid-keys-button, 
+  .export-valid-keys-button {
     padding: 8px 12px;
     font-size: 12px;
-  }
-  
-  .api-key-input-form, .api-key-test-form {
-    padding: 15px;
-  }
-  
-  .form-title h4 {
-    font-size: 15px;
-  }
-  
-  .form-description {
-    font-size: 12px;
-  }
-  
-  .stats-grid {
+    justify-content: center;
+    min-height: 36px;
     gap: 6px;
   }
   
-  .stat-card {
-    padding: 8px 5px;
-  }
-  
-  .stat-value {
-    font-size: 16px;
-  }
-  
-  .stat-label {
-    font-size: 11px;
-    margin-top: 3px;
-  }
-  
-  .stats-summary {
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px;
-  }
-  
-  .summary-item {
-    flex-direction: row;
-    justify-content: space-between;
-    width: 100%;
-  }
-  
-  .summary-label {
-    margin-bottom: 0;
-  }
-  
-  .api-key-stats-list {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .api-key-item {
-    padding: 8px;
-  }
-  
-  .api-key-header {
-    margin-bottom: 6px;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
-  
-  .api-key-name {
-    font-size: 13px;
-    max-width: 100%;
-    margin-bottom: 3px;
-    color: var(--button-primary);
-  }
-  
-  .api-key-usage {
-    font-size: 12px;
-    gap: 5px;
-    width: 100%;
-    justify-content: space-between;
-  }
-  
-  .model-stats-container {
-    margin-top: 8px;
-    padding-top: 8px;
-  }
-  
-  .model-stats-header {
-    font-size: 12px;
-    margin-bottom: 6px;
-  }
-  
-  .model-stat-item {
-    padding: 8px;
-  }
-  
-  .model-info {
-    gap: 5px;
-  }
-  
-  .model-name {
-    font-size: 12px;
-    color: var(--button-primary);
-  }
-  
-  .model-count {
-    font-size: 11px;
-  }
-  
-  .model-usage-text {
-    font-size: 10px;
-    color: var(--color-heading);
-    opacity: 0.9;
-  }
-  
-  .model-tokens {
-    font-size: 10px;
-    color: var(--color-heading);
-    opacity: 0.9;
-  }
-  
-  .total-tokens {
-    margin-top: 4px;
-    padding: 6px 8px;
-  }
-  
-  .total-tokens-label {
-    font-size: 10px;
-    color: var(--color-heading);
-    opacity: 0.9;
-  }
-  
-  .total-tokens-value {
-    font-size: 11px;
-  }
-  
-  .pagination {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .pagination-button {
-    width: 100%;
-  }
-  
-  .form-actions {
-    flex-direction: column;
-  }
-}
-
-/* 小屏幕手机进一步优化 */
-@media (max-width: 480px) {
-  .stat-card {
-    padding: 6px 3px;
-  }
-  
-  .stat-value {
-    font-size: 14px;
-  }
-  
-  .stat-label {
-    font-size: 10px;
-    margin-top: 2px;
+  .add-api-key-button svg, 
+  .test-api-key-button svg, 
+  .clear-invalid-keys-button svg, 
+  .export-valid-keys-button svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
   }
   
   .api-key-stats-list {
@@ -1402,18 +1756,10 @@ const totalTokens = computed(() => {
     opacity: 0.9;
   }
   
-  .add-api-key-button, .test-api-key-button {
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-  
-  .add-api-key-button svg, .test-api-key-button svg {
-    width: 14px;
-    height: 14px;
-  }
-  
-  .api-key-test-form {
-    padding: 12px;
+  .api-key-test-form,
+  .clear-invalid-keys-form,
+  .export-valid-keys-form {
+    padding: 15px;
   }
   
   .form-title h4 {
@@ -1421,11 +1767,143 @@ const totalTokens = computed(() => {
   }
   
   .form-description {
-    font-size: 11px;
+    font-size: 12px;
   }
   
   .progress-text {
     font-size: 12px;
+  }
+  
+  .exported-keys-list {
+    max-height: 250px;
+  }
+  
+  .exported-key-item {
+    padding: 8px 10px;
+  }
+  
+  .key-text {
+    font-size: 12px;
+  }
+  
+  .copy-key-button {
+    min-width: 24px;
+    height: 24px;
+    padding: 3px;
+  }
+  
+  .copy-all-button {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 480px) {
+  .header-buttons {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  
+  .add-api-key-button, 
+  .test-api-key-button, 
+  .clear-invalid-keys-button, 
+  .export-valid-keys-button {
+    padding: 10px 12px;
+    font-size: 13px;
+    min-height: 40px;
+    gap: 8px;
+  }
+  
+  .add-api-key-button svg, 
+  .test-api-key-button svg, 
+  .clear-invalid-keys-button svg, 
+  .export-valid-keys-button svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  
+  .api-key-test-form,
+  .clear-invalid-keys-form,
+  .export-valid-keys-form {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+  
+  .form-title h4 {
+    font-size: 15px;
+  }
+  
+  .form-description {
+    font-size: 13px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .submit-api-key,
+  .cancel-api-key {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  .exported-keys-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .copy-all-button {
+    align-self: flex-end;
+  }
+}
+
+/* 极小屏幕优化 */
+@media (max-width: 360px) {
+  .header-buttons {
+    gap: 4px;
+  }
+  
+  .add-api-key-button, 
+  .test-api-key-button, 
+  .clear-invalid-keys-button, 
+  .export-valid-keys-button {
+    padding: 8px 10px;
+    font-size: 12px;
+    min-height: 36px;
+    gap: 6px;
+  }
+  
+  .add-api-key-button svg, 
+  .test-api-key-button svg, 
+  .clear-invalid-keys-button svg, 
+  .export-valid-keys-button svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .api-key-test-form,
+  .clear-invalid-keys-form,
+  .export-valid-keys-form {
+    padding: 10px;
+  }
+  
+  .form-title h4 {
+    font-size: 14px;
+  }
+  
+  .form-description {
+    font-size: 12px;
+  }
+  
+  .submit-api-key,
+  .cancel-api-key {
+    padding: 8px;
+    font-size: 13px;
   }
 }
 

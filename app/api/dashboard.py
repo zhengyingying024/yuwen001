@@ -735,3 +735,96 @@ def start_api_key_test_in_thread(keys):
             "is_running": False,
             "is_completed": True
         })
+
+@dashboard_router.post("/clear-invalid-api-keys")
+async def clear_invalid_api_keys(password_data: dict):
+    """
+    清除所有失效的API密钥
+    
+    Args:
+        password_data (dict): 包含密码的字典
+        
+    Returns:
+        dict: 操作结果
+    """
+    try:
+        if not isinstance(password_data, dict):
+            raise HTTPException(status_code=422, detail="请求体格式错误：应为JSON对象")
+            
+        password = password_data.get("password")
+        if not password:
+            raise HTTPException(status_code=400, detail="缺少密码参数")
+            
+        if not isinstance(password, str):
+            raise HTTPException(status_code=422, detail="密码参数类型错误：应为字符串")
+            
+        if not verify_web_password(password):
+            raise HTTPException(status_code=401, detail="密码错误")
+        
+        # 获取当前无效密钥数量
+        current_invalid_keys = settings.INVALID_API_KEYS.split(',') if settings.INVALID_API_KEYS else []
+        current_invalid_keys = [key.strip() for key in current_invalid_keys if key.strip()]
+        invalid_count = len(current_invalid_keys)
+        
+        if invalid_count == 0:
+            return {"status": "success", "message": "没有失效的API密钥需要清除"}
+        
+        # 清除无效密钥
+        settings.INVALID_API_KEYS = ""
+        save_settings()
+        
+        log('info', f"已清除 {invalid_count} 个失效的API密钥")
+        
+        return {
+            "status": "success", 
+            "message": f"已成功清除 {invalid_count} 个失效的API密钥"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"清除失效API密钥失败：{str(e)}")
+
+@dashboard_router.post("/export-valid-api-keys")
+async def export_valid_api_keys(password_data: dict):
+    """
+    输出所有有效的API密钥
+    
+    Args:
+        password_data (dict): 包含密码的字典
+        
+    Returns:
+        dict: 操作结果，包含有效密钥列表
+    """
+    try:
+        if not isinstance(password_data, dict):
+            raise HTTPException(status_code=422, detail="请求体格式错误：应为JSON对象")
+            
+        password = password_data.get("password")
+        if not password:
+            raise HTTPException(status_code=400, detail="缺少密码参数")
+            
+        if not isinstance(password, str):
+            raise HTTPException(status_code=422, detail="密码参数类型错误：应为字符串")
+            
+        if not verify_web_password(password):
+            raise HTTPException(status_code=401, detail="密码错误")
+        
+        # 获取当前有效密钥
+        valid_keys = key_manager.api_keys.copy()
+        
+        if not valid_keys:
+            return {"status": "success", "message": "当前没有有效的API密钥", "keys": []}
+        
+        # 直接返回完整的密钥列表
+        log('info', f"用户导出了 {len(valid_keys)} 个有效API密钥")
+        
+        return {
+            "status": "success", 
+            "message": f"成功获取 {len(valid_keys)} 个有效API密钥",
+            "keys": valid_keys,
+            "count": len(valid_keys)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取有效API密钥失败：{str(e)}")

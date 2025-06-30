@@ -42,7 +42,7 @@ if (!fs.existsSync(templatesDir)) {
 
 // 构建 Vue 应用
 console.log('正在构建 Vue 应用...');
-execSync('npm run build', { stdio: 'inherit' });
+execSync('npx vite build', { stdio: 'inherit' });
 
 // 生成随机文件名
 function generateRandomFileName(extension) {

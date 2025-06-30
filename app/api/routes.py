@@ -7,7 +7,7 @@ from app.utils import protect_from_abuse,generate_cache_key,openAI_from_text,log
 from app.utils.response import openAI_from_Gemini
 from app.utils.auth import custom_verify_password
 from .stream_handlers import process_stream_request
-from .nonstream_handlers import process_request
+from .nonstream_handlers import process_request, process_nonstream_with_keepalive_stream
 from app.models.schemas import ChatCompletionRequest, ChatCompletionResponse, ModelList, AIRequest, ChatRequestGemini
 import app.config.settings as settings
 import asyncio
@@ -209,17 +209,32 @@ async def aistudio_chat_completions(
         )
     
     else:
-        # 创建非流式请求处理任务
-        process_task = asyncio.create_task(
-            process_request(
-                chat_request = request,
-                key_manager = key_manager,
-                response_cache_manager = response_cache_manager,
-                safety_settings = safety_settings,
-                safety_settings_g2 = safety_settings_g2,
-                cache_key = cache_key
+        # 检查是否启用非流式保活功能
+        if settings.NONSTREAM_KEEPALIVE_ENABLED:
+            # 使用带保活功能的非流式请求处理
+            process_task = asyncio.create_task(
+                process_nonstream_with_keepalive_stream(
+                    chat_request = request,
+                    key_manager = key_manager,
+                    response_cache_manager = response_cache_manager,
+                    safety_settings = safety_settings,
+                    safety_settings_g2 = safety_settings_g2,
+                    cache_key = cache_key,
+                    is_gemini = is_gemini
+                )
             )
-        )
+        else:
+            # 创建非流式请求处理任务
+            process_task = asyncio.create_task(
+                process_request(
+                    chat_request = request,
+                    key_manager = key_manager,
+                    response_cache_manager = response_cache_manager,
+                    safety_settings = safety_settings,
+                    safety_settings_g2 = safety_settings_g2,
+                    cache_key = cache_key
+                )
+            )
 
     if not settings.PUBLIC_MODE:
         # 将任务添加到活跃请求池

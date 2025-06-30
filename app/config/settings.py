@@ -119,3 +119,7 @@ FAKE_STREAMING_INTERVAL = float(os.environ.get("FAKE_STREAMING_INTERVAL", "1"))
 FAKE_STREAMING_CHUNK_SIZE = int(os.environ.get("FAKE_STREAMING_CHUNK_SIZE", "10"))
 # 假流式响应的每个块之间的延迟（秒）
 FAKE_STREAMING_DELAY_PER_CHUNK = float(os.environ.get("FAKE_STREAMING_DELAY_PER_CHUNK", "0.1"))
+
+# 非流式请求TCP保活配置
+NONSTREAM_KEEPALIVE_ENABLED = os.environ.get("NONSTREAM_KEEPALIVE_ENABLED", "true").lower() in ["true", "1", "yes"]
+NONSTREAM_KEEPALIVE_INTERVAL = float(os.environ.get("NONSTREAM_KEEPALIVE_INTERVAL", "5.0"))

@@ -8,7 +8,8 @@ const dashboardStore = useDashboardStore()
 const localConfig = reactive({
   fakeStreaming: dashboardStore.config.fakeStreaming,
   enableVertexExpress: dashboardStore.config.enableVertexExpress,
-  vertexExpressApiKey: dashboardStore.config.vertexExpressApiKey || ''
+  vertexExpressApiKey: dashboardStore.config.vertexExpressApiKey || '',
+  googleCredentialsJson: dashboardStore.config.googleCredentialsJson || ''
 })
 
 // 密码和错误信息
@@ -91,6 +92,18 @@ function getBooleanText(value) {
             v-model="localConfig.vertexExpressApiKey" 
             placeholder="请输入 Vertex Express API密钥"
           >
+        </div>
+      </div>
+      
+      <!-- Google Credentials JSON 配置项 -->
+      <div class="config-row">
+        <div class="config-group full-width">
+          <label class="config-label">Google Credentials JSON</label>
+          <textarea 
+            class="config-input text-area" 
+            v-model="localConfig.googleCredentialsJson" 
+            placeholder="请输入 Google Credentials JSON"
+          ></textarea>
         </div>
       </div>
       

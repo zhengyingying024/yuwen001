@@ -21,8 +21,6 @@
 - [huggingface 部署的使用文档（复活？！）（推荐，免费，手机电脑均可使用）](./wiki/huggingface2.md)
 
 - [Claw Cloud部署的使用文档（推荐，免费，手机电脑均可使用）](./wiki/claw.md) 感谢[@IDeposit](https://github.com/IDeposit)编写
-- [看不到的看这里](https://blog.rzline.eu.org/2025/04/29/Claw%20Cloud%E9%83%A8%E7%BD%B2Gemini%E8%BD%AE%E8%AF%A2%E9%A1%B9%E7%9B%AEHajimi)
-
 
 - [termux部署的使用文档（手机使用）](./wiki/Termux.md) 感谢[@天命不又](https://github.com/tmby)编写
 

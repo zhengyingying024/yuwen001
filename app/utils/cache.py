@@ -207,7 +207,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
     h = xxhash.xxh64()
     
     # 1. 哈希模型名称
-    h.update(chat_request.model.encode('utf-8'))
+    h.update(chat_request.model.encode('utf-8', errors='surrogateescape'))
 
     if last_n_messages <= 0:
         # 如果不考虑消息，直接返回基于模型的哈希
@@ -224,7 +224,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
             role = content_item.get('role')
             if role is not None and isinstance(role, str):
                 h.update(b'role:')
-                h.update(role.encode('utf-8'))
+                h.update(role.encode('utf-8', errors='surrogateescape'))
             # log('INFO', f"哈希gemini格式角色{role}")
             parts = content_item.get('parts', [])
             if not isinstance(parts, list):
@@ -233,7 +233,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
                 text_content = part.get('text')
                 if text_content is not None and isinstance(text_content, str):
                     h.update(b'text:')
-                    h.update(text_content.encode('utf-8'))
+                    h.update(text_content.encode('utf-8', errors='surrogateescape'))
                     # log('INFO', f"哈希gemini格式文本内容{text_content}")
                 
                 inline_data_obj = part.get('inline_data')
@@ -243,7 +243,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
                     # log('INFO', f"哈希gemini格式非文本内容{data_payload[:32]}")
                     if isinstance(data_payload, str):
                         h.update(b'data_prefix:')
-                        h.update(data_payload[:32].encode('utf-8'))
+                        h.update(data_payload[:32].encode('utf-8', errors='surrogateescape'))
 
                 file_data_obj = part.get('file_data')
                 if file_data_obj is not None and isinstance(file_data_obj, dict):
@@ -251,7 +251,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
                     file_uri = file_data_obj.get('file_uri', '')
                     if isinstance(file_uri, str):
                         h.update(b'file_uri:')
-                        h.update(file_uri.encode('utf-8'))
+                        h.update(file_uri.encode('utf-8', errors='surrogateescape'))
             messages_processed += 1
     
     else :
@@ -261,13 +261,13 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
 
             # 哈希角色
             h.update(b'role:')
-            h.update(msg.get('role', '').encode('utf-8'))
+            h.update(msg.get('role', '').encode('utf-8', errors='surrogateescape'))
 
             # 哈希内容
             content = msg.get('content')
             if isinstance(content, str):
                 h.update(b'text:')
-                h.update(content.encode('utf-8'))
+                h.update(content.encode('utf-8', errors='surrogateescape'))
             elif isinstance(content, list):
                 # 处理图文混合内容
                 for item in content:
@@ -275,7 +275,7 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
                     if item_type == 'text':
                         text = item.get('text', '') if hasattr(item, 'get') else ''
                         h.update(b'text:') 
-                        h.update(text.encode('utf-8'))
+                        h.update(text.encode('utf-8', errors='surrogateescape'))
                     elif item_type == 'image_url':
                         image_url = item.get('image_url', {}) if hasattr(item, 'get') else {}
                         image_data = image_url.get('url', '') if hasattr(image_url, 'get') else ''
@@ -283,9 +283,9 @@ def generate_cache_key(chat_request, last_n_messages: int = 65536, is_gemini=Fal
                         h.update(b'image_url:') # 加入类型标识符
                         if image_data.startswith('data:image/'):
                             # 对于base64图像，使用前32字符作为标识符
-                            h.update(image_data[:32].encode('utf-8'))
+                            h.update(image_data[:32].encode('utf-8', errors='surrogateescape'))
                         else:
-                            h.update(image_data.encode('utf-8'))
+                            h.update(image_data.encode('utf-8', errors='surrogateescape'))
 
             messages_processed += 1
     return h.hexdigest()

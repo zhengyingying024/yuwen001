@@ -247,8 +247,8 @@ app.mount("/assets", StaticFiles(directory="app/templates/assets"), name="assets
 # 设置根路由路径
 dashboard_path = f"/{settings.DASHBOARD_URL}" if settings.DASHBOARD_URL else "/"
 
-@app.get(dashboard_path, response_class=HTMLResponse)
-async def root(request: Request):
+@app.api_route(dashboard_path,
+methods=["GET", "HEAD"], response_class=HTMLResponse):
     """
     根路由 - 返回静态 HTML 文件
     """

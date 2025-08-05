@@ -25,6 +25,7 @@ import asyncio
 import sys
 import pathlib
 import os
+import webbrowser
 # 设置模板目录
 BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -226,6 +227,9 @@ async def startup_event():
         credential_manager_instance
     )
 
+    # 启动浏览器
+    open_browser()
+
 # --------------- 异常处理 ---------------
 
 @app.exception_handler(Exception)
@@ -259,3 +263,34 @@ async def root(request: Request):
     return templates.TemplateResponse(
         "index.html", {"request": request, "api_url": api_url}
     )
+
+# --------------- 自动启动浏览器 ---------------
+def open_browser():
+    """
+    检查是否存在可用的浏览器，如果存在，则在默认浏览器中打开应用的 URL。
+    此函数会特别检查 Linux 环境下的 'DISPLAY' 环境变量，以避免在无头服务器上出错。
+    """
+    # 首先，检查是否在无 GUI 的 Linux 环境中
+    if os.name == 'posix' and not os.environ.get('DISPLAY'):
+        log('info', "检测到无 GUI 环境 (缺少 DISPLAY 环境变量)，跳过打开浏览器。")
+        return
+
+    try:
+        # webbrowser.get() 会在找不到浏览器时抛出 webbrowser.Error
+        browser = webbrowser.get()
+        if browser:
+            log('info', f"找到可用浏览器: {browser.name}。准备打开 URL...")
+            webbrowser.open("http://127.0.0.1:7860")
+            log('info', "已发送打开浏览器指令: http://127.0.0.1:7860")
+        else:
+            # 这种情况很少见，但作为备用逻辑
+            log('warning', "webbrowser.get() 未返回浏览器实例，跳过打开浏览器。")
+
+    except webbrowser.Error:
+        # 捕获找不到浏览器的特定错误
+        log('warning', "系统中未找到可用的浏览器，跳过自动打开。")
+    # 捕获错误, 失败也不重新抛出异常
+    # 后果也只是不会自动打开浏览器，不会对调用处产生影响
+    except Exception as e:
+        # 捕获其他可能的异常
+        log('error', f"尝试打开浏览器时发生未知错误: {e}")

@@ -1,5 +1,6 @@
 @echo off
-chcp 65001 > nul
+:: 65001 导致了对控制台输入（stdin）和控制信号（如 Ctrl+C）的处理机制不正常响应的bug
+:: chcp 65001 > nul
 setlocal enabledelayedexpansion
 
 echo ===================================
@@ -74,20 +75,6 @@ if not exist "%~dp0.venv" (
 
 :: Start the application with delayed browser launch
 echo Starting Hajimi application...
+uvicorn app.main:app --host 0.0.0.0 --port 7860
 
-:: Start the application in a separate process and capture its PID
-start /b cmd /c "uvicorn app.main:app --host 0.0.0.0 --port 7860"
-
-:: Wait for the server to initialize (5 seconds)
-echo Waiting for server to initialize...
-timeout /t 5 /nobreak > nul
-
-:: Open browser after delay
-echo Opening browser...
-start "" http://127.0.0.1:7860
-
-:: Wait for user to close the application
-echo.
-echo Press Ctrl+C to stop the server when finished.
-pause > nul
 endlocal

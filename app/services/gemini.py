@@ -470,3 +470,16 @@ class GeminiClient:
             models.extend(GeminiClient.EXTRA_MODELS)
                 
             return models
+
+    @staticmethod
+    async def list_native_models(api_key):
+        """
+        获取原生Gemini模型列表
+        """
+        url = "https://generativelanguage.googleapis.com/v1beta/models?key={}".format(
+            api_key)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.json()
+

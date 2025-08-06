@@ -311,6 +311,18 @@ async def chat_completions(
         return await vertex_chat_completions(request, http_request, _dp, _du)
     return await aistudio_chat_completions(request, http_request, _dp, _du)
 
+@router.get("/gemini/v1beta/models")
+@router.get("/gemini/v1/models")
+async def gemini_list_models(request: Request,
+                             _ = Depends(custom_verify_password),
+                             _2 = Depends(verify_user_agent)):
+    """ gemini 端点的模型获取 """
+    api_key = await key_manager.get_available_key()
+    if not api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No valid API keys available.")
+   
+    return await GeminiClient.list_native_models(api_key)
+
 @router.post("/gemini/{api_version:str}/models/{model_and_responseType:path}")
 async def gemini_chat_completions(
     request: Request,
@@ -325,6 +337,7 @@ async def gemini_chat_completions(
     is_stream = False
     try:
         model_name, action_type = model_and_responseType.split(":", 1)
+        model_name = model_name.removeprefix("models/")
         if action_type == "streamGenerateContent":
             is_stream = True
         
